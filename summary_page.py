@@ -6,6 +6,23 @@ import string
 from pathlib import Path
 from datetime import datetime, date, timezone, timedelta
 
+# Windows-specific environment setup
+if os.name == 'nt':  # Windows
+    # Set UTF-8 encoding for Windows
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    # Ensure proper path handling
+    os.environ['PYTHONPATH'] = str(Path(__file__).parent)
+    # Set console encoding to UTF-8 if possible
+    try:
+        import codecs
+        import sys
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 from flask import (
     Flask,
     render_template_string,
@@ -46,6 +63,11 @@ def is_admin_user(uid: str) -> bool:
     """Check if the user is an admin based on environment variable."""
     admin_uids = os.getenv("ADMIN_USER_IDS", "").split(",")
     return uid.strip() in [admin_id.strip() for admin_id in admin_uids if admin_id.strip()]
+
+
+def is_windows_system() -> bool:
+    """Check if the system is running Windows."""
+    return os.name == 'nt'
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -251,6 +273,18 @@ DETAIL_TEMPLATE = open(os.path.join('ui', 'detail.html'), 'r', encoding='utf-8')
 # Routes
 # -----------------------------------------------------------------------------
 
+@app.route("/test", methods=["GET"])
+def test_endpoint():
+    """Test endpoint to verify routing is working."""
+    return jsonify({
+        "status": "ok",
+        "message": "Test endpoint working",
+        "path": request.path,
+        "url": request.url,
+        "headers": dict(request.headers),
+        "remote_addr": request.remote_addr
+    })
+
 @app.route("/", methods=["GET"])
 def index():
     uid = request.cookies.get("uid")
@@ -361,6 +395,13 @@ def index():
             total_pages=total_pages,
             total_items=total_items,
             admin_users=admin_users,
+            # Add admin URLs for JavaScript
+            admin_fetch_url=url_for("admin_fetch_latest"),
+            admin_stream_url=url_for("admin_fetch_latest_stream"),
+            # Add other API URLs for JavaScript
+            mark_read_url=url_for("mark_read", arxiv_id="__ID__").replace("__ID__", ""),
+            unmark_read_url=url_for("unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
+            reset_url=url_for("reset_read"),
         )
     )
     return resp
@@ -523,6 +564,13 @@ def read_papers():
         total_pages=total_pages,
         total_items=total_items,
         admin_users=admin_users,
+        # Add admin URLs for JavaScript
+        admin_fetch_url=url_for("admin_fetch_latest"),
+        admin_stream_url=url_for("admin_fetch_latest_stream"),
+        # Add other API URLs for JavaScript
+        mark_read_url=url_for("mark_read", arxiv_id="__ID__").replace("__ID__", ""),
+        unmark_read_url=url_for("unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
+        reset_url=url_for("reset_read"),
     )
 
 @app.get("/assets/base.css")
@@ -646,6 +694,12 @@ def ingest_event():
 @app.route("/admin/fetch_latest", methods=["POST"])
 def admin_fetch_latest():
     """Admin route to fetch latest summaries from RSS feed."""
+    # Debug logging
+    print(f"DEBUG: Admin fetch_latest called from {request.remote_addr}")
+    print(f"DEBUG: Request headers: {dict(request.headers)}")
+    print(f"DEBUG: Request path: {request.path}")
+    print(f"DEBUG: Request url: {request.url}")
+    
     uid = request.cookies.get("uid")
     if not uid:
         return jsonify({"error": "no-uid"}), 400
@@ -654,14 +708,45 @@ def admin_fetch_latest():
         return jsonify({"error": "unauthorized"}), 403
     
     try:
-        # Run the feed service to fetch latest summaries
-        cmd = ["uv", "run", "python", "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
+        # Cross-platform command execution with better Windows support
+        import platform
+        import shutil
+        
+        # Check if uv is available, fallback to python if not
+        uv_path = shutil.which("uv")
+        python_path = shutil.which("python")
+        
+        if not python_path:
+            python_path = shutil.which("python3")
+        
+        if not python_path:
+            return jsonify({
+                "status": "error",
+                "message": "Python not found in PATH"
+            }), 500
+        
+        # Build command based on available tools and platform
+        if uv_path and platform.system() != "Windows":
+            # Use uv on Unix-like systems
+            cmd = ["uv", "run", "python", "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
+        else:
+            # Fallback to direct python execution, especially for Windows
+            cmd = [python_path, "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
+        
+        # Windows-specific subprocess settings
+        creation_flags = 0
+        if platform.system() == "Windows":
+            creation_flags = subprocess.CREATE_NO_WINDOW
+        
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
+            encoding='utf-8',  # Explicitly set UTF-8 encoding
+            errors='replace',   # Replace problematic characters
             cwd=Path(__file__).parent,
-            timeout=300  # 5 minutes timeout
+            timeout=300,  # 5 minutes timeout
+            creationflags=creation_flags
         )
         
         if result.returncode == 0:
@@ -694,7 +779,8 @@ def admin_fetch_latest():
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "summary_stats": summary_stats,
-                "return_code": result.returncode
+                "return_code": result.returncode,
+                "platform": "Windows" if is_windows_system() else "Unix/Linux"
             })
         else:
             return jsonify({
@@ -720,6 +806,12 @@ def admin_fetch_latest():
 @app.route("/admin/fetch_latest_stream", methods=["POST"])
 def admin_fetch_latest_stream():
     """Admin route to stream the feed service output in real-time."""
+    # Debug logging
+    print(f"DEBUG: Admin fetch_latest_stream called from {request.remote_addr}")
+    print(f"DEBUG: Request headers: {dict(request.headers)}")
+    print(f"DEBUG: Request path: {request.path}")
+    print(f"DEBUG: Request url: {request.url}")
+    
     uid = request.cookies.get("uid")
     if not uid:
         return jsonify({"error": "no-uid"}), 400
@@ -730,7 +822,9 @@ def admin_fetch_latest_stream():
     def generate():
         try:
             # Send initial status
-            yield "data: {\"type\": \"status\", \"message\": \"正在启动服务...\", \"icon\": \"⏳\"}\n\n"
+            # Send initial status with platform info
+            platform_info = "Windows" if is_windows_system() else "Unix/Linux"
+            yield f"data: {{\"type\": \"status\", \"message\": \"正在启动服务... ({platform_info})\", \"icon\": \"⏳\"}}\n\n"
             
             # Cross-platform command execution
             import platform
@@ -758,7 +852,7 @@ def admin_fetch_latest_stream():
             
             yield f"data: {{\"type\": \"log\", \"message\": \"执行命令: {' '.join(cmd)}\", \"level\": \"info\"}}\n\n"
             
-            # Use Popen to get real-time output
+            # Use Popen to get real-time output with better Windows support
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -766,6 +860,8 @@ def admin_fetch_latest_stream():
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
+                encoding='utf-8',  # Explicitly set UTF-8 encoding
+                errors='replace',   # Replace problematic characters
                 cwd=Path(__file__).parent,
                 # Windows-specific settings
                 creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
@@ -780,14 +876,22 @@ def admin_fetch_latest_stream():
                 if output == '' and process.poll() is not None:
                     break
                 if output:
-                    # Just stream the raw output directly
+                    # Clean and sanitize output for Windows compatibility
                     clean_output = output.rstrip()  # Remove trailing newline only
                     if clean_output:
+                        # Handle Windows encoding issues by replacing problematic characters
+                        # Remove or replace emoji and special characters that cause GBK encoding issues
+                        clean_output = clean_output.encode('utf-8', errors='replace').decode('utf-8')
+                        
                         # Remove all control characters that break JSON
                         clean_output = ''.join(char for char in clean_output if char in string.printable)
                         
                         # Escape only the essential characters for JSON
                         clean_output = clean_output.replace('\\', '\\\\').replace('"', '\\"')
+                        
+                        # Limit line length to prevent overwhelming the frontend
+                        if len(clean_output) > 500:
+                            clean_output = clean_output[:500] + "... [truncated]"
                         
                         yield f"data: {{\"type\": \"log\", \"message\": \"{clean_output}\", \"level\": \"info\"}}\n\n"
             

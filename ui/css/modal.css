@@ -1,0 +1,277 @@
+/* Modal Styles */
+
+/* Admin button styling */
+.admin-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.admin-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.admin-btn:active {
+  transform: translateY(0);
+}
+
+.admin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Modal styling */
+.modal {
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background-color: var(--card-bg);
+  margin: 5% auto;
+  padding: 0;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--btn-border);
+}
+
+.modal-header {
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--btn-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text);
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background-color: var(--action-bg);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--btn-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+#fallback-fetch-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+#fallback-fetch-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+/* Progress styling */
+.progress-status {
+  margin-bottom: 1.5rem;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.status-icon {
+  font-size: 1.2rem;
+}
+
+.status-text {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.command-display {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background-color: var(--bg);
+  border-radius: 6px;
+  border: 1px solid var(--btn-border);
+  font-size: 0.85rem;
+}
+
+.command-label {
+  color: var(--text);
+  margin-right: 0.5rem;
+  font-weight: 500;
+}
+
+.command-text {
+  background-color: var(--code-bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  color: var(--action-text);
+}
+
+.command-details {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--btn-border);
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.detail-item code {
+  background-color: var(--code-bg);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  color: var(--action-text);
+}
+
+/* Log container styling */
+.log-container {
+  background-color: var(--code-bg);
+  border-radius: 8px;
+  border: 1px solid var(--btn-border);
+}
+
+.log-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--btn-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+}
+
+.small-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background: var(--action-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  color: var(--action-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.small-btn:hover {
+  background: var(--action-bg-hover);
+}
+
+.log-output {
+  padding: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text);
+  background-color: var(--bg);
+  border-radius: 0 0 8px 8px;
+}
+
+.log-line {
+  margin-bottom: 0.25rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--code-bg);
+}
+
+.log-line:last-child {
+  border-bottom: none;
+}
+
+.log-timestamp {
+  color: #6b7280;
+  margin-right: 0.5rem;
+}
+
+/* Summary stats styling */
+.summary-stats {
+  margin-top: 1.5rem;
+  background-color: var(--code-bg);
+  border-radius: 8px;
+  border: 1px solid var(--btn-border);
+}
+
+.stats-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--btn-border);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.stats-content {
+  padding: 1rem;
+  background-color: var(--bg);
+  border-radius: 0 0 8px 8px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--code-bg);
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.stat-value {
+  color: var(--action-text);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9rem;
+}

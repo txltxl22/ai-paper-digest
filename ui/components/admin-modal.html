@@ -1,0 +1,44 @@
+<!-- Admin Progress Modal Component -->
+<div id="admin-progress-modal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>🔄 获取最新论文摘要</h3>
+      <button id="close-modal-btn" class="close-btn">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="progress-status">
+        <div class="status-line">
+          <span class="status-icon">⏳</span>
+          <span class="status-text">正在启动服务...</span>
+        </div>
+        <div class="command-display">
+          <span class="command-label">执行命令:</span>
+          <code class="command-text" id="command-text">uv run python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed</code>
+          <div class="command-details">
+            <span class="detail-item">工作目录: <code>./</code></span>
+            <span class="detail-item">超时时间: <code>5分钟</code></span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="log-container">
+        <div class="log-header">
+          <span>实时日志</span>
+          <button id="clear-logs-btn" class="small-btn">清除日志</button>
+        </div>
+        <div id="log-output" class="log-output"></div>
+      </div>
+      
+      <div id="summary-stats" class="summary-stats" style="display: none;">
+        <div class="stats-header">
+          <span>📊 处理结果摘要</span>
+        </div>
+        <div id="stats-content" class="stats-content"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="fallback-fetch-btn" class="topbar-btn" style="display: none;">使用备用方式</button>
+      <button id="cancel-fetch-btn" class="topbar-btn">取消</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,33 @@
+<!-- Tag Filter Component -->
+<form id="tag-filter" method="GET" action="{{ url_for('index') }}" class="filters-panel">
+  <div class="filter-row head">
+    <span class="muted">标签筛选:</span>
+    <a href="{{ url_for('index') }}" class="tag-chip {% if not active_tag and not tag_query and (not active_tops or active_tops|length == 0) %}active{% endif %}">全部</a>
+    <a href="{{ url_for('index') }}" class="topbar-btn ghost-btn">清除筛选</a>
+    <span class="spacer"></span>
+    <span class="muted">或 搜索:</span>
+    <input type="text" name="q" placeholder="模糊搜索标签" value="{{ tag_query or '' }}" class="tag-input" />
+    <button type="submit" class="topbar-btn">筛选</button>
+  </div>
+
+  {% if top_cloud and top_cloud|length %}
+  <div class="filter-row tops">
+    <span class="muted row-title">顶级:</span>
+    <div class="top-chips">
+      {% for t in top_cloud %}
+        <label class="top-chip"><input type="checkbox" name="top" value="{{ t.name }}" {% if active_tops and (t.name in active_tops) %}checked{% endif %}><span>{{ t.name }}</span><span class="tag-count">{{ t.count }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="filter-row details">
+    <span class="muted row-title">细分:</span>
+    <div class="detail-chips" id="detail-chips" data-query="{{ tag_query or '' }}">
+      {% for t in tag_cloud %}
+        <a href="{{ url_for('index') }}?tag={{ t.name }}" class="tag-chip {% if active_tag == t.name %}active{% endif %} {% if tag_query and (tag_query in t.name) %}query-hit{% endif %}">{{ t.name }} <span class="tag-count">{{ t.count }}</span></a>
+      {% endfor %}
+    </div>
+    <button type="button" id="toggle-detail-chips" class="topbar-btn ghost-btn" style="display:none;">展开全部标签</button>
+  </div>
+</form>

@@ -1,0 +1,42 @@
+<!-- Article Card Component -->
+<article data-id='{{ e.id }}'>
+  <div class="article-header">
+    <h2><a href='{{ url_for("view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a></h2>
+    <div class="source-badge">
+      {% if e.source_type == "user" %}
+        <span class="badge user-badge" title="用户上传">👤 {{ e.user_id or "用户" }}</span>
+      {% else %}
+        <span class="badge system-badge" title="系统自动处理">🤖 系统</span>
+      {% endif %}
+    </div>
+  </div>
+  {% if e.top_tags and e.top_tags|length %}
+  <div class="tag-row">
+    {% for tg in e.top_tags %}
+      <a class="top-chip pill" href='{{ url_for("index") }}?top={{ tg }}'>{{ tg }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if e.detail_tags and e.detail_tags|length %}
+  <div class="tag-row">
+    {% set q = tag_query or '' %}
+    {% for tg in e.detail_tags[:18] %}
+      <a class="tag-chip {% if q and (q in tg) %}query-hit{% endif %}" href='{{ url_for("index") }}?tag={{ tg }}'>{{ tg }}</a>
+    {% endfor %}
+    {% if e.detail_tags|length > 18 %}
+      <span class="muted">+{{ e.detail_tags|length - 18 }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class='preview-html collapsed'>{{ e.preview_html | safe }}</div>
+  <div class='card-actions'>
+    <a class='toggle-link action-btn'>展开</a>
+    {% if show_read %}
+      <a class='remove-read-link action-btn'>从已读列表移除</a>
+    {% else %}
+      {% if uid %}<a class='mark-read-link action-btn'>标记为已读</a>{% else %}<a class='mark-read-link action-btn disabled'>标记为已读</a>{% endif %}
+    {% endif %}
+    <a target='_blank' href='https://arxiv.org/pdf/{{ e.id }}.pdf' class='action-btn'>打开原文 PDF</a>
+  </div>
+  <p class='muted'>更新时间：{{ e.updated.strftime('%Y-%m-%d %H:%M') }}</p>
+</article>

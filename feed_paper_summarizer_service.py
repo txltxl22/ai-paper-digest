@@ -41,6 +41,8 @@ import markdown
 from feedgen.feed import FeedGenerator
 import xml.etree.ElementTree as ET
 
+from summary_service.record_manager import migrate_legacy_summaries_to_service_record
+
 # ---------------------------------------------------------------------------
 # Local modules – assume we're run from the repo root or installed package
 # ---------------------------------------------------------------------------
@@ -230,7 +232,6 @@ def _summarize_url(
             if not json_path.exists():
                 _LOG.info("🔄  Creating service record for existing summary %s…", pdf_path.stem)
                 try:
-                    from summary_page import save_summary_with_service_record
                     summary_text = summary_path.read_text(encoding="utf-8", errors="ignore")
                     # Load existing tags if available
                     tags_path = ps.SUMMARY_DIR / (pdf_path.stem + ".tags.json")  # type: ignore[attr-defined]
@@ -526,7 +527,6 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
     # Short-circuit: migrate legacy summaries
     if args.migrate_legacy:
         try:
-            from summary_page import migrate_legacy_summaries_to_service_record
             _LOG.info("🔄  Starting legacy summaries migration...")
             migration_stats = migrate_legacy_summaries_to_service_record()
             _LOG.info("✅  Migration completed:")

@@ -9,6 +9,13 @@ def setup_app_dirs(sp, tmp_path):
     sp.SUMMARY_DIR = tmp_path / "summary"
     sp.USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
     sp.SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Update the existing modules with test paths
+    sp.user_management_module["service"].user_data_dir = sp.USER_DATA_DIR
+    sp.user_management_module["service"].admin_user_ids = ["admin1", "admin2"]
+    
+    sp.index_page_module["scanner"].summary_dir = sp.SUMMARY_DIR
+    sp.index_page_module["renderer"].summary_dir = sp.SUMMARY_DIR
 
 
 @pytest.fixture()

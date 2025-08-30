@@ -1,7 +1,7 @@
 <!-- Pagination Component -->
 {% if total_pages and total_pages > 1 %}
 <nav class="pagination" aria-label="分页导航">
-  {% set base_endpoint = 'read_papers' if show_read else 'index' %}
+  {% set base_endpoint = 'index_page.read_papers' if show_read else 'index_page.index' %}
   {% set qs = [] %}
   {% if active_tag %}{% set _ = qs.append('tag=' ~ active_tag) %}{% endif %}
   {% if tag_query %}{% set _ = qs.append('q=' ~ tag_query) %}{% endif %}

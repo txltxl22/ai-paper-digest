@@ -21,7 +21,7 @@
     {% if show_read %}
     <div style="margin-bottom:0.7rem;text-align:center;">
       <span style="font-size:1.1rem;">📖 我的已读论文</span>
-      <a href="{{ url_for('index') }}" style="margin-left:1.5rem;font-size:0.95rem;">← 返回首页</a>
+      <a href="{{ url_for('index_page.index') }}" style="margin-left:1.5rem;font-size:0.95rem;">← 返回首页</a>
     </div>
     {% endif %}
     {% if uid and read_total is not none and read_today is not none and unread_count is not none and not show_read %}

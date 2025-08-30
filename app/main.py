@@ -110,6 +110,31 @@ def load_summary_with_service_record(arxiv_id: str) -> dict:
     return load_summary_with_service_record_base(arxiv_id, SUMMARY_DIR)
 
 
+# Initialize user management module
+from app.user_management.factory import create_user_management_module
+
+user_management_module = create_user_management_module(
+    user_data_dir=USER_DATA_DIR,
+    admin_user_ids=app_config.admin_user_ids
+)
+
+# Initialize index page module
+from app.index_page.factory import create_index_page_module
+
+# Load templates
+with open(Path(__file__).parent.parent / "ui" / "index.html", "r", encoding="utf-8") as f:
+    INDEX_TEMPLATE = f.read()
+
+with open(Path(__file__).parent.parent / "ui" / "detail.html", "r", encoding="utf-8") as f:
+    DETAIL_TEMPLATE = f.read()
+
+index_page_module = create_index_page_module(
+    summary_dir=SUMMARY_DIR,
+    user_service=user_management_module["service"],
+    index_template=INDEX_TEMPLATE,
+    detail_template=DETAIL_TEMPLATE
+)
+
 # Initialize paper submission module
 from app.paper_submission.factory import create_paper_submission_module
 
@@ -124,7 +149,9 @@ paper_submission_module = create_paper_submission_module(
     save_summary_func=save_summary_with_service_record
 )
 
-# Register paper submission blueprint
+# Register blueprints
+app.register_blueprint(user_management_module["blueprint"])
+app.register_blueprint(index_page_module["blueprint"])
 app.register_blueprint(paper_submission_module["blueprint"])
 
 
@@ -133,9 +160,7 @@ app.register_blueprint(paper_submission_module["blueprint"])
 # Admin helpers
 # -----------------------------------------------------------------------------
 
-def is_admin_user(uid: str) -> bool:
-    """Check if the user is an admin based on configuration."""
-    return uid.strip() in app_config.admin_user_ids
+
 
 
 
@@ -158,232 +183,8 @@ def render_markdown(md_text: str) -> str:
     )
 
 
-_ENTRIES_CACHE: dict = {
-    "meta": None,           # list of dicts without preview_html
-    "count": 0,
-    "latest_mtime": 0.0,    # max mtime among md/tag files
-}
 
 
-def _scan_entries_meta() -> list[dict]:
-    """Scan summary directory and build metadata for all entries (no HTML).
-
-    Returns a list of dicts with keys: id, updated, tags, top_tags, detail_tags, source_type, user_id.
-    This function also maintains a lightweight cache to avoid re-reading files
-    on every request when nothing changed.
-    """
-    # Get all .json files (new format) and .md files (legacy format)
-    json_files = list(SUMMARY_DIR.glob("*.json"))
-    md_files = list(SUMMARY_DIR.glob("*.md"))
-    
-    # Filter out .tags.json files from json_files
-    json_files = [f for f in json_files if not f.name.endswith('.tags.json')]
-    
-    # Count total files for cache invalidation
-    count = len(json_files) + len(md_files)
-    
-    # Compute latest mtime considering all relevant files
-    latest_mtime = 0.0
-    for p in json_files + md_files:
-        try:
-            latest_mtime = max(latest_mtime, p.stat().st_mtime)
-        except Exception:
-            continue
-
-    if (
-        _ENTRIES_CACHE.get("meta") is not None
-        and _ENTRIES_CACHE.get("count") == count
-        and float(_ENTRIES_CACHE.get("latest_mtime") or 0.0) >= float(latest_mtime)
-    ):
-        return list(_ENTRIES_CACHE["meta"])  # type: ignore[index]
-
-    entries_meta: list[dict] = []
-    processed_ids = set()
-    
-    # Process new JSON format files first
-    for json_path in json_files:
-        try:
-            arxiv_id = json_path.stem
-            if arxiv_id in processed_ids:
-                continue
-                
-            data = json.loads(json_path.read_text(encoding="utf-8"))
-            service_data = data.get("service_data", {})
-            summary_data = data.get("summary_data", {})
-            
-            # Parse tags
-            tags: list[str] = []
-            top_tags: list[str] = []
-            detail_tags: list[str] = []
-            
-            tags_dict = summary_data.get("tags", {})
-            if isinstance(tags_dict, dict):
-                if isinstance(tags_dict.get("top"), list):
-                    top_tags = [str(t).strip().lower() for t in tags_dict.get("top") if str(t).strip()]
-                if isinstance(tags_dict.get("tags"), list):
-                    detail_tags = [str(t).strip().lower() for t in tags_dict.get("tags") if str(t).strip()]
-            tags = (top_tags or []) + (detail_tags or [])
-            
-            # Parse updated time
-            updated_str = summary_data.get("updated_at")
-            if updated_str:
-                try:
-                    updated = datetime.fromisoformat(updated_str.replace('Z', '+00:00'))
-                except Exception:
-                    updated = datetime.fromtimestamp(json_path.stat().st_mtime)
-            else:
-                updated = datetime.fromtimestamp(json_path.stat().st_mtime)
-            
-            entries_meta.append({
-                "id": arxiv_id,
-                "updated": updated,
-                "tags": tags,
-                "top_tags": top_tags,
-                "detail_tags": detail_tags,
-                "source_type": service_data.get("source_type", "system"),
-                "user_id": service_data.get("user_id"),
-                "original_url": service_data.get("original_url"),
-            })
-            processed_ids.add(arxiv_id)
-        except Exception as e:
-            print(f"Error processing JSON file {json_path}: {e}")
-            continue
-    
-    # Process legacy .md files
-    for md_path in md_files:
-        try:
-            arxiv_id = md_path.stem
-            if arxiv_id in processed_ids:
-                continue
-                
-            stat = md_path.stat()
-            updated = datetime.fromtimestamp(stat.st_mtime)
-
-            # Load tags from legacy .tags.json file
-            tags: list[str] = []
-            top_tags: list[str] = []
-            detail_tags: list[str] = []
-            tags_file = md_path.with_suffix("")
-            tags_file = tags_file.with_name(tags_file.name + ".tags.json")
-            try:
-                if tags_file.exists():
-                    data = json.loads(tags_file.read_text(encoding="utf-8"))
-                    # support legacy [..], flat {"top": [...], "tags": [...]},
-                    # and nested {"tags": {"top": [...], "tags": [...]}}
-                    if isinstance(data, list):
-                        detail_tags = [str(t).strip().lower() for t in data if str(t).strip()]
-                    elif isinstance(data, dict):
-                        container = data
-                        if isinstance(data.get("tags"), dict):
-                            container = data.get("tags") or {}
-                        if isinstance(container.get("top"), list):
-                            top_tags = [str(t).strip().lower() for t in container.get("top") if str(t).strip()]
-                        if isinstance(container.get("tags"), list):
-                            detail_tags = [str(t).strip().lower() for t in container.get("tags") if str(t).strip()]
-                    tags = (top_tags or []) + (detail_tags or [])
-            except Exception:
-                tags = []
-
-            entries_meta.append({
-                "id": arxiv_id,
-                "updated": updated,
-                "tags": tags,
-                "top_tags": top_tags,
-                "detail_tags": detail_tags,
-                "source_type": "system",  # Legacy files default to system
-                "user_id": None,
-                "original_url": None,
-            })
-            processed_ids.add(arxiv_id)
-        except Exception as e:
-            print(f"Error processing legacy MD file {md_path}: {e}")
-            continue
-
-    entries_meta.sort(key=lambda e: e["updated"], reverse=True)
-    _ENTRIES_CACHE["meta"] = list(entries_meta)
-    _ENTRIES_CACHE["count"] = count
-    _ENTRIES_CACHE["latest_mtime"] = latest_mtime
-    return entries_meta
-
-
-def _render_page_entries(entries_meta: list[dict]) -> list[dict]:
-    """Given a slice of entries meta, materialize preview_html for each."""
-    rendered: list[dict] = []
-    for meta in entries_meta:
-        try:
-            # Try to load from new JSON format first
-            json_path = SUMMARY_DIR / f"{meta['id']}.json"
-            if json_path.exists():
-                data = json.loads(json_path.read_text(encoding="utf-8"))
-                summary_data = data.get("summary_data", {})
-                md_text = summary_data.get("content", "")
-            else:
-                # Fallback to legacy .md file
-                md_path = SUMMARY_DIR / f"{meta['id']}.md"
-                md_text = md_path.read_text(encoding="utf-8", errors="ignore")
-            
-            preview_html = render_markdown(md_text)
-        except Exception:
-            preview_html = ""
-        item = dict(meta)
-        item["preview_html"] = preview_html
-        rendered.append(item)
-    return rendered
-
-
-
-# ------------------------- user-state helpers ---------------------------------
-
-def _user_file(uid: str) -> Path:
-    return USER_DATA_DIR / f"{uid}.json"
-
-
-def load_user_data(uid: str) -> dict:
-    """Load full user data structure with backward compatibility.
-
-    Shape:
-    {
-      "read": {arxiv_id: "YYYY-MM-DD" | null, ...},
-      "events": [ {"ts": ISO8601, "type": str, "arxiv_id": str|None, "meta": dict|None, "path": str|None, "ua": str|None}, ... ]
-    }
-    """
-    try:
-        data = json.loads(_user_file(uid).read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        data = {}
-
-    # migrate legacy list-based read
-    raw_read = data.get("read", {})
-    if isinstance(raw_read, list):
-        read_map = {str(rid): None for rid in raw_read}
-    elif isinstance(raw_read, dict):
-        read_map = {str(k): v for k, v in raw_read.items()}
-    else:
-        read_map = {}
-
-    events = data.get("events")
-    if not isinstance(events, list):
-        events = []
-
-    return {"read": read_map, "events": events}
-
-
-def load_read_map(uid: str) -> dict[str, str | None]:
-    data = load_user_data(uid)
-    return data.get("read", {})
-
-
-def save_user_data(uid: str, data: dict) -> None:
-    _user_file(uid).write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-
-def save_read_map(uid: str, read_map: dict[str, str | None]):
-    """Persist read map, preserving other fields (like events)."""
-    data = load_user_data(uid)
-    data["read"] = read_map
-    save_user_data(uid, data)
 
 
 # Event tracking functions are now handled by the decoupled EventTracker class
@@ -412,9 +213,6 @@ app.register_blueprint(event_tracking_bp)
 
 BASE_CSS = open(os.path.join('ui', 'base.css'), 'r', encoding='utf-8').read()
 
-INDEX_TEMPLATE = open(os.path.join('ui', 'index.html'), 'r', encoding='utf-8').read()
-DETAIL_TEMPLATE = open(os.path.join('ui', 'detail.html'), 'r', encoding='utf-8').read()
-
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
@@ -431,171 +229,10 @@ def test_endpoint():
         "remote_addr": request.remote_addr
     })
 
-@app.route("/", methods=["GET"])
-def index():
-    uid = request.cookies.get("uid")
-    entries_meta = _scan_entries_meta()
-    # tag filtering (from query string)
-    active_tag = (request.args.get("tag") or "").strip().lower() or None
-    tag_query = (request.args.get("q") or "").strip().lower()
-    # support multiple top filters: ?top=llm&top=cv
-    active_tops = [t.strip().lower() for t in request.args.getlist("top") if t.strip()]
-    unread_count = None
-    read_total = None
-    read_today = None
-    if uid:
-        read_map = load_read_map(uid)
-        read_ids = set(read_map.keys())
-        unread_count = len([e for e in entries_meta if e["id"] not in read_ids])
-        entries_meta = [e for e in entries_meta if e["id"] not in read_ids]
-        read_total = len(read_ids)
-        # Count how many read today, based on stored per-paper read date/time (YYYY-MM-DD[THH:MM:SS])
-        today_iso = date.today().isoformat()
-        read_today = 0
-        for d in read_map.values():
-            if not d:
-                continue
-            try:
-                # match date prefix for both date-only and datetime strings
-                if str(d).split('T', 1)[0] == today_iso:
-                    read_today += 1
-            except Exception:
-                continue
-    # apply tag-based filters if present
-    if active_tag:
-        entries_meta = [e for e in entries_meta if active_tag in (e.get("detail_tags") or []) or active_tag in (e.get("top_tags") or [])]
-    if tag_query:
-        def matches_query(tags: list[str] | None, query: str) -> bool:
-            if not tags:
-                return False
-            for t in tags:
-                if query in t:
-                    return True
-            return False
-        entries_meta = [e for e in entries_meta if matches_query(e.get("detail_tags"), tag_query) or matches_query(e.get("top_tags"), tag_query)]
-    if active_tops:
-        entries_meta = [e for e in entries_meta if any(t in (e.get("top_tags") or []) for t in active_tops)]
-
-    # compute tag cloud from filtered entries only (meta only, no HTML work)
-    tag_counts: dict[str, int] = {}
-    top_counts: dict[str, int] = {}
-    for e in entries_meta:
-        for t in e.get("detail_tags", []) or []:
-            tag_counts[t] = tag_counts.get(t, 0) + 1
-        for t in e.get("top_tags", []) or []:
-            top_counts[t] = top_counts.get(t, 0) + 1
-
-    # sort tags by frequency then name
-    tag_cloud = sorted(
-        ({"name": k, "count": v} for k, v in tag_counts.items()),
-        key=lambda item: (-item["count"], item["name"]),
-    )
-    top_cloud = sorted(
-        ({"name": k, "count": v} for k, v in top_counts.items()),
-        key=lambda item: (-item["count"], item["name"]),
-    )
-
-    # when searching, show only related detailed tags in the filter bar
-    if tag_query:
-        tag_cloud = [t for t in tag_cloud if tag_query in t["name"]]
-
-    # pagination
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-    except Exception:
-        page = 1
-    try:
-        per_page = int(request.args.get("per_page", 10))
-    except Exception:
-        per_page = 10
-    per_page = max(1, min(per_page, 30))
-    total_items = len(entries_meta)
-    total_pages = max(1, math.ceil(total_items / per_page))
-    if page > total_pages:
-        page = total_pages
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_entries = entries_meta[start:end]
-
-    # materialize preview HTML only for current page
-    entries = _render_page_entries(page_entries)
-
-    # Get admin users list for template
-    admin_users = [admin_id.strip() for admin_id in os.getenv("ADMIN_USER_IDS", "").split(",") if admin_id.strip()]
-
-    resp = make_response(
-        render_template_string(
-            INDEX_TEMPLATE,
-            entries=entries,
-            uid=uid,
-            unread_count=unread_count,
-            read_total=read_total,
-            read_today=read_today,
-            tag_cloud=tag_cloud,
-            active_tag=active_tag,
-            top_cloud=top_cloud,
-            active_tops=active_tops,
-            tag_query=tag_query,
-            page=page,
-            per_page=per_page,
-            total_pages=total_pages,
-            total_items=total_items,
-            admin_users=admin_users,
-            # Add admin URLs for JavaScript
-            admin_fetch_url=url_for("admin_fetch_latest"),
-            admin_stream_url=url_for("admin_fetch_latest_stream"),
-            # Add other API URLs for JavaScript
-            mark_read_url=url_for("mark_read", arxiv_id="__ID__").replace("__ID__", ""),
-            unmark_read_url=url_for("unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
-            reset_url=url_for("reset_read"),
-        )
-    )
-    return resp
 
 
-@app.route("/set_user", methods=["POST"])
-def set_user():
-    uid = request.form.get("uid", "").strip()
-    if not uid:
-        return redirect(url_for("index"))
-    resp = make_response(redirect(url_for("index")))
-    resp.set_cookie("uid", uid, max_age=60 * 60 * 24 * 365 * 3)  # 3-year cookie
-    return resp
 
 
-@app.route("/mark_read/<arxiv_id>", methods=["POST"])
-def mark_read(arxiv_id):
-    uid = request.cookies.get("uid")
-    if not uid:
-        return jsonify({"error": "no-uid"}), 400
-    read_map = load_read_map(uid)
-    # store local date-time with timezone offset for more precise analytics
-    read_map[str(arxiv_id)] = datetime.now().astimezone().isoformat(timespec="seconds")
-    save_read_map(uid, read_map)
-    return jsonify({"status": "ok"})
-
-
-@app.route("/unmark_read/<arxiv_id>", methods=["POST"])
-def unmark_read(arxiv_id):
-    uid = request.cookies.get("uid")
-    if not uid:
-        return jsonify({"error": "no-uid"}), 400
-    read_map = load_read_map(uid)
-    read_map.pop(str(arxiv_id), None)
-    save_read_map(uid, read_map)
-    return jsonify({"status": "ok"})
-
-
-@app.route("/reset", methods=["POST"])
-def reset_read():
-    uid = request.cookies.get("uid")
-    if not uid:
-        return jsonify({"error": "no-uid"}), 400
-    try:
-        _user_file(uid).unlink(missing_ok=True)
-    except Exception:
-        pass
-    return jsonify({"status": "reset"})
 
 
 @app.route("/summary/<arxiv_id>")
@@ -609,7 +246,7 @@ def view_summary(arxiv_id):
     service_data = record["service_data"]
     
     html_content = render_markdown(summary_data["content"])
-    uid = request.cookies.get("uid")
+    uid = user_management_module["service"].get_current_user_id()
     
     # Extract tags
     tags: list[str] = []
@@ -632,85 +269,7 @@ def view_summary(arxiv_id):
         original_url=service_data.get("original_url")
     )
 
-@app.route("/read")
-def read_papers():
-    uid = request.cookies.get("uid")
-    if not uid:
-        return redirect(url_for("index"))
-    read_map = load_read_map(uid)
-    entries_meta = _scan_entries_meta()
-    read_entries_meta = [e for e in entries_meta if e["id"] in set(read_map.keys())]
-    # allow optional tag filter on read list
-    active_tag = (request.args.get("tag") or "").strip().lower() or None
-    tag_query = (request.args.get("q") or "").strip().lower()
-    if active_tag:
-        read_entries_meta = [e for e in read_entries_meta if active_tag in (e.get("tags") or []) or active_tag in (e.get("top_tags") or [])]
-    if tag_query:
-        def matches_query(tags: list[str] | None, query: str) -> bool:
-            if not tags:
-                return False
-            for t in tags:
-                if query in t:
-                    return True
-            return False
-        read_entries_meta = [e for e in read_entries_meta if matches_query(e.get("tags"), tag_query)]
-    # tag cloud for read entries
-    tag_counts: dict[str, int] = {}
-    for e in read_entries_meta:
-        for t in (e.get("tags", []) or []):
-            tag_counts[t] = tag_counts.get(t, 0) + 1
-    tag_cloud = sorted(
-        ({"name": k, "count": v} for k, v in tag_counts.items()),
-        key=lambda item: (-item["count"], item["name"]),
-    )
-    # pagination for read list
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-    except Exception:
-        page = 1
-    try:
-        per_page = int(request.args.get("per_page", 10))
-    except Exception:
-        per_page = 10
-    per_page = max(1, min(per_page, 100))
-    total_items = len(read_entries_meta)
-    total_pages = max(1, math.ceil(total_items / per_page))
-    if page > total_pages:
-        page = total_pages
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_entries = read_entries_meta[start:end]
 
-    # render only the current page
-    entries = _render_page_entries(page_entries)
-    
-    # Get admin users list for template
-    admin_users = [admin_id.strip() for admin_id in os.getenv("ADMIN_USER_IDS", "").split(",") if admin_id.strip()]
-    
-    return render_template_string(
-        INDEX_TEMPLATE,
-        entries=entries,
-        uid=uid,
-        unread_count=None,
-        read_total=None,
-        read_today=None,
-        show_read=True,
-        tag_cloud=tag_cloud,
-        active_tag=active_tag,
-        tag_query=tag_query,
-        page=page,
-        per_page=per_page,
-        total_pages=total_pages,
-        total_items=total_items,
-        admin_users=admin_users,
-        # Add admin URLs for JavaScript
-        admin_fetch_url=url_for("admin_fetch_latest"),
-        admin_stream_url=url_for("admin_fetch_latest_stream"),
-        # Add other API URLs for JavaScript
-        mark_read_url=url_for("mark_read", arxiv_id="__ID__").replace("__ID__", ""),
-        unmark_read_url=url_for("unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
-        reset_url=url_for("reset_read"),
-    )
 
 @app.get("/assets/base.css")
 def base_css():
@@ -759,11 +318,11 @@ def admin_fetch_latest():
     print(f"DEBUG: Request path: {request.path}")
     print(f"DEBUG: Request url: {request.url}")
     
-    uid = request.cookies.get("uid")
+    uid = user_management_module["service"].get_current_user_id()
     if not uid:
         return jsonify({"error": "no-uid"}), 400
     
-    if not is_admin_user(uid):
+    if not user_management_module["service"].is_admin_user(uid):
         return jsonify({"error": "unauthorized"}), 403
     
     try:
@@ -801,8 +360,7 @@ def admin_fetch_latest():
         
         if result.returncode == 0:
             # Clear the cache to force refresh of entries
-            global _ENTRIES_CACHE
-            _ENTRIES_CACHE = {
+            index_page_module["scanner"]._cache = {
                 "meta": None,
                 "count": 0,
                 "latest_mtime": 0.0,
@@ -861,11 +419,11 @@ def admin_fetch_latest_stream():
     print(f"DEBUG: Request path: {request.path}")
     print(f"DEBUG: Request url: {request.url}")
     
-    uid = request.cookies.get("uid")
+    uid = user_management_module["service"].get_current_user_id()
     if not uid:
         return jsonify({"error": "no-uid"}), 400
     
-    if not is_admin_user(uid):
+    if not user_management_module["service"].is_admin_user(uid):
         return jsonify({"error": "unauthorized"}), 403
     
     def generate():
@@ -942,8 +500,7 @@ def admin_fetch_latest_stream():
                 yield "data: {\"type\": \"complete\", \"status\": \"success\", \"message\": \"最新论文摘要获取成功！\"}\n\n"
                 
                 # Clear the cache to force refresh of entries
-                global _ENTRIES_CACHE
-                _ENTRIES_CACHE = {
+                index_page_module["scanner"]._cache = {
                     "meta": None,
                     "count": 0,
                     "latest_mtime": 0.0,

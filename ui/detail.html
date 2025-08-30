@@ -30,9 +30,9 @@
         </div>
         
         {% if tags and tags|length %}
-        <form class="tag-row" method="GET" action="{{ url_for('index') }}" style="margin: .2rem 0 1rem; align-items:center; gap:.35rem;">
+        <form class="tag-row" method="GET" action="{{ url_for('index_page.index') }}" style="margin: .2rem 0 1rem; align-items:center; gap:.35rem;">
           {% for tg in tags %}
-            <a class="tag-chip" href='{{ url_for("index") }}?tag={{ tg }}'>{{ tg }}</a>
+            <a class="tag-chip" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>{{ tg }}</a>
           {% endfor %}
           <span class="muted" style="margin:0 .25rem 0 .5rem;">或 搜索:</span>
           <input type="text" name="q" placeholder="模糊搜索标签" class="tag-input" />

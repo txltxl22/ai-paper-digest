@@ -13,7 +13,7 @@
   {% if e.top_tags and e.top_tags|length %}
   <div class="tag-row">
     {% for tg in e.top_tags %}
-      <a class="top-chip pill" href='{{ url_for("index") }}?top={{ tg }}'>{{ tg }}</a>
+      <a class="top-chip pill" href='{{ url_for("index_page.index") }}?top={{ tg }}'>{{ tg }}</a>
     {% endfor %}
   </div>
   {% endif %}
@@ -21,7 +21,7 @@
   <div class="tag-row">
     {% set q = tag_query or '' %}
     {% for tg in e.detail_tags[:18] %}
-      <a class="tag-chip {% if q and (q in tg) %}query-hit{% endif %}" href='{{ url_for("index") }}?tag={{ tg }}'>{{ tg }}</a>
+      <a class="tag-chip {% if q and (q in tg) %}query-hit{% endif %}" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>{{ tg }}</a>
     {% endfor %}
     {% if e.detail_tags|length > 18 %}
       <span class="muted">+{{ e.detail_tags|length - 18 }}</span>

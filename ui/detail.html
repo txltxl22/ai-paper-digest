@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('base_css') }}">
     <link rel="stylesheet" href="{{ url_for('static_css', filename='badges.css') }}">
     <link rel="stylesheet" href="{{ url_for('static_css', filename='components.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static_css', filename='modal.css') }}">
     <link rel="icon" href="{{ url_for('static_favicon_svg') }}" type="image/svg+xml">
     <link rel="icon" href="{{ url_for('static_favicon_ico') }}" sizes="any">
 </head>
@@ -46,9 +47,27 @@
             <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf'>📄 打开原文 PDF</a>
         </p>
     </main>
-    <script src="js/event-tracker.js"></script>
-    <script src="js/theme.js"></script>
+    
+    {% include 'components/admin-modal.html' %}
+    <!-- JavaScript Modules -->
+    <script src="{{ url_for('static_js', filename='event-tracker.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='theme.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='toast.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='user-actions.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='article-actions.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='admin-modal.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='paper-submission.js') }}"></script>
+    
     <script>
+      // URL configuration for Flask templates
+      window.appUrls = {
+        mark_read: '{{ mark_read_url }}',
+        unmark_read: '{{ unmark_read_url }}',
+        reset: '{{ reset_url }}',
+        admin_stream: '{{ admin_stream_url }}',
+        admin_fetch: '{{ admin_fetch_url }}'
+      };
+      
       // PDF click event for detail page - using centralized event tracker
       document.getElementById('pdf-link')?.addEventListener('click', (ev) => {
         const href = ev.currentTarget.getAttribute('href');

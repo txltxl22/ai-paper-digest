@@ -16,6 +16,8 @@ def setup_app_dirs(sp, tmp_path):
     
     sp.index_page_module["scanner"].summary_dir = sp.SUMMARY_DIR
     sp.index_page_module["renderer"].summary_dir = sp.SUMMARY_DIR
+    
+    sp.summary_detail_module["loader"].summary_dir = sp.SUMMARY_DIR
 
 
 @pytest.fixture()
@@ -140,14 +142,40 @@ def test_index_renders_tags_and_filters(tmp_path, monkeypatch):
     sp.app.config.update(TESTING=True)
     client = sp.app.test_client()
 
-    # create two summaries with tags
-    s1 = sp.SUMMARY_DIR / "2506.11111.md"
-    s1.write_text("# s1\ncontent", encoding="utf-8")
-    (sp.SUMMARY_DIR / "2506.11111.tags.json").write_text('{"tags":["llm","agents"]}', encoding="utf-8")
+    # create two summaries with tags in new service record format
+    s1_data = {
+        "service_data": {
+            "source_type": "system",
+            "user_id": None,
+            "original_url": None
+        },
+        "summary_data": {
+            "arxiv_id": "2506.11111",
+            "content": "# s1\ncontent",
+            "tags": {
+                "top": ["llm"],
+                "tags": ["llm", "agents"]
+            }
+        }
+    }
+    (sp.SUMMARY_DIR / "2506.11111.json").write_text(json.dumps(s1_data), encoding="utf-8")
 
-    s2 = sp.SUMMARY_DIR / "2506.22222.md"
-    s2.write_text("# s2\ncontent", encoding="utf-8")
-    (sp.SUMMARY_DIR / "2506.22222.tags.json").write_text('{"tags":["vision","agents"]}', encoding="utf-8")
+    s2_data = {
+        "service_data": {
+            "source_type": "system", 
+            "user_id": None,
+            "original_url": None
+        },
+        "summary_data": {
+            "arxiv_id": "2506.22222",
+            "content": "# s2\ncontent", 
+            "tags": {
+                "top": ["vision"],
+                "tags": ["vision", "agents"]
+            }
+        }
+    }
+    (sp.SUMMARY_DIR / "2506.22222.json").write_text(json.dumps(s2_data), encoding="utf-8")
 
     # index should show tag chips and tag cloud
     res = client.get("/")

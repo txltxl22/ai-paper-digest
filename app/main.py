@@ -121,6 +121,9 @@ user_management_module = create_user_management_module(
 # Initialize index page module
 from app.index_page.factory import create_index_page_module
 
+# Initialize summary detail module
+from app.summary_detail.factory import create_summary_detail_module
+
 # Load templates
 with open(Path(__file__).parent.parent / "ui" / "index.html", "r", encoding="utf-8") as f:
     INDEX_TEMPLATE = f.read()
@@ -132,6 +135,11 @@ index_page_module = create_index_page_module(
     summary_dir=SUMMARY_DIR,
     user_service=user_management_module["service"],
     index_template=INDEX_TEMPLATE,
+    detail_template=DETAIL_TEMPLATE
+)
+
+summary_detail_module = create_summary_detail_module(
+    summary_dir=SUMMARY_DIR,
     detail_template=DETAIL_TEMPLATE
 )
 
@@ -152,6 +160,7 @@ paper_submission_module = create_paper_submission_module(
 # Register blueprints
 app.register_blueprint(user_management_module["blueprint"])
 app.register_blueprint(index_page_module["blueprint"])
+app.register_blueprint(summary_detail_module["blueprint"])
 app.register_blueprint(paper_submission_module["blueprint"])
 
 
@@ -168,24 +177,6 @@ app.register_blueprint(paper_submission_module["blueprint"])
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
-
-def render_markdown(md_text: str) -> str:
-    """Convert Markdown → HTML (GitHub-flavoured-ish)."""
-    return markdown.markdown(
-        md_text,
-        extensions=[
-            "fenced_code",
-            "tables",
-            "codehilite",
-            "toc",
-            "attr_list",
-        ],
-    )
-
-
-
-
-
 
 # Event tracking functions are now handled by the decoupled EventTracker class
 # This function is kept for backward compatibility but delegates to the tracker
@@ -228,47 +219,6 @@ def test_endpoint():
         "headers": dict(request.headers),
         "remote_addr": request.remote_addr
     })
-
-
-
-
-
-
-
-@app.route("/summary/<arxiv_id>")
-def view_summary(arxiv_id):
-    # Try to load from new JSON format first
-    record = load_summary_with_service_record(arxiv_id)
-    if not record:
-        abort(404)
-    
-    summary_data = record["summary_data"]
-    service_data = record["service_data"]
-    
-    html_content = render_markdown(summary_data["content"])
-    uid = user_management_module["service"].get_current_user_id()
-    
-    # Extract tags
-    tags: list[str] = []
-    tags_dict = summary_data.get("tags", {})
-    if isinstance(tags_dict, dict):
-        raw = []
-        if isinstance(tags_dict.get("top"), list):
-            raw.extend(tags_dict.get("top") or [])
-        if isinstance(tags_dict.get("tags"), list):
-            raw.extend(tags_dict.get("tags") or [])
-        tags = [str(t).strip().lower() for t in raw if str(t).strip()]
-    
-    return render_template_string(
-        DETAIL_TEMPLATE, 
-        content=html_content, 
-        arxiv_id=arxiv_id, 
-        tags=tags,
-        source_type=service_data.get("source_type", "system"),
-        user_id=service_data.get("user_id"),
-        original_url=service_data.get("original_url")
-    )
-
 
 
 @app.get("/assets/base.css")

@@ -1,7 +1,7 @@
 <!-- Article Card Component -->
 <article data-id='{{ e.id }}'>
   <div class="article-header">
-    <h2><a href='{{ url_for("view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a></h2>
+    <h2><a href='{{ url_for("summary_detail.view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a></h2>
     <div class="source-badge">
       {% if e.source_type == "user" %}
         <span class="badge user-badge" title="用户上传">👤 {{ e.user_id or "用户" }}</span>

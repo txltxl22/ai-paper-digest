@@ -204,6 +204,93 @@ def load_legacy_summary(arxiv_id: str) -> dict:
         print(f"Error loading legacy summary for {arxiv_id}: {e}")
         return None
 
+def migrate_legacy_summaries_to_service_record() -> dict:
+    """Migrate all legacy summaries (.md + .tags.json) to new service record format.
+    
+    This function scans for legacy format summaries and creates service records for them
+    with update times based on the file creation time.
+    
+    Returns:
+        Dictionary with migration statistics
+    """
+    import os
+    from pathlib import Path
+    
+    migration_stats = {
+        "total_legacy_files": 0,
+        "migrated": 0,
+        "skipped": 0,
+        "errors": 0,
+        "details": []
+    }
+    
+    # Find all .md files that don't have corresponding .json files
+    md_files = list(SUMMARY_DIR.glob("*.md"))
+    
+    for md_path in md_files:
+        arxiv_id = md_path.stem
+        json_path = SUMMARY_DIR / f"{arxiv_id}.json"
+        
+        # Skip if service record already exists
+        if json_path.exists():
+            migration_stats["skipped"] += 1
+            migration_stats["details"].append({
+                "arxiv_id": arxiv_id,
+                "status": "skipped",
+                "reason": "service record already exists"
+            })
+            continue
+        
+        migration_stats["total_legacy_files"] += 1
+        
+        try:
+            # Load summary content
+            summary_content = md_path.read_text(encoding="utf-8")
+            
+            # Load tags if available
+            tags_path = SUMMARY_DIR / f"{arxiv_id}.tags.json"
+            tags = {"top": [], "tags": []}
+            if tags_path.exists():
+                try:
+                    tags = json.loads(tags_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            
+            # Create service record with file creation time as update time
+            service_record = create_service_record(arxiv_id, "system")
+            
+            # Use file creation time for updated_at
+            file_creation_time = datetime.fromtimestamp(md_path.stat().st_mtime)
+            
+            record = {
+                "service_data": service_record["service_data"],
+                "summary_data": {
+                    "content": summary_content,
+                    "tags": tags,
+                    "updated_at": file_creation_time.isoformat()
+                }
+            }
+            
+            # Save the new service record
+            json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+            
+            migration_stats["migrated"] += 1
+            migration_stats["details"].append({
+                "arxiv_id": arxiv_id,
+                "status": "migrated",
+                "update_time": file_creation_time.isoformat()
+            })
+            
+        except Exception as e:
+            migration_stats["errors"] += 1
+            migration_stats["details"].append({
+                "arxiv_id": arxiv_id,
+                "status": "error",
+                "error": str(e)
+            })
+    
+    return migration_stats
+
 # -----------------------------------------------------------------------------
 # Admin helpers
 # -----------------------------------------------------------------------------
@@ -1156,6 +1243,39 @@ def admin_fetch_latest_stream():
             yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": \"执行失败\"}\n\n"
     
     return Response(generate(), mimetype='text/event-stream')
+
+
+@app.route("/admin/migrate_legacy_summaries", methods=["POST"])
+def admin_migrate_legacy_summaries():
+    """Admin route to migrate legacy summaries to service record format."""
+    uid = request.cookies.get("uid")
+    if not uid:
+        return jsonify({"error": "no-uid"}), 400
+    
+    if not is_admin_user(uid):
+        return jsonify({"error": "unauthorized"}), 403
+    
+    try:
+        # Run the migration
+        migration_stats = migrate_legacy_summaries_to_service_record()
+        
+        # Clear the cache to force refresh of entries
+        global _ENTRIES_CACHE
+        _ENTRIES_CACHE = {
+            "meta": None,
+            "count": 0,
+            "latest_mtime": 0.0,
+        }
+        
+        return jsonify({
+            "status": "success",
+            "message": "Legacy summaries migration completed",
+            "migration_stats": migration_stats
+        })
+        
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
 
 # -----------------------------------------------------------------------------
 # Paper URL submission and processing

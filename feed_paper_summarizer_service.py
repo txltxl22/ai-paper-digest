@@ -225,6 +225,35 @@ def _summarize_url(
         summary_path = ps.SUMMARY_DIR / f_name  # type: ignore[attr-defined]
         if summary_path.exists():
             _LOG.warning(f"{summary_path} existed")
+            # Check if service record exists, if not create one for backward compatibility
+            json_path = ps.SUMMARY_DIR / (pdf_path.stem + ".json")  # type: ignore[attr-defined]
+            if not json_path.exists():
+                _LOG.info("🔄  Creating service record for existing summary %s…", pdf_path.stem)
+                try:
+                    from summary_page import save_summary_with_service_record
+                    summary_text = summary_path.read_text(encoding="utf-8", errors="ignore")
+                    # Load existing tags if available
+                    tags_path = ps.SUMMARY_DIR / (pdf_path.stem + ".tags.json")  # type: ignore[attr-defined]
+                    tag_obj = {"tags": [], "top": []}
+                    if tags_path.exists():
+                        try:
+                            tag_obj = json.loads(tags_path.read_text(encoding="utf-8"))
+                        except Exception:
+                            pass
+                    
+                    save_summary_with_service_record(
+                        arxiv_id=pdf_path.stem,
+                        summary_content=summary_text,
+                        tags=tag_obj,
+                        source_type="system",
+                        original_url=pdf_url
+                    )
+                    _LOG.info("✅  Created service record for %s", pdf_path.stem)
+                except ImportError:
+                    _LOG.warning("summary_page module not available, skipping service record creation")
+                except Exception as exc:
+                    _LOG.exception("Failed to create service record for %s: %s", pdf_path.stem, exc)
+            
             # Ensure tags exist even if summary already cached
             try:
                 tags_path = ps.SUMMARY_DIR / (pdf_path.stem + ".tags.json")  # type: ignore[attr-defined]
@@ -258,19 +287,37 @@ def _summarize_url(
         )
 
         chunks_summary_out_path.write_text(chunks_summary, encoding="utf-8")
-        summary_path.write_text(summary, encoding="utf-8")
-
+        
         # Generate and persist tags alongside the summary
         try:
             _LOG.info("🏷️  Generating tags for %s…", pdf_path.stem)
             tag_raw = ps.generate_tags_from_summary(summary, api_key=api_key, 
                                                   base_url=base_url, provider=provider, model=model)  # type: ignore[attr-defined]
             tag_obj = tag_raw if isinstance(tag_raw, dict) else {"tags": list(tag_raw or []), "top": []}
-            tags_path = ps.SUMMARY_DIR / (pdf_path.stem + ".tags.json")  # type: ignore[attr-defined]
-            tags_path.write_text(json.dumps(tag_obj, ensure_ascii=False, indent=2), encoding="utf-8")
-            _LOG.info("✅  Saved %d tag(s) for %s", len(tag_obj.get("tags", [])), pdf_path.stem)
+            
+            # Save using the new service record format
+            try:
+                # Import the function from summary_page module
+                from summary_page import save_summary_with_service_record
+                save_summary_with_service_record(
+                    arxiv_id=pdf_path.stem,
+                    summary_content=summary,
+                    tags=tag_obj,
+                    source_type="system",
+                    original_url=pdf_url
+                )
+                _LOG.info("✅  Saved summary with service record for %s", pdf_path.stem)
+            except ImportError:
+                # Fallback to legacy format if summary_page module is not available
+                summary_path.write_text(summary, encoding="utf-8")
+                tags_path = ps.SUMMARY_DIR / (pdf_path.stem + ".tags.json")  # type: ignore[attr-defined]
+                tags_path.write_text(json.dumps(tag_obj, ensure_ascii=False, indent=2), encoding="utf-8")
+                _LOG.info("✅  Saved %d tag(s) for %s (legacy format)", len(tag_obj.get("tags", [])), pdf_path.stem)
+                
         except Exception as exc:
             _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
+            # Still save the summary even if tag generation fails
+            summary_path.write_text(summary, encoding="utf-8")
 
         _LOG.info("✅  Done – summary saved to %s", summary_path)
         return summary_path, pdf_url, paper_subject
@@ -435,6 +482,7 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:  # noqa: D
     p.add_argument("--local", action="store_true", help="Process local cached papers instead of fetching RSS.")
     p.add_argument("--tags-only", action="store_true", help="Only generate tags for existing summaries and exit.")
     p.add_argument("--extract-only", action="store_true", help="Only extract PDF text to markdown (no LLM calls, no summaries, no tags, no RSS generation).")
+    p.add_argument("--migrate-legacy", action="store_true", help="Migrate legacy summaries to service record format and exit.")
     p.add_argument("--debug", action="store_true", help="Verbose logging")
     p.add_argument("--input-char-limit", dest="max_input_char", default=100000, help="Max allowed number of input chars")
     return p.parse_args(argv)
@@ -444,6 +492,7 @@ def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:  # noqa: D
 # ---------------------------------------------------------------------------
 
 def main(argv: List[str] | None = None) -> None:  # noqa: D401
+    global _log_listener
     args = _parse_args(argv)
     _setup_logging(args.debug)
 
@@ -467,6 +516,29 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
                        model=provider_config["model"],
                        api_key=provider_config["api_key"])
         _LOG.info("✨  All done (tags-only).")
+        # Clean up the log listener
+        if _log_listener:
+            _log_listener.stop()
+            _log_listener = None
+        return
+
+    # Short-circuit: migrate legacy summaries
+    if args.migrate_legacy:
+        try:
+            from summary_page import migrate_legacy_summaries_to_service_record
+            _LOG.info("🔄  Starting legacy summaries migration...")
+            migration_stats = migrate_legacy_summaries_to_service_record()
+            _LOG.info("✅  Migration completed:")
+            _LOG.info("   Total legacy files: %d", migration_stats["total_legacy_files"])
+            _LOG.info("   Migrated: %d", migration_stats["migrated"])
+            _LOG.info("   Skipped: %d", migration_stats["skipped"])
+            _LOG.info("   Errors: %d", migration_stats["errors"])
+            if migration_stats["errors"] > 0:
+                _LOG.warning("Some files had errors during migration. Check the details.")
+        except ImportError:
+            _LOG.error("summary_page module not available for migration")
+        except Exception as exc:
+            _LOG.error("Migration failed: %s", exc)
         # Clean up the log listener
         if _log_listener:
             _log_listener.stop()

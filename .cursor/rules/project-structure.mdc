@@ -1,0 +1,10 @@
+---
+description: understand this project, read which files and modify which files
+globs:
+alwaysApply: true
+---
+
+1. for paper summary whole process and related functions, read paper_summarizer.py
+2. for the service using the functions to handle rss input, read feed_paper_summarizer_service.py
+3. for the web application for the whole project, which is a website for users, read summary_page.py
+4. user data saving in user_data/

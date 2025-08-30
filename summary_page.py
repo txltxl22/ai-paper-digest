@@ -74,6 +74,137 @@ MD_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
 
 # -----------------------------------------------------------------------------
+# Service Record Management
+# -----------------------------------------------------------------------------
+
+def create_service_record(arxiv_id: str, source_type: str = "system", user_id: str = None, 
+                         original_url: str = None, ai_judgment: dict = None) -> dict:
+    """Create a service record for a paper summary.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+        source_type: Either "system" (from background processing) or "user" (user upload)
+        user_id: The user ID who uploaded the paper (if source_type is "user")
+        original_url: The original URL of the paper
+        ai_judgment: AI judgment data if available
+    
+    Returns:
+        Service record dictionary
+    """
+    record = {
+        "service_data": {
+            "arxiv_id": arxiv_id,
+            "source_type": source_type,  # "system" or "user"
+            "created_at": datetime.now().isoformat(),
+            "original_url": original_url,
+            "ai_judgment": ai_judgment or {}
+        }
+    }
+    
+    if source_type == "user" and user_id:
+        record["service_data"]["user_id"] = user_id
+    
+    return record
+
+def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: dict, 
+                                   source_type: str = "system", user_id: str = None,
+                                   original_url: str = None, ai_judgment: dict = None):
+    """Save a summary with its service record in JSON format.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+        summary_content: The markdown summary content
+        tags: Tags dictionary with top and detail tags
+        source_type: Either "system" or "user"
+        user_id: The user ID who uploaded the paper (if source_type is "user")
+        original_url: The original URL of the paper
+        ai_judgment: AI judgment data if available
+    """
+    # Create the combined record
+    record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment)
+    record["summary_data"] = {
+        "content": summary_content,
+        "tags": tags,
+        "updated_at": datetime.now().isoformat()
+    }
+    
+    # Save as JSON file
+    json_path = SUMMARY_DIR / f"{arxiv_id}.json"
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
+    
+    # Also save the legacy .md and .tags.json files for backward compatibility
+    md_path = SUMMARY_DIR / f"{arxiv_id}.md"
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write(summary_content)
+    
+    tags_path = SUMMARY_DIR / f"{arxiv_id}.tags.json"
+    with open(tags_path, 'w', encoding='utf-8') as f:
+        json.dump(tags, f, ensure_ascii=False, indent=2)
+
+def load_summary_with_service_record(arxiv_id: str) -> dict:
+    """Load a summary with its service record.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+    
+    Returns:
+        Dictionary containing service_data and summary_data, or None if not found
+    """
+    json_path = SUMMARY_DIR / f"{arxiv_id}.json"
+    if json_path.exists():
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading service record for {arxiv_id}: {e}")
+    
+    # Fallback to legacy format
+    return load_legacy_summary(arxiv_id)
+
+def load_legacy_summary(arxiv_id: str) -> dict:
+    """Load a summary in legacy format (separate .md and .tags.json files).
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+    
+    Returns:
+        Dictionary with service_data and summary_data, defaulting to system source
+    """
+    md_path = SUMMARY_DIR / f"{arxiv_id}.md"
+    tags_path = SUMMARY_DIR / f"{arxiv_id}.tags.json"
+    
+    if not md_path.exists():
+        return None
+    
+    try:
+        # Load summary content
+        summary_content = md_path.read_text(encoding='utf-8')
+        
+        # Load tags
+        tags = {"top": [], "tags": []}
+        if tags_path.exists():
+            try:
+                tags = json.loads(tags_path.read_text(encoding='utf-8'))
+            except Exception:
+                pass
+        
+        # Create service record with default system source
+        service_record = create_service_record(arxiv_id, "system")
+        
+        return {
+            "service_data": service_record["service_data"],
+            "summary_data": {
+                "content": summary_content,
+                "tags": tags,
+                "updated_at": datetime.fromtimestamp(md_path.stat().st_mtime).isoformat()
+            }
+        }
+    except Exception as e:
+        print(f"Error loading legacy summary for {arxiv_id}: {e}")
+        return None
+
+# -----------------------------------------------------------------------------
 # Admin helpers
 # -----------------------------------------------------------------------------
 
@@ -114,21 +245,25 @@ _ENTRIES_CACHE: dict = {
 def _scan_entries_meta() -> list[dict]:
     """Scan summary directory and build metadata for all entries (no HTML).
 
-    Returns a list of dicts with keys: id, updated, tags, top_tags, detail_tags.
-    This function also maintains a lightweight cache to avoid re-reading tag
-    files on every request when nothing changed.
+    Returns a list of dicts with keys: id, updated, tags, top_tags, detail_tags, source_type, user_id.
+    This function also maintains a lightweight cache to avoid re-reading files
+    on every request when nothing changed.
     """
+    # Get all .json files (new format) and .md files (legacy format)
+    json_files = list(SUMMARY_DIR.glob("*.json"))
     md_files = list(SUMMARY_DIR.glob("*.md"))
-    count = len(md_files)
-    # compute latest mtime considering the md file and its .tags.json sibling
+    
+    # Filter out .tags.json files from json_files
+    json_files = [f for f in json_files if not f.name.endswith('.tags.json')]
+    
+    # Count total files for cache invalidation
+    count = len(json_files) + len(md_files)
+    
+    # Compute latest mtime considering all relevant files
     latest_mtime = 0.0
-    for p in md_files:
+    for p in json_files + md_files:
         try:
             latest_mtime = max(latest_mtime, p.stat().st_mtime)
-            t = p.with_suffix("")
-            t = t.with_name(t.name + ".tags.json")
-            if t.exists():
-                latest_mtime = max(latest_mtime, t.stat().st_mtime)
         except Exception:
             continue
 
@@ -140,16 +275,72 @@ def _scan_entries_meta() -> list[dict]:
         return list(_ENTRIES_CACHE["meta"])  # type: ignore[index]
 
     entries_meta: list[dict] = []
-    for path in md_files:
+    processed_ids = set()
+    
+    # Process new JSON format files first
+    for json_path in json_files:
         try:
-            stat = path.stat()
-            updated = datetime.fromtimestamp(stat.st_mtime)
-
-            # load tags saved alongside the summary (no markdown rendering here)
+            arxiv_id = json_path.stem
+            if arxiv_id in processed_ids:
+                continue
+                
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            service_data = data.get("service_data", {})
+            summary_data = data.get("summary_data", {})
+            
+            # Parse tags
             tags: list[str] = []
             top_tags: list[str] = []
             detail_tags: list[str] = []
-            tags_file = path.with_suffix("")
+            
+            tags_dict = summary_data.get("tags", {})
+            if isinstance(tags_dict, dict):
+                if isinstance(tags_dict.get("top"), list):
+                    top_tags = [str(t).strip().lower() for t in tags_dict.get("top") if str(t).strip()]
+                if isinstance(tags_dict.get("tags"), list):
+                    detail_tags = [str(t).strip().lower() for t in tags_dict.get("tags") if str(t).strip()]
+            tags = (top_tags or []) + (detail_tags or [])
+            
+            # Parse updated time
+            updated_str = summary_data.get("updated_at")
+            if updated_str:
+                try:
+                    updated = datetime.fromisoformat(updated_str.replace('Z', '+00:00'))
+                except Exception:
+                    updated = datetime.fromtimestamp(json_path.stat().st_mtime)
+            else:
+                updated = datetime.fromtimestamp(json_path.stat().st_mtime)
+            
+            entries_meta.append({
+                "id": arxiv_id,
+                "updated": updated,
+                "tags": tags,
+                "top_tags": top_tags,
+                "detail_tags": detail_tags,
+                "source_type": service_data.get("source_type", "system"),
+                "user_id": service_data.get("user_id"),
+                "original_url": service_data.get("original_url"),
+            })
+            processed_ids.add(arxiv_id)
+        except Exception as e:
+            print(f"Error processing JSON file {json_path}: {e}")
+            continue
+    
+    # Process legacy .md files
+    for md_path in md_files:
+        try:
+            arxiv_id = md_path.stem
+            if arxiv_id in processed_ids:
+                continue
+                
+            stat = md_path.stat()
+            updated = datetime.fromtimestamp(stat.st_mtime)
+
+            # Load tags from legacy .tags.json file
+            tags: list[str] = []
+            top_tags: list[str] = []
+            detail_tags: list[str] = []
+            tags_file = md_path.with_suffix("")
             tags_file = tags_file.with_name(tags_file.name + ".tags.json")
             try:
                 if tags_file.exists():
@@ -170,16 +361,19 @@ def _scan_entries_meta() -> list[dict]:
             except Exception:
                 tags = []
 
-            entries_meta.append(
-                {
-                    "id": path.stem,
-                    "updated": updated,
-                    "tags": tags,
-                    "top_tags": top_tags,
-                    "detail_tags": detail_tags,
-                }
-            )
-        except Exception:
+            entries_meta.append({
+                "id": arxiv_id,
+                "updated": updated,
+                "tags": tags,
+                "top_tags": top_tags,
+                "detail_tags": detail_tags,
+                "source_type": "system",  # Legacy files default to system
+                "user_id": None,
+                "original_url": None,
+            })
+            processed_ids.add(arxiv_id)
+        except Exception as e:
+            print(f"Error processing legacy MD file {md_path}: {e}")
             continue
 
     entries_meta.sort(key=lambda e: e["updated"], reverse=True)
@@ -194,8 +388,17 @@ def _render_page_entries(entries_meta: list[dict]) -> list[dict]:
     rendered: list[dict] = []
     for meta in entries_meta:
         try:
-            md_path = SUMMARY_DIR / f"{meta['id']}.md"
-            md_text = md_path.read_text(encoding="utf-8", errors="ignore")
+            # Try to load from new JSON format first
+            json_path = SUMMARY_DIR / f"{meta['id']}.json"
+            if json_path.exists():
+                data = json.loads(json_path.read_text(encoding="utf-8"))
+                summary_data = data.get("summary_data", {})
+                md_text = summary_data.get("content", "")
+            else:
+                # Fallback to legacy .md file
+                md_path = SUMMARY_DIR / f"{meta['id']}.md"
+                md_text = md_path.read_text(encoding="utf-8", errors="ignore")
+            
             preview_html = render_markdown(md_text)
         except Exception:
             preview_html = ""
@@ -283,6 +486,7 @@ def append_event(uid: str, event_type: str, arxiv_id: str | None = None, meta: d
 # -----------------------------------------------------------------------------
 
 BASE_CSS = open(os.path.join('ui', 'base.css'), 'r', encoding='utf-8').read()
+BADGE_CSS = open(os.path.join('ui', 'css', 'badges.css'), 'r', encoding='utf-8').read()
 INDEX_TEMPLATE = open(os.path.join('ui', 'index.html'), 'r', encoding='utf-8').read()
 DETAIL_TEMPLATE = open(os.path.join('ui', 'detail.html'), 'r', encoding='utf-8').read()
 
@@ -471,35 +675,37 @@ def reset_read():
 
 @app.route("/summary/<arxiv_id>")
 def view_summary(arxiv_id):
-    md_path = SUMMARY_DIR / f"{arxiv_id}.md"
-    if not md_path.exists():
+    # Try to load from new JSON format first
+    record = load_summary_with_service_record(arxiv_id)
+    if not record:
         abort(404)
-    md_text = md_path.read_text(encoding="utf-8", errors="ignore")
+    
+    summary_data = record["summary_data"]
+    service_data = record["service_data"]
+    
+    html_content = render_markdown(summary_data["content"])
     uid = request.cookies.get("uid")
-    html_content = render_markdown(md_text)
-    # load tags for this paper
+    
+    # Extract tags
     tags: list[str] = []
-    tpath = md_path.with_suffix("")
-    tpath = tpath.with_name(tpath.name + ".tags.json")
-    try:
-        if tpath.exists():
-            data = json.loads(tpath.read_text(encoding="utf-8"))
-            # support flat and nested
-            if isinstance(data, list):
-                tags = [str(t).strip().lower() for t in data if str(t).strip()]
-            elif isinstance(data, dict):
-                container = data
-                if isinstance(data.get("tags"), dict):
-                    container = data.get("tags") or {}
-                raw = []
-                if isinstance(container.get("top"), list):
-                    raw.extend(container.get("top") or [])
-                if isinstance(container.get("tags"), list):
-                    raw.extend(container.get("tags") or [])
-                tags = [str(t).strip().lower() for t in raw if str(t).strip()]
-    except Exception:
-        tags = []
-    return render_template_string(DETAIL_TEMPLATE, content=html_content, arxiv_id=arxiv_id, tags=tags)
+    tags_dict = summary_data.get("tags", {})
+    if isinstance(tags_dict, dict):
+        raw = []
+        if isinstance(tags_dict.get("top"), list):
+            raw.extend(tags_dict.get("top") or [])
+        if isinstance(tags_dict.get("tags"), list):
+            raw.extend(tags_dict.get("tags") or [])
+        tags = [str(t).strip().lower() for t in raw if str(t).strip()]
+    
+    return render_template_string(
+        DETAIL_TEMPLATE, 
+        content=html_content, 
+        arxiv_id=arxiv_id, 
+        tags=tags,
+        source_type=service_data.get("source_type", "system"),
+        user_id=service_data.get("user_id"),
+        original_url=service_data.get("original_url")
+    )
 
 
 @app.route("/raw/<arxiv_id>.md")
@@ -593,6 +799,10 @@ def read_papers():
 @app.get("/assets/base.css")
 def base_css():
     return Response(BASE_CSS, mimetype="text/css")
+
+@app.get("/assets/badges.css")
+def badge_css():
+    return Response(BADGE_CSS, mimetype="text/css")
 
 
 @app.get("/favicon.svg")
@@ -1382,7 +1592,40 @@ def submit_paper():
             )
             
             if summary_path:
-                # Save successful upload
+                # Extract arXiv ID from the summary path
+                arxiv_id = summary_path.stem
+                
+                # Read the generated summary content
+                summary_content = summary_path.read_text(encoding="utf-8")
+                
+                # Read the generated tags
+                tags_path = SUMMARY_DIR / f"{arxiv_id}.tags.json"
+                tags = {"top": [], "tags": []}
+                if tags_path.exists():
+                    try:
+                        tags = json.loads(tags_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
+                
+                # Create AI judgment data
+                ai_judgment = {
+                    "is_ai": is_ai,
+                    "confidence": confidence,
+                    "tags": tags
+                }
+                
+                # Save with service record
+                save_summary_with_service_record(
+                    arxiv_id=arxiv_id,
+                    summary_content=summary_content,
+                    tags=tags,
+                    source_type="user",
+                    user_id=uid,
+                    original_url=paper_url,
+                    ai_judgment=ai_judgment
+                )
+                
+                # Save successful upload record
                 save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
                     "success": True,
                     "summary_path": str(summary_path),

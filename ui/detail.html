@@ -6,6 +6,7 @@
     <meta name='viewport' content='width=device-width,initial-scale=1'>
     <title>{{ arxiv_id }} – Summary</title>
     <link rel="stylesheet" href="{{ url_for('base_css') }}">
+    <link rel="stylesheet" href="{{ url_for('badge_css') }}">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/favicon.ico" sizes="any">
 </head>
@@ -19,6 +20,19 @@
         </div>
     </header>
     <main>
+        <div class="summary-header">
+          <div class="source-info">
+            {% if source_type == "user" %}
+              <span class="badge user-badge" title="用户上传">👤 {{ user_id or "用户" }}</span>
+              {% if original_url %}
+                <span class="muted">来源: <a href="{{ original_url }}" target="_blank" class="source-link">{{ original_url }}</a></span>
+              {% endif %}
+            {% else %}
+              <span class="badge system-badge" title="系统自动处理">🤖 系统自动处理</span>
+            {% endif %}
+          </div>
+        </div>
+        
         {% if tags and tags|length %}
         <form class="tag-row" method="GET" action="{{ url_for('index') }}" style="margin: .2rem 0 1rem; align-items:center; gap:.35rem;">
           {% for tg in tags %}

@@ -6,6 +6,7 @@
   <title>arXiv最新AI论文速览速学</title>
   <meta name='viewport' content='width=device-width,initial-scale=1'>
   <link rel="stylesheet" href="{{ url_for('base_css') }}">
+  <link rel="stylesheet" href="{{ url_for('badge_css') }}">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="icon" href="./favicon.ico" sizes="any">
 </head>
@@ -126,7 +127,16 @@
     {% endif %}
     {% for e in entries %}
     <article data-id='{{ e.id }}'>
-      <h2><a href='{{ url_for("view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a></h2>
+      <div class="article-header">
+        <h2><a href='{{ url_for("view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a></h2>
+        <div class="source-badge">
+          {% if e.source_type == "user" %}
+            <span class="badge user-badge" title="用户上传">👤 {{ e.user_id or "用户" }}</span>
+          {% else %}
+            <span class="badge system-badge" title="系统自动处理">🤖 系统</span>
+          {% endif %}
+        </div>
+      </div>
       {% if e.top_tags and e.top_tags|length %}
       <div class="tag-row">
         {% for tg in e.top_tags %}

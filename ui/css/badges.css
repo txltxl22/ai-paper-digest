@@ -1,0 +1,83 @@
+/* Badge Styles */
+
+/* Source badges for article headers */
+.article-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.article-header h2 {
+    margin: 0;
+    flex: 1;
+}
+
+.source-badge {
+    flex-shrink: 0;
+}
+
+/* Base badge styles */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid;
+}
+
+/* User badge - blue theme */
+.user-badge {
+    background: #dbeafe;
+    color: #1e40af;
+    border-color: #93c5fd;
+}
+
+[data-theme="dark"] .user-badge {
+    background: #1e3a8a;
+    color: #dbeafe;
+    border-color: #3b82f6;
+}
+
+/* System badge - purple theme */
+.system-badge {
+    background: #f3e8ff;
+    color: #7c3aed;
+    border-color: #c4b5fd;
+}
+
+[data-theme="dark"] .system-badge {
+    background: #581c87;
+    color: #e9d5ff;
+    border-color: #a855f7;
+}
+
+/* Summary header styles for detail page */
+.summary-header {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--code-bg);
+    border-radius: 6px;
+}
+
+.source-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.source-link {
+    color: var(--muted-text);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.source-link:hover {
+    text-decoration: underline;
+}

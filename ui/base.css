@@ -296,3 +296,5 @@ code {
     opacity: 1;
     transform: translateY(0);
 }
+
+/* Badge styles are now in ui/css/badges.css */

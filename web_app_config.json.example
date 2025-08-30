@@ -1,0 +1,28 @@
+{
+  "llm": {
+    "provider": "deepseek",
+    "api_key": "",
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "max_tokens": 4000,
+    "temperature": 0.1
+  },
+  "app": {
+    "host": "0.0.0.0",
+    "port": 22581,
+    "debug": false,
+    "admin_user_ids": []
+  },
+  "paper_processing": {
+    "max_workers": 4,
+    "chunk_size": 2000,
+    "max_tags": 8,
+    "daily_submission_limit": 3
+  },
+  "paths": {
+    "summary_dir": "summary",
+    "user_data_dir": "user_data",
+    "papers_dir": "papers",
+    "markdown_dir": "markdown"
+  }
+}

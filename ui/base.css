@@ -3,6 +3,7 @@
     --bg: #f5f7fa;
     --text: #111827;
     --muted: #6b7280;
+    --muted-text: #6b7280;
 
     --header-bg: #24292f;
     --header-text: #ffffff;
@@ -17,6 +18,7 @@
     --btn-hover-bg: #e2e8f0;
 
     --action-bg: #f5f5f5;
+    --action-bg-hover: #e5e5e5;
     --action-text: #333333;
     --btn-border: rgba(0, 0, 0, 0.06);
     --divider: rgba(0, 0, 0, 0.08);
@@ -32,6 +34,7 @@
     --bg: #0b1220;
     --text: #e5e7eb;
     --muted: #9ca3af;
+    --muted-text: #9ca3af;
 
     --header-bg: #0f172a;
     --header-text: #e5e7eb;
@@ -46,6 +49,7 @@
     --btn-hover-bg: #374151;
 
     --action-bg: #1f2937;
+    --action-bg-hover: #374151;
     --action-text: #e5e7eb;
     --btn-border: rgba(255, 255, 255, 0.08);
     --divider: rgba(255, 255, 255, 0.12);

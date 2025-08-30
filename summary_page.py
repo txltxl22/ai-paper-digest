@@ -6,6 +6,9 @@ import string
 from pathlib import Path
 from datetime import datetime, date, timezone, timedelta
 
+# Import configuration management
+from config_manager import get_llm_config, get_app_config, get_paper_processing_config, get_paths_config
+
 # Windows-specific environment setup
 if os.name == 'nt':  # Windows
     # Set UTF-8 encoding for Windows
@@ -50,19 +53,33 @@ app.wsgi_app = ProxyFix(
 # Configuration
 # -----------------------------------------------------------------------------
 
-SUMMARY_DIR = Path(__file__).parent / "summary"  # folder with <arxiv_id>.md
-USER_DATA_DIR = Path(__file__).parent / "user_data"  # persisted read-status
+# Load configuration
+paths_config = get_paths_config()
+app_config = get_app_config()
+llm_config = get_llm_config()
+paper_config = get_paper_processing_config()
+
+# Set up directories
+SUMMARY_DIR = Path(__file__).parent / paths_config.summary_dir
+USER_DATA_DIR = Path(__file__).parent / paths_config.user_data_dir
+PDF_DIR = Path(__file__).parent / paths_config.papers_dir
+MD_DIR = Path(__file__).parent / paths_config.markdown_dir
+DATA_DIR = Path(__file__).parent / "data"
+
+# Create directories
 SUMMARY_DIR.mkdir(exist_ok=True)
 USER_DATA_DIR.mkdir(exist_ok=True)
+PDF_DIR.mkdir(exist_ok=True)
+MD_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 # -----------------------------------------------------------------------------
 # Admin helpers
 # -----------------------------------------------------------------------------
 
 def is_admin_user(uid: str) -> bool:
-    """Check if the user is an admin based on environment variable."""
-    admin_uids = os.getenv("ADMIN_USER_IDS", "").split(",")
-    return uid.strip() in [admin_id.strip() for admin_id in admin_uids if admin_id.strip()]
+    """Check if the user is an admin based on configuration."""
+    return uid.strip() in app_config.admin_user_ids
 
 
 def is_windows_system() -> bool:
@@ -931,9 +948,505 @@ def admin_fetch_latest_stream():
     return Response(generate(), mimetype='text/event-stream')
 
 # -----------------------------------------------------------------------------
+# Paper URL submission and processing
+# -----------------------------------------------------------------------------
+
+def get_client_ip():
+    """Get client IP address, handling proxy headers."""
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    elif request.headers.get('X-Real-IP'):
+        return request.headers.get('X-Real-IP')
+    else:
+        return request.remote_addr
+
+def check_daily_limit(ip):
+    """Check if IP has exceeded daily limit."""
+    today = date.today().isoformat()
+    limit_file = DATA_DIR / "daily_limits.json"
+    
+    try:
+        if limit_file.exists():
+            with open(limit_file, 'r', encoding='utf-8') as f:
+                limits = json.load(f)
+        else:
+            limits = {}
+        
+        # Clean up old entries
+        limits = {k: v for k, v in limits.items() if v['date'] == today}
+        
+        if ip in limits:
+            return limits[ip]['count'] < paper_config.daily_submission_limit
+        return True
+        
+    except Exception:
+        return True
+
+def increment_daily_limit(ip):
+    """Increment daily limit counter for IP."""
+    today = date.today().isoformat()
+    limit_file = DATA_DIR / "daily_limits.json"
+    
+    try:
+        if limit_file.exists():
+            with open(limit_file, 'r', encoding='utf-8') as f:
+                limits = json.load(f)
+        else:
+            limits = {}
+        
+        # Clean up old entries
+        limits = {k: v for k, v in limits.items() if v['date'] == today}
+        
+        if ip in limits:
+            limits[ip]['count'] += 1
+        else:
+            limits[ip] = {'date': today, 'count': 1}
+        
+        with open(limit_file, 'w', encoding='utf-8') as f:
+            json.dump(limits, f, ensure_ascii=False, indent=2)
+            
+    except Exception as e:
+        print(f"Error updating daily limit: {e}")
+
+
+def save_uploaded_url(uid, url, ai_result, process_result):
+    """Save uploaded URL information to user data."""
+    try:
+        user_file = _user_file(uid)
+        
+        # Load existing user data
+        if user_file.exists():
+            with open(user_file, 'r', encoding='utf-8') as f:
+                user_data = json.load(f)
+        else:
+            user_data = {"read": {}, "events": [], "uploaded_urls": []}
+        
+        # Initialize uploaded_urls section if not exists
+        if "uploaded_urls" not in user_data:
+            user_data["uploaded_urls"] = []
+        
+        # Create upload record
+        upload_record = {
+            "url": url,
+            "timestamp": datetime.now().isoformat(),
+            "ai_judgment": {
+                "is_ai": ai_result[0],
+                "confidence": ai_result[1],
+                "tags": ai_result[2] if len(ai_result) > 2 else []
+            },
+            "process_result": {
+                "success": process_result.get("success", False),
+                "error": process_result.get("error", None),
+                "summary_path": process_result.get("summary_path", None),
+                "paper_subject": process_result.get("paper_subject", None)
+            }
+        }
+        
+        # Add to uploaded_urls list
+        user_data["uploaded_urls"].append(upload_record)
+        
+        # Save updated user data
+        with open(user_file, 'w', encoding='utf-8') as f:
+            json.dump(user_data, f, ensure_ascii=False, indent=2)
+            
+    except Exception as e:
+        print(f"Error saving uploaded URL: {e}")
+
+
+def get_uploaded_urls(uid):
+    """Get uploaded URLs for a user."""
+    try:
+        user_file = _user_file(uid)
+        
+        if user_file.exists():
+            with open(user_file, 'r', encoding='utf-8') as f:
+                user_data = json.load(f)
+            
+            return user_data.get("uploaded_urls", [])
+        else:
+            return []
+            
+    except Exception as e:
+        print(f"Error getting uploaded URLs: {e}")
+        return []
+
+# Global cache for AI judgment results
+_AI_JUDGMENT_CACHE = {}
+
+# Cache file path
+AI_CACHE_FILE = DATA_DIR / "ai_judgment_cache.json"
+
+def _load_ai_cache():
+    """Load AI judgment cache from file."""
+    global _AI_JUDGMENT_CACHE
+    try:
+        if AI_CACHE_FILE.exists():
+            with open(AI_CACHE_FILE, 'r', encoding='utf-8') as f:
+                _AI_JUDGMENT_CACHE = json.load(f)
+        else:
+            _AI_JUDGMENT_CACHE = {}
+    except Exception as e:
+        print(f"Error loading AI cache: {e}")
+        _AI_JUDGMENT_CACHE = {}
+
+def _save_ai_cache():
+    """Save AI judgment cache to file."""
+    try:
+        # Ensure directory exists
+        AI_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(AI_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(_AI_JUDGMENT_CACHE, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving AI cache: {e}")
+
+# Load cache on startup
+_load_ai_cache()
+
+def check_paper_ai_relevance(text_content, url=None):
+    """Check if paper content is AI-related using LLM with caching."""
+    global _AI_JUDGMENT_CACHE
+    
+    # Create cache key from URL or content hash
+    if url:
+        cache_key = url
+    else:
+        # Use content hash as cache key if no URL
+        import hashlib
+        cache_key = hashlib.md5(text_content[:1000].encode()).hexdigest()
+    
+    # Check cache first
+    if cache_key in _AI_JUDGMENT_CACHE:
+        cached_result = _AI_JUDGMENT_CACHE[cache_key]
+        return cached_result['is_ai'], cached_result['confidence'], cached_result.get('tags', [])
+    
+    try:
+        # Import paper_summarizer module
+        import paper_summarizer as ps
+        
+        # Get the first 1000 tokens (approximate)
+        first_1000 = text_content[:1000]
+        
+        # Read prompt from the prompts/ai_check.md file
+        from langchain_core.prompts import PromptTemplate
+        
+        prompt_template = PromptTemplate.from_file(
+            os.path.join("prompts", "ai_check.md"), 
+            encoding="utf-8"
+        )
+        
+        prompt_content = prompt_template.format(first_1000=first_1000)
+
+        # Use the same LLM client as in paper_summarizer
+        from langchain_core.messages import HumanMessage
+        
+        # Get LLM configuration
+        api_key = llm_config.api_key
+        base_url = llm_config.base_url
+        provider = llm_config.provider
+        model = llm_config.model
+        
+        # Use the same LLM invocation method
+        response = ps.llm_invoke(
+            [HumanMessage(content=prompt_content)],
+            api_key=api_key,
+            base_url=base_url,
+            provider=provider,
+            model=model
+        )
+        
+        # Parse response
+        response_text = response.content.strip()
+        
+        # Try to extract JSON from response
+        import re
+        json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
+        if json_match:
+            response_text = json_match.group(1)
+        
+        # Parse JSON
+        print(f"Response text: {response_text}")
+        result = json.loads(response_text)
+        is_ai = result.get('is_ai', False)
+        confidence = result.get('confidence', 0.0)
+        tags = result.get('tags', [])
+        
+        # Cache the result
+        _AI_JUDGMENT_CACHE[cache_key] = {
+            'is_ai': is_ai,
+            'confidence': confidence,
+            'tags': tags,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Save cache to file
+        _save_ai_cache()
+        
+        return is_ai, confidence, tags
+        
+    except Exception as e:
+        print(f"Error checking AI relevance: {e}")
+        # Default to True if there's an error, to be safe
+        return True, 0.5, []
+
+
+def get_ai_cache_stats():
+    """Get AI cache statistics for maintenance."""
+    try:
+        return {
+            "cache_size": len(_AI_JUDGMENT_CACHE),
+            "cache_file": str(AI_CACHE_FILE),
+            "cache_file_exists": AI_CACHE_FILE.exists(),
+            "cache_file_size": AI_CACHE_FILE.stat().st_size if AI_CACHE_FILE.exists() else 0,
+            "sample_entries": list(_AI_JUDGMENT_CACHE.keys())[:5] if _AI_JUDGMENT_CACHE else []
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def clear_ai_cache():
+    """Clear AI cache for maintenance."""
+    global _AI_JUDGMENT_CACHE
+    try:
+        _AI_JUDGMENT_CACHE.clear()
+        _save_ai_cache()
+        return {"success": True, "message": "AI cache cleared successfully"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def get_ai_cache_entry(url_or_hash):
+    """Get specific AI cache entry for maintenance."""
+    try:
+        if url_or_hash in _AI_JUDGMENT_CACHE:
+            return {
+                "found": True,
+                "entry": _AI_JUDGMENT_CACHE[url_or_hash]
+            }
+        else:
+            return {
+                "found": False,
+                "message": "Entry not found in cache"
+            }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def reload_ai_cache():
+    """Reload AI cache from file for maintenance."""
+    try:
+        _load_ai_cache()
+        return {
+            "success": True, 
+            "message": "AI cache reloaded successfully",
+            "cache_size": len(_AI_JUDGMENT_CACHE)
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.route("/uploaded_urls", methods=["GET"])
+def get_uploaded_urls_route():
+    """Get uploaded URLs for the current user."""
+    uid = request.cookies.get("uid")
+    if not uid:
+        return jsonify({"error": "Login required"}), 401
+    
+    try:
+        uploaded_urls = get_uploaded_urls(uid)
+        return jsonify({
+            "success": True,
+            "uploaded_urls": uploaded_urls
+        })
+    except Exception as e:
+        return jsonify({
+            "error": "Failed to get uploaded URLs",
+            "message": str(e)
+        }), 500
+
+
+@app.route("/submit_paper", methods=["POST"])
+def submit_paper():
+    """Handle paper URL submission from users."""
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({"error": "Missing URL"}), 400
+        
+        paper_url = data['url'].strip()
+        if not paper_url:
+            return jsonify({"error": "Empty URL"}), 400
+        
+        # Check daily limit
+        client_ip = get_client_ip()
+        if not check_daily_limit(client_ip):
+            return jsonify({
+                "error": "Daily limit exceeded",
+                "message": "您今天已经提交了3篇论文，请明天再试。"
+            }), 429
+        
+        # Check if user is logged in
+        uid = request.cookies.get("uid")
+        if not uid:
+            return jsonify({
+                "error": "Login required",
+                "message": "请先登录后再提交论文。"
+            }), 401
+        
+        # Import paper_summarizer module
+        import paper_summarizer as ps
+        
+        # Step 1: Resolve PDF URL
+        try:
+            pdf_url = ps.resolve_pdf_url(paper_url)
+        except Exception as e:
+            # Save failed upload attempt
+            save_uploaded_url(uid, paper_url, (False, 0.0, []), {
+                "success": False,
+                "error": f"PDF resolution failed: {str(e)}"
+            })
+            
+            return jsonify({
+                "error": "PDF resolution failed",
+                "message": f"无法解析PDF链接: {str(e)}"
+            }), 400
+        
+        # Step 2: Download PDF
+        try:
+            pdf_path = ps.download_pdf(pdf_url)
+        except Exception as e:
+            # Save failed upload attempt
+            save_uploaded_url(uid, paper_url, (False, 0.0, []), {
+                "success": False,
+                "error": f"PDF download failed: {str(e)}"
+            })
+            
+            return jsonify({
+                "error": "PDF download failed",
+                "message": f"PDF下载失败: {str(e)}"
+            }), 400
+        
+        # Step 3: Extract text
+        try:
+            md_path = ps.extract_markdown(pdf_path)
+            text_content = md_path.read_text(encoding="utf-8")
+        except Exception as e:
+            # Save failed upload attempt
+            save_uploaded_url(uid, paper_url, (False, 0.0, []), {
+                "success": False,
+                "error": f"Text extraction failed: {str(e)}"
+            })
+            
+            return jsonify({
+                "error": "Text extraction failed",
+                "message": f"文本提取失败: {str(e)}"
+            }), 400
+        
+        # Step 4: Check if paper is AI-related (with caching)
+        is_ai, confidence, tags = check_paper_ai_relevance(text_content, paper_url)
+        
+        # Increment daily limit for any valid PDF upload (regardless of AI content)
+        increment_daily_limit(client_ip)
+        
+        if not is_ai:
+            # Save failed upload attempt
+            save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
+                "success": False,
+                "error": "Not AI paper"
+            })
+
+            print(f"Not AI paper: {paper_url}, confidence: {confidence}, tags: {tags}")
+            
+            return jsonify({
+                "error": "Not AI paper",
+                "message": "抱歉，我们只接受AI相关的论文。根据分析，这篇论文不属于AI领域。",
+                "confidence": confidence
+            }), 400
+        
+        # Step 5: Process the paper using existing pipeline
+        try:
+            # Use the same summarization logic as in feed_paper_summarizer_service
+            import feed_paper_summarizer_service as fps
+            
+            # Process the paper
+            summary_path, _, paper_subject = fps._summarize_url(
+                paper_url,
+                api_key=llm_config.api_key,
+                base_url=llm_config.base_url,
+                provider=llm_config.provider,
+                model=llm_config.model,
+                max_input_char=100000,
+                extract_only=False,
+                local=False,
+                max_workers=paper_config.max_workers
+            )
+            
+            if summary_path:
+                # Save successful upload
+                save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
+                    "success": True,
+                    "summary_path": str(summary_path),
+                    "paper_subject": paper_subject
+                })
+                
+                # Clear cache to force refresh
+                global _ENTRIES_CACHE
+                _ENTRIES_CACHE = {
+                    "meta": None,
+                    "count": 0,
+                    "latest_mtime": 0.0,
+                }
+                
+                return jsonify({
+                    "success": True,
+                    "message": "论文提交成功！",
+                    "summary_path": str(summary_path),
+                    "paper_subject": paper_subject
+                })
+            else:
+                # Save failed upload attempt
+                save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
+                    "success": False,
+                    "error": "Summary generation failed"
+                })
+                
+                return jsonify({
+                    "error": "Summary generation failed",
+                    "message": "论文处理失败，请稍后重试。"
+                }), 500
+                
+        except Exception as e:
+            # Save failed upload attempt
+            save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
+                "success": False,
+                "error": f"Processing failed: {str(e)}"
+            })
+            
+            return jsonify({
+                "error": "Processing failed",
+                "message": f"论文处理失败: {str(e)}"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "error": "Server error",
+            "message": f"服务器错误: {str(e)}"
+        }), 500
+
+# -----------------------------------------------------------------------------
 # Entry point
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print(f"✅ Serving summaries from {SUMMARY_DIR.resolve()}")
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 22581)), debug=True)
+    print(f"📋 Configuration loaded:")
+    print(f"   - LLM Provider: {llm_config.provider}")
+    print(f"   - Base URL: {llm_config.base_url}")
+    print(f"   - Model: {llm_config.model}")
+    print(f"   - Daily Limit: {paper_config.daily_submission_limit}")
+    print(f"   - Max Workers: {paper_config.max_workers}")
+    app.run(
+        host=app_config.host, 
+        port=app_config.port, 
+        debug=app_config.debug
+    )

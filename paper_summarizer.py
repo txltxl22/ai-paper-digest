@@ -142,6 +142,8 @@ def resolve_pdf_url(url: str, session: requests.Session = SESSION) -> str:
         return pdf
     elif url.endswith(".pdf"):
         return url
+    elif "arxiv.org/pdf" in url:
+        return url + ".pdf"
 
     resp = session.get(url, timeout=30)
     resp.raise_for_status()

@@ -85,9 +85,13 @@ def test_resolve_pdf_url_scrape(monkeypatch):
 
 
 def test_download_pdf(tmp_path, monkeypatch):
-    content = b'data'
+    # Create a larger fake PDF content that will pass integrity check
+    content = b'%PDF-1.4\n' + b'x' * 1024  # PDF header + 1KB of content
     fake_session = type('S', (), {'get': lambda self, url, stream, timeout: FakeResponse(content)})()
     monkeypatch.setattr(paper_summarizer, 'tqdm', lambda *args, **kwargs: DummyBar())
+    
+    # Mock the PDF integrity check to always return True
+    monkeypatch.setattr(paper_summarizer, '_verify_pdf_integrity', lambda x: True)
 
     out = download_pdf('http://example.com/x.pdf', output_dir=tmp_path, session=fake_session)
     assert out.exists()

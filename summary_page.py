@@ -894,68 +894,19 @@ def badge_css():
 
 @app.get("/favicon.svg")
 def favicon_svg():
-    svg = (
-        """
-<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\">
-  <defs>
-    <linearGradient id=\"gLight\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">
-      <stop offset=\"0%\" stop-color=\"#6366f1\"/>
-      <stop offset=\"100%\" stop-color=\"#22d3ee\"/>
-    </linearGradient>
-    <linearGradient id=\"gDark\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">
-      <stop offset=\"0%\" stop-color=\"#1d4ed8\"/>
-      <stop offset=\"100%\" stop-color=\"#06b6d4\"/>
-    </linearGradient>
-    <filter id=\"shadow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\">
-      <feDropShadow dx=\"0\" dy=\"2\" stdDeviation=\"2\" flood-color=\"#000\" flood-opacity=\".25\"/>
-    </filter>
-  </defs>
-  <style>
-    :root { color-scheme: light dark; }
-    .light-only { display: block; }
-    .dark-only { display: none; }
-    .fg { fill: #ffffff; }
-    .accent { fill: #f59e0b; }
-    @media (prefers-color-scheme: dark) {
-      .light-only { display: none; }
-      .dark-only { display: block; }
-      .fg { fill: #f8fafc; }
-      .accent { fill: #fbbf24; }
-    }
-  </style>
-
-  <!-- vivid gradient background, light/dark aware -->
-  <rect class=\"light-only\" x=\"4\" y=\"4\" width=\"56\" height=\"56\" rx=\"14\" fill=\"url(#gLight)\"/>
-  <rect class=\"dark-only\"  x=\"4\" y=\"4\" width=\"56\" height=\"56\" rx=\"14\" fill=\"url(#gDark)\"/>
-
-  <!-- stylized book with bookmark and spark -->
-  <g filter=\"url(#shadow)\">
-    <!-- book body -->
-    <rect x=\"17\" y=\"16\" width=\"30\" height=\"34\" rx=\"6\" class=\"fg\"/>
-    <!-- page lines -->
-    <rect x=\"22\" y=\"22\" width=\"20\" height=\"2\" rx=\"1\" opacity=\".25\"/>
-    <rect x=\"22\" y=\"28\" width=\"20\" height=\"2\" rx=\"1\" opacity=\".25\"/>
-    <rect x=\"22\" y=\"34\" width=\"14\" height=\"2\" rx=\"1\" opacity=\".25\"/>
-    <!-- bookmark ribbon -->
-    <path class=\"accent\" d=\"M40 16 v18 l-5-3 l-5 3 V16 z\"/>
-  </g>
-
-  <!-- spark -->
-  <g transform=\"translate(44 44)\">
-    <circle r=\"2.5\" class=\"fg\" opacity=\".3\"/>
-    <path class=\"fg\" d=\"M0-4 L1.2-1.2 4 0 1.2 1.2 0 4 -1.2 1.2 -4 0 -1.2 -1.2 Z\"/>
-  </g>
-</svg>
-"""
-    ).strip()
-    return Response(svg, mimetype="image/svg+xml")
+    """Serve the static SVG favicon file."""
+    return send_from_directory('ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
 @app.get("/favicon.ico")
 def favicon_ico():
-    # Serve SVG to avoid 404; modern browsers accept the linked SVG favicon.
-    # This keeps network quiet even if the user agent auto-requests /favicon.ico.
-    return favicon_svg()
+    """Serve the static ICO favicon file, fallback to SVG if ICO not available."""
+    ico_path = Path('ui') / 'favicon.ico'
+    if ico_path.exists() and ico_path.stat().st_size > 0:
+        return send_from_directory('ui', 'favicon.ico', mimetype="image/x-icon")
+    else:
+        # Fallback to SVG if ICO file doesn't exist or is empty
+        return send_from_directory('ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
 @app.route("/event", methods=["POST"])

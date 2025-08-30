@@ -24,9 +24,7 @@ class AdminModal {
         document.getElementById('log-output').innerHTML = '';
       }
       
-      if (ev.target.id === 'fallback-fetch-btn') {
-        ev.preventDefault();
-      }
+
     });
 
     // Close modal when clicking outside
@@ -53,11 +51,7 @@ class AdminModal {
     summaryStats.style.display = 'none';
     statsContent.innerHTML = '';
     
-    // Hide fallback button initially
-    const fallbackBtn = document.getElementById('fallback-fetch-btn');
-    if (fallbackBtn) {
-      fallbackBtn.style.display = 'none';
-    }
+
     
     // Add initial log entry
     this.addLogEntry('开始获取最新论文摘要...', 'info');
@@ -196,42 +190,7 @@ class AdminModal {
       statusText.textContent = '连接失败';
       statusIcon.textContent = '❌';
       
-      this.addLogEntry('💡 Windows用户提示: 请检查防火墙设置和网络连接', 'info');
-      this.addLogEntry('💡 如果问题持续，请尝试刷新页面或重启服务', 'info');
-      
-      const fallbackBtn = document.getElementById('fallback-fetch-btn');
-      if (fallbackBtn) {
-        fallbackBtn.style.display = 'inline-block';
-        fallbackBtn.onclick = () => {
-          this.addLogEntry('🔄 尝试使用备用方式获取...', 'info');
-          statusText.textContent = '使用备用方式...';
-          statusIcon.textContent = '🔄';
-          
-          fetch(window.appUrls.admin_fetch, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.status === 'success') {
-              statusText.textContent = '获取成功！';
-              statusIcon.textContent = '✅';
-              this.addLogEntry('✅ 备用方式获取成功！', 'success');
-              showToast('✅ 最新论文摘要获取成功！页面将在3秒后刷新...');
-              setTimeout(() => location.reload(), 3000);
-            } else {
-              statusText.textContent = '获取失败';
-              statusIcon.textContent = '❌';
-              this.addLogEntry('❌ 备用方式也失败了: ' + data.message, 'error');
-            }
-          })
-          .catch(fallbackError => {
-            statusText.textContent = '获取失败';
-            statusIcon.textContent = '❌';
-            this.addLogEntry('❌ 备用方式出错: ' + fallbackError.message, 'error');
-          });
-        };
-      }
+
     });
   }
 

@@ -12,22 +12,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 from config_manager import get_llm_config, get_app_config, get_paper_processing_config, get_paths_config
 
-# Windows-specific environment setup
-if os.name == 'nt':  # Windows
-    # Set UTF-8 encoding for Windows
-    os.environ['PYTHONIOENCODING'] = 'utf-8'
-    # Ensure proper path handling
-    os.environ['PYTHONPATH'] = str(Path(__file__).parent)
-    # Set console encoding to UTF-8 if possible
-    try:
-        import codecs
-        import sys
-        if hasattr(sys.stdout, 'reconfigure'):
-            sys.stdout.reconfigure(encoding='utf-8')
-        if hasattr(sys.stderr, 'reconfigure'):
-            sys.stderr.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
+
 
 from flask import (
     Flask,
@@ -153,9 +138,7 @@ def is_admin_user(uid: str) -> bool:
     return uid.strip() in app_config.admin_user_ids
 
 
-def is_windows_system() -> bool:
-    """Check if the system is running Windows."""
-    return os.name == 'nt'
+
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -647,15 +630,6 @@ def view_summary(arxiv_id):
         original_url=service_data.get("original_url")
     )
 
-
-@app.route("/raw/<arxiv_id>.md")
-def raw_markdown(arxiv_id):
-    md_path = SUMMARY_DIR / f"{arxiv_id}.md"
-    if not md_path.exists():
-        abort(404)
-    return send_from_directory(md_path.parent, md_path.name, mimetype="text/markdown")
-
-
 @app.route("/read")
 def read_papers():
     uid = request.cookies.get("uid")
@@ -837,8 +811,7 @@ def admin_fetch_latest():
         return jsonify({"error": "unauthorized"}), 403
     
     try:
-        # Cross-platform command execution with better Windows support
-        import platform
+        # Command execution
         import shutil
         
         # Check if uv is available, fallback to python if not
@@ -854,28 +827,20 @@ def admin_fetch_latest():
                 "message": "Python not found in PATH"
             }), 500
         
-        # Build command based on available tools and platform
-        if uv_path and platform.system() != "Windows":
-            # Use uv on Unix-like systems
+        # Build command - prefer uv if available
+        if uv_path:
             cmd = ["uv", "run", "python", "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
         else:
-            # Fallback to direct python execution, especially for Windows
             cmd = [python_path, "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
-        
-        # Windows-specific subprocess settings
-        creation_flags = 0
-        if platform.system() == "Windows":
-            creation_flags = subprocess.CREATE_NO_WINDOW
         
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            encoding='utf-8',  # Explicitly set UTF-8 encoding
-            errors='replace',   # Replace problematic characters
+            encoding='utf-8',
+            errors='replace',
             cwd=Path(__file__).parent,
-            timeout=300,  # 5 minutes timeout
-            creationflags=creation_flags
+            timeout=300  # 5 minutes timeout
         )
         
         if result.returncode == 0:
@@ -908,8 +873,7 @@ def admin_fetch_latest():
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "summary_stats": summary_stats,
-                "return_code": result.returncode,
-                "platform": "Windows" if is_windows_system() else "Unix/Linux"
+                "return_code": result.returncode
             })
         else:
             return jsonify({
@@ -951,12 +915,9 @@ def admin_fetch_latest_stream():
     def generate():
         try:
             # Send initial status
-            # Send initial status with platform info
-            platform_info = "Windows" if is_windows_system() else "Unix/Linux"
-            yield f"data: {{\"type\": \"status\", \"message\": \"正在启动服务... ({platform_info})\", \"icon\": \"⏳\"}}\n\n"
+            yield "data: {\"type\": \"status\", \"message\": \"正在启动服务...\", \"icon\": \"⏳\"}\n\n"
             
-            # Cross-platform command execution
-            import platform
+            # Command execution
             import shutil
             
             # Check if uv is available, fallback to python if not
@@ -971,17 +932,15 @@ def admin_fetch_latest_stream():
                 yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": \"Python环境未配置\"}\n\n"
                 return
             
-            # Build command based on available tools
-            if uv_path and platform.system() != "Windows":
-                # Use uv on Unix-like systems
+            # Build command - prefer uv if available
+            if uv_path:
                 cmd = ["uv", "run", "python", "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
             else:
-                # Fallback to direct python execution
                 cmd = [python_path, "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
             
             yield f"data: {{\"type\": \"log\", \"message\": \"执行命令: {' '.join(cmd)}\", \"level\": \"info\"}}\n\n"
             
-            # Use Popen to get real-time output with better Windows support
+            # Use Popen to get real-time output
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -989,11 +948,9 @@ def admin_fetch_latest_stream():
                 text=True,
                 bufsize=1,
                 universal_newlines=True,
-                encoding='utf-8',  # Explicitly set UTF-8 encoding
-                errors='replace',   # Replace problematic characters
-                cwd=Path(__file__).parent,
-                # Windows-specific settings
-                creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+                encoding='utf-8',
+                errors='replace',
+                cwd=Path(__file__).parent
             )
             
             # Send status update
@@ -1005,13 +962,9 @@ def admin_fetch_latest_stream():
                 if output == '' and process.poll() is not None:
                     break
                 if output:
-                    # Clean and sanitize output for Windows compatibility
+                    # Clean and sanitize output
                     clean_output = output.rstrip()  # Remove trailing newline only
                     if clean_output:
-                        # Handle Windows encoding issues by replacing problematic characters
-                        # Remove or replace emoji and special characters that cause GBK encoding issues
-                        clean_output = clean_output.encode('utf-8', errors='replace').decode('utf-8')
-                        
                         # Remove all control characters that break JSON
                         clean_output = ''.join(char for char in clean_output if char in string.printable)
                         
@@ -1058,38 +1011,6 @@ def admin_fetch_latest_stream():
             yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": \"执行失败\"}\n\n"
     
     return Response(generate(), mimetype='text/event-stream')
-
-
-@app.route("/admin/migrate_legacy_summaries", methods=["POST"])
-def admin_migrate_legacy_summaries():
-    """Admin route to migrate legacy summaries to service record format."""
-    uid = request.cookies.get("uid")
-    if not uid:
-        return jsonify({"error": "no-uid"}), 400
-    
-    if not is_admin_user(uid):
-        return jsonify({"error": "unauthorized"}), 403
-    
-    try:
-        # Run the migration using the decoupled function
-        migration_stats = migrate_legacy_summaries_to_service_record(SUMMARY_DIR)
-        
-        # Clear the cache to force refresh of entries
-        global _ENTRIES_CACHE
-        _ENTRIES_CACHE = {
-            "meta": None,
-            "count": 0,
-            "latest_mtime": 0.0,
-        }
-        
-        return jsonify({
-            "status": "success",
-            "message": "Legacy summaries migration completed",
-            "migration_stats": migration_stats
-        })
-        
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
 
 
 # -----------------------------------------------------------------------------

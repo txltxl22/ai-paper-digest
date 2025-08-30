@@ -1,8 +1,6 @@
 import os
 import json
-import subprocess
 import re
-import string
 import argparse
 from pathlib import Path
 from datetime import datetime, date, timezone, timedelta
@@ -124,6 +122,9 @@ from app.index_page.factory import create_index_page_module
 # Initialize summary detail module
 from app.summary_detail.factory import create_summary_detail_module
 
+# Initialize fetch module
+from app.fetch.factory import create_fetch_module
+
 # Load templates
 with open(Path(__file__).parent.parent / "ui" / "index.html", "r", encoding="utf-8") as f:
     INDEX_TEMPLATE = f.read()
@@ -141,6 +142,12 @@ index_page_module = create_index_page_module(
 summary_detail_module = create_summary_detail_module(
     summary_dir=SUMMARY_DIR,
     detail_template=DETAIL_TEMPLATE
+)
+
+fetch_module = create_fetch_module(
+    working_directory=Path(__file__).parent.parent,
+    user_service=user_management_module["service"],
+    index_page_module=index_page_module
 )
 
 # Initialize paper submission module
@@ -161,17 +168,8 @@ paper_submission_module = create_paper_submission_module(
 app.register_blueprint(user_management_module["blueprint"])
 app.register_blueprint(index_page_module["blueprint"])
 app.register_blueprint(summary_detail_module["blueprint"])
+app.register_blueprint(fetch_module["blueprint"])
 app.register_blueprint(paper_submission_module["blueprint"])
-
-
-
-# -----------------------------------------------------------------------------
-# Admin helpers
-# -----------------------------------------------------------------------------
-
-
-
-
 
 
 # -----------------------------------------------------------------------------
@@ -257,223 +255,6 @@ def static_favicon_ico():
 
 # Event tracking routes are now handled by the decoupled event tracking system
 # The /event endpoint is registered via the event tracking blueprint
-
-
-@app.route("/admin/fetch_latest", methods=["POST"])
-def admin_fetch_latest():
-    """Admin route to fetch latest summaries from RSS feed."""
-    # Debug logging
-    print(f"DEBUG: Admin fetch_latest called from {request.remote_addr}")
-    print(f"DEBUG: Request headers: {dict(request.headers)}")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Request url: {request.url}")
-    
-    uid = user_management_module["service"].get_current_user_id()
-    if not uid:
-        return jsonify({"error": "no-uid"}), 400
-    
-    if not user_management_module["service"].is_admin_user(uid):
-        return jsonify({"error": "unauthorized"}), 403
-    
-    try:
-        # Command execution
-        import shutil
-        
-        # Check if uv is available, fallback to python if not
-        uv_path = shutil.which("uv")
-        python_path = shutil.which("python")
-        
-        if not python_path:
-            python_path = shutil.which("python3")
-        
-        if not python_path:
-            return jsonify({
-                "status": "error",
-                "message": "Python not found in PATH"
-            }), 500
-        
-        # Build command - prefer uv if available
-        if uv_path:
-            cmd = ["uv", "run", "python", "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
-        else:
-            cmd = [python_path, "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            cwd=Path(__file__).parent,
-            timeout=300  # 5 minutes timeout
-        )
-        
-        if result.returncode == 0:
-            # Clear the cache to force refresh of entries
-            index_page_module["scanner"]._cache = {
-                "meta": None,
-                "count": 0,
-                "latest_mtime": 0.0,
-            }
-            
-            # Process the output to extract key information
-            stdout_lines = result.stdout.strip().split('\n') if result.stdout else []
-            
-            # Extract summary statistics
-            summary_stats = {}
-            for line in stdout_lines:
-                if "Found" in line and "paper" in line.lower():
-                    summary_stats["papers_found"] = line.strip()
-                elif "successfully" in line.lower():
-                    summary_stats["success_count"] = line.strip()
-                elif "RSS feed updated" in line:
-                    summary_stats["rss_updated"] = line.strip()
-                elif "All done" in line:
-                    summary_stats["completion"] = line.strip()
-            
-            return jsonify({
-                "status": "success",
-                "message": "Latest summaries fetched successfully",
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "summary_stats": summary_stats,
-                "return_code": result.returncode
-            })
-        else:
-            return jsonify({
-                "status": "error",
-                "message": f"Feed service failed with return code {result.returncode}",
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "return_code": result.returncode
-            }), 500
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({
-            "status": "error",
-            "message": "Feed service timed out after 5 minutes"
-        }), 500
-    except Exception as exc:
-        return jsonify({
-            "status": "error",
-            "message": f"Failed to run feed service: {str(exc)}"
-        }), 500
-
-
-@app.route("/admin/fetch_latest_stream", methods=["POST"])
-def admin_fetch_latest_stream():
-    """Admin route to stream the feed service output in real-time."""
-    # Debug logging
-    print(f"DEBUG: Admin fetch_latest_stream called from {request.remote_addr}")
-    print(f"DEBUG: Request headers: {dict(request.headers)}")
-    print(f"DEBUG: Request path: {request.path}")
-    print(f"DEBUG: Request url: {request.url}")
-    
-    uid = user_management_module["service"].get_current_user_id()
-    if not uid:
-        return jsonify({"error": "no-uid"}), 400
-    
-    if not user_management_module["service"].is_admin_user(uid):
-        return jsonify({"error": "unauthorized"}), 403
-    
-    def generate():
-        try:
-            # Send initial status
-            yield "data: {\"type\": \"status\", \"message\": \"正在启动服务...\", \"icon\": \"⏳\"}\n\n"
-            
-            # Command execution
-            import shutil
-            
-            # Check if uv is available, fallback to python if not
-            uv_path = shutil.which("uv")
-            python_path = shutil.which("python")
-            
-            if not python_path:
-                python_path = shutil.which("python3")
-            
-            if not python_path:
-                yield "data: {\"type\": \"error\", \"message\": \"Python not found in PATH\"}\n\n"
-                yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": \"Python环境未配置\"}\n\n"
-                return
-            
-            # Build command - prefer uv if available
-            if uv_path:
-                cmd = ["uv", "run", "python", "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
-            else:
-                cmd = [python_path, "feed_paper_summarizer_service.py", "https://papers.takara.ai/api/feed"]
-            
-            yield f"data: {{\"type\": \"log\", \"message\": \"执行命令: {' '.join(cmd)}\", \"level\": \"info\"}}\n\n"
-            
-            # Use Popen to get real-time output
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,  # Combine stdout and stderr
-                text=True,
-                bufsize=1,
-                universal_newlines=True,
-                encoding='utf-8',
-                errors='replace',
-                cwd=Path(__file__).parent
-            )
-            
-            # Send status update
-            yield "data: {\"type\": \"status\", \"message\": \"正在连接RSS源...\", \"icon\": \"🔗\"}\n\n"
-            
-            # Stream output in real-time
-            while True:
-                output = process.stdout.readline()
-                if output == '' and process.poll() is not None:
-                    break
-                if output:
-                    # Clean and sanitize output
-                    clean_output = output.rstrip()  # Remove trailing newline only
-                    if clean_output:
-                        # Remove all control characters that break JSON
-                        clean_output = ''.join(char for char in clean_output if char in string.printable)
-                        
-                        # Escape only the essential characters for JSON
-                        clean_output = clean_output.replace('\\', '\\\\').replace('"', '\\"')
-                        
-                        # Limit line length to prevent overwhelming the frontend
-                        if len(clean_output) > 500:
-                            clean_output = clean_output[:500] + "... [truncated]"
-                        
-                        yield f"data: {{\"type\": \"log\", \"message\": \"{clean_output}\", \"level\": \"info\"}}\n\n"
-            
-            # Wait for process to complete and get return code
-            return_code = process.poll()
-            
-            # Send completion status
-            if return_code == 0:
-                yield "data: {\"type\": \"status\", \"message\": \"获取成功！\", \"icon\": \"✅\"}\n\n"
-                yield "data: {\"type\": \"complete\", \"status\": \"success\", \"message\": \"最新论文摘要获取成功！\"}\n\n"
-                
-                # Clear the cache to force refresh of entries
-                index_page_module["scanner"]._cache = {
-                    "meta": None,
-                    "count": 0,
-                    "latest_mtime": 0.0,
-                }
-            else:
-                yield f"data: {{\"type\": \"log\", \"message\": \"进程返回码: {return_code}\", \"level\": \"error\"}}\n\n"
-                yield "data: {\"type\": \"status\", \"message\": \"获取失败\", \"icon\": \"❌\"}\n\n"
-                yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": f\"Feed service failed with return code {return_code}\"}\n\n"
-                
-        except FileNotFoundError as e:
-            error_msg = f"文件未找到: {str(e)}"
-            yield f"data: {{\"type\": \"error\", \"message\": \"{error_msg}\"}}\n\n"
-            yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": \"文件路径错误\"}\n\n"
-        except PermissionError as e:
-            error_msg = f"权限错误: {str(e)}"
-            yield f"data: {{\"type\": \"error\", \"message\": \"{error_msg}\"}}\n\n"
-            yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": \"权限不足\"}\n\n"
-        except Exception as exc:
-            error_msg = f"执行过程中发生错误: {str(exc)}"
-            yield f"data: {{\"type\": \"error\", \"message\": \"{error_msg}\"}}\n\n"
-            yield "data: {\"type\": \"complete\", \"status\": \"error\", \"message\": \"执行失败\"}\n\n"
-    
-    return Response(generate(), mimetype='text/event-stream')
 
 
 # -----------------------------------------------------------------------------

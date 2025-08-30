@@ -39,8 +39,8 @@ def create_summary_detail_routes(
             mark_read_url=url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
             unmark_read_url=url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
             reset_url=url_for("user_management.reset_read"),
-            admin_fetch_url=url_for("admin_fetch_latest"),
-            admin_stream_url=url_for("admin_fetch_latest_stream")
+                    admin_fetch_url=url_for("fetch.admin_fetch_latest"),
+        admin_stream_url=url_for("fetch.admin_fetch_latest_stream")
         )
     
     return bp

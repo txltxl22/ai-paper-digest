@@ -297,12 +297,13 @@ def _summarize_url(
             
             # Save using the new service record format
             try:
-                # Import the function from summary_page module
-                from summary_page import save_summary_with_service_record
+                # Import the function from summary_service module
+                from summary_service.record_manager import save_summary_with_service_record
                 save_summary_with_service_record(
                     arxiv_id=pdf_path.stem,
                     summary_content=summary,
                     tags=tag_obj,
+                    summary_dir=ps.SUMMARY_DIR,  # type: ignore[attr-defined]
                     source_type="system",
                     original_url=pdf_url
                 )

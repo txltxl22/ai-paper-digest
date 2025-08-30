@@ -9,7 +9,7 @@ from datetime import date
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     """Create a test client with temporary directories."""
-    import summary_page as sp
+    import app.main as sp
     
     # Setup temporary directories
     sp.USER_DATA_DIR = tmp_path / "user_data"
@@ -30,7 +30,7 @@ class TestPaperSubmissionFunctions:
     
     def test_check_daily_limit_new_ip(self, client, tmp_path):
         """Test daily limit check for new IP."""
-        import summary_page as sp
+        import app.main as sp
         
         # Test with new IP
         result = sp.check_daily_limit("192.168.1.100")
@@ -38,7 +38,7 @@ class TestPaperSubmissionFunctions:
     
     def test_check_daily_limit_existing_ip_under_limit(self, client, tmp_path):
         """Test daily limit check for existing IP under limit."""
-        import summary_page as sp
+        import app.main as sp
         
         # Create daily limits file
         limits_file = sp.DATA_DIR / "daily_limits.json"
@@ -54,7 +54,7 @@ class TestPaperSubmissionFunctions:
     
     def test_check_daily_limit_existing_ip_at_limit(self, client, tmp_path):
         """Test daily limit check for existing IP at limit."""
-        import summary_page as sp
+        import app.main as sp
         
         # Create daily limits file
         limits_file = sp.DATA_DIR / "daily_limits.json"
@@ -70,7 +70,7 @@ class TestPaperSubmissionFunctions:
     
     def test_check_daily_limit_old_date(self, client, tmp_path):
         """Test daily limit check with old date (should reset)."""
-        import summary_page as sp
+        import app.main as sp
         
         # Create daily limits file with old date
         limits_file = sp.DATA_DIR / "daily_limits.json"
@@ -86,7 +86,7 @@ class TestPaperSubmissionFunctions:
     
     def test_increment_daily_limit_new_ip(self, client, tmp_path):
         """Test incrementing daily limit for new IP."""
-        import summary_page as sp
+        import app.main as sp
         
         sp.increment_daily_limit("192.168.1.100")
         
@@ -102,7 +102,7 @@ class TestPaperSubmissionFunctions:
     
     def test_increment_daily_limit_existing_ip(self, client, tmp_path):
         """Test incrementing daily limit for existing IP."""
-        import summary_page as sp
+        import app.main as sp
         
         # Create initial limits
         limits_file = sp.DATA_DIR / "daily_limits.json"
@@ -145,7 +145,7 @@ class TestPaperSubmissionAPI:
     
     def test_submit_paper_daily_limit_exceeded(self, client, tmp_path):
         """Test submission when daily limit is exceeded."""
-        import summary_page as sp
+        import app.main as sp
         
         # Set up daily limit
         limits_file = sp.DATA_DIR / "daily_limits.json"
@@ -170,7 +170,7 @@ class TestAICheckFunction:
     
     def test_check_paper_ai_relevance_basic(self, client):
         """Test basic AI relevance check functionality."""
-        import summary_page as sp
+        import app.main as sp
         
         # Test with sample text
         text_content = "This paper presents a novel approach to machine learning..."
@@ -193,7 +193,7 @@ class TestIntegration:
     
     def test_daily_limits_integration(self, client, tmp_path):
         """Test daily limits integration with the API."""
-        import summary_page as sp
+        import app.main as sp
         
         # Set up daily limit
         limits_file = sp.DATA_DIR / "daily_limits.json"

@@ -52,7 +52,7 @@ graph TB
     LLM[LLM提供商<br/>• DeepSeek API<br/>• OpenAI兼容API<br/>• Ollama本地部署<br/>• 自定义端点]
     
     %% Web Interface
-    WEB[Web界面<br/>summary_page.py<br/>• Flask应用<br/>• 响应式设计<br/>• 用户管理<br/>• 阅读进度跟踪]
+    WEB[Web界面<br/>app/main.py<br/>• Flask应用<br/>• 响应式设计<br/>• 用户管理<br/>• 阅读进度跟踪]
     
     %% Data Storage
     STORAGE[数据存储<br/>• papers/ - PDF缓存<br/>• markdown/ - 文本缓存<br/>• summary/ - 摘要缓存<br/>• user_data/ - 用户数据]
@@ -93,7 +93,13 @@ ai-paper-digest/
 ├── collect_hf_paper_links_from_rss.py    # RSS源链接提取
 ├── feed_paper_summarizer_service.py      # 服务编排和流程控制
 ├── paper_summarizer.py                   # PDF下载、解析和AI摘要生成
-├── summary_page.py                       # Flask Web应用
+├── summary_service/                      # 摘要服务包
+│   ├── __init__.py                       # 包初始化
+│   └── record_manager.py                 # 服务记录管理
+├── app/                                  # Web应用目录
+│   ├── __init__.py                       # Python包初始化
+│   └── main.py                          # Flask Web应用主程序
+├── run_app.py                           # 便捷启动脚本
 ├── prompts/                              # AI摘要提示词模板
 ├── summary/                              # 生成的论文摘要
 ├── papers/                               # 下载的PDF论文
@@ -121,7 +127,7 @@ uv sync
 export ADMIN_USER_IDS="admin,superuser"
 
 # 或者在启动时设置
-ADMIN_USER_IDS="admin" python summary_page.py
+ADMIN_USER_IDS="admin" python app/main.py
 ```
 
 管理员用户可以：
@@ -141,7 +147,14 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
 
 #### 2. 启动Web界面
 ```bash
-python summary_page.py
+# 方法1：使用便捷的启动脚本（推荐）
+python run_app.py
+
+# 方法2：直接运行主程序
+python app/main.py
+
+# 方法3：使用uv运行
+uv run python app/main.py
 ```
 访问 http://localhost:22581 即可使用Web界面
 
@@ -207,7 +220,28 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
 - **`collect_hf_paper_links_from_rss.py`**：RSS源链接提取
 - **`paper_summarizer.py`**：PDF下载、解析和AI摘要生成
 - **`feed_paper_summarizer_service.py`**：服务编排和流程控制
-- **`summary_page.py`**：Flask Web应用
+- **`summary_service/`**：摘要服务包（解耦的服务记录管理）
+- **`app/main.py`**：Flask Web应用
+
+### 🏗️ 解耦架构设计
+
+项目采用模块化设计，将摘要服务功能从Web应用中解耦：
+
+- **`summary_service/`**：独立的摘要服务包
+  - 提供摘要记录的创建、保存、加载功能
+  - 支持新旧格式的兼容性
+  - 可被多个模块复用（Web应用、后台服务等）
+  - 不依赖Flask或其他Web框架
+
+- **`app/main.py`**：专注于Web界面功能
+  - 用户界面和交互逻辑
+  - 路由处理和请求响应
+  - 通过导入使用摘要服务功能
+
+- **`feed_paper_summarizer_service.py`**：后台处理服务
+  - RSS源处理和论文摘要生成
+  - 使用解耦的摘要服务保存结果
+  - 可独立运行，不依赖Web应用
 
 ### AI摘要流程
 1. **PDF下载**：从论文页面解析并下载PDF文件

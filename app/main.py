@@ -3,10 +3,13 @@ import json
 import subprocess
 import re
 import string
+import argparse
 from pathlib import Path
 from datetime import datetime, date, timezone, timedelta
 
 # Import configuration management
+import sys
+sys.path.append(str(Path(__file__).parent.parent))
 from config_manager import get_llm_config, get_app_config, get_paper_processing_config, get_paths_config
 
 # Windows-specific environment setup
@@ -42,7 +45,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import markdown
 import math
 
-app = Flask(__name__, template_folder='ui')
+app = Flask(__name__, template_folder='../ui', static_folder='../ui')
 app.wsgi_app = ProxyFix(
         app.wsgi_app,
         x_proto = 1,     # trust 1 hop for X-Forwarded-Proto
@@ -60,11 +63,11 @@ llm_config = get_llm_config()
 paper_config = get_paper_processing_config()
 
 # Set up directories
-SUMMARY_DIR = Path(__file__).parent / paths_config.summary_dir
-USER_DATA_DIR = Path(__file__).parent / paths_config.user_data_dir
-PDF_DIR = Path(__file__).parent / paths_config.papers_dir
-MD_DIR = Path(__file__).parent / paths_config.markdown_dir
-DATA_DIR = Path(__file__).parent / "data"
+SUMMARY_DIR = Path(__file__).parent.parent / paths_config.summary_dir
+USER_DATA_DIR = Path(__file__).parent.parent / paths_config.user_data_dir
+PDF_DIR = Path(__file__).parent.parent / paths_config.papers_dir
+MD_DIR = Path(__file__).parent.parent / paths_config.markdown_dir
+DATA_DIR = Path(__file__).parent.parent / "data"
 
 # Create directories
 SUMMARY_DIR.mkdir(exist_ok=True)
@@ -77,34 +80,13 @@ DATA_DIR.mkdir(exist_ok=True)
 # Service Record Management
 # -----------------------------------------------------------------------------
 
-def create_service_record(arxiv_id: str, source_type: str = "system", user_id: str = None, 
-                         original_url: str = None, ai_judgment: dict = None) -> dict:
-    """Create a service record for a paper summary.
-    
-    Args:
-        arxiv_id: The arXiv ID of the paper
-        source_type: Either "system" (from background processing) or "user" (user upload)
-        user_id: The user ID who uploaded the paper (if source_type is "user")
-        original_url: The original URL of the paper
-        ai_judgment: AI judgment data if available
-    
-    Returns:
-        Service record dictionary
-    """
-    record = {
-        "service_data": {
-            "arxiv_id": arxiv_id,
-            "source_type": source_type,  # "system" or "user"
-            "created_at": datetime.now().isoformat(),
-            "original_url": original_url,
-            "ai_judgment": ai_judgment or {}
-        }
-    }
-    
-    if source_type == "user" and user_id:
-        record["service_data"]["user_id"] = user_id
-    
-    return record
+# Import service record functions from the decoupled module
+from summary_service.record_manager import (
+    create_service_record,
+    save_summary_with_service_record as save_summary_with_service_record_base,
+    load_summary_with_service_record as load_summary_with_service_record_base,
+    migrate_legacy_summaries_to_service_record
+)
 
 def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: dict, 
                                    source_type: str = "system", user_id: str = None,
@@ -120,27 +102,16 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: 
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
     """
-    # Create the combined record
-    record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment)
-    record["summary_data"] = {
-        "content": summary_content,
-        "tags": tags,
-        "updated_at": datetime.now().isoformat()
-    }
-    
-    # Save as JSON file
-    json_path = SUMMARY_DIR / f"{arxiv_id}.json"
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(record, f, ensure_ascii=False, indent=2)
-    
-    # Also save the legacy .md and .tags.json files for backward compatibility
-    md_path = SUMMARY_DIR / f"{arxiv_id}.md"
-    with open(md_path, 'w', encoding='utf-8') as f:
-        f.write(summary_content)
-    
-    tags_path = SUMMARY_DIR / f"{arxiv_id}.tags.json"
-    with open(tags_path, 'w', encoding='utf-8') as f:
-        json.dump(tags, f, ensure_ascii=False, indent=2)
+    save_summary_with_service_record_base(
+        arxiv_id=arxiv_id,
+        summary_content=summary_content,
+        tags=tags,
+        summary_dir=SUMMARY_DIR,
+        source_type=source_type,
+        user_id=user_id,
+        original_url=original_url,
+        ai_judgment=ai_judgment
+    )
 
 def load_summary_with_service_record(arxiv_id: str) -> dict:
     """Load a summary with its service record.
@@ -151,145 +122,11 @@ def load_summary_with_service_record(arxiv_id: str) -> dict:
     Returns:
         Dictionary containing service_data and summary_data, or None if not found
     """
-    json_path = SUMMARY_DIR / f"{arxiv_id}.json"
-    if json_path.exists():
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading service record for {arxiv_id}: {e}")
-    
-    # Fallback to legacy format
-    return load_legacy_summary(arxiv_id)
+    return load_summary_with_service_record_base(arxiv_id, SUMMARY_DIR)
 
-def load_legacy_summary(arxiv_id: str) -> dict:
-    """Load a summary in legacy format (separate .md and .tags.json files).
-    
-    Args:
-        arxiv_id: The arXiv ID of the paper
-    
-    Returns:
-        Dictionary with service_data and summary_data, defaulting to system source
-    """
-    md_path = SUMMARY_DIR / f"{arxiv_id}.md"
-    tags_path = SUMMARY_DIR / f"{arxiv_id}.tags.json"
-    
-    if not md_path.exists():
-        return None
-    
-    try:
-        # Load summary content
-        summary_content = md_path.read_text(encoding='utf-8')
-        
-        # Load tags
-        tags = {"top": [], "tags": []}
-        if tags_path.exists():
-            try:
-                tags = json.loads(tags_path.read_text(encoding='utf-8'))
-            except Exception:
-                pass
-        
-        # Create service record with default system source
-        service_record = create_service_record(arxiv_id, "system")
-        
-        return {
-            "service_data": service_record["service_data"],
-            "summary_data": {
-                "content": summary_content,
-                "tags": tags,
-                "updated_at": datetime.fromtimestamp(md_path.stat().st_mtime).isoformat()
-            }
-        }
-    except Exception as e:
-        print(f"Error loading legacy summary for {arxiv_id}: {e}")
-        return None
 
-def migrate_legacy_summaries_to_service_record() -> dict:
-    """Migrate all legacy summaries (.md + .tags.json) to new service record format.
-    
-    This function scans for legacy format summaries and creates service records for them
-    with update times based on the file creation time.
-    
-    Returns:
-        Dictionary with migration statistics
-    """
-    import os
-    from pathlib import Path
-    
-    migration_stats = {
-        "total_legacy_files": 0,
-        "migrated": 0,
-        "skipped": 0,
-        "errors": 0,
-        "details": []
-    }
-    
-    # Find all .md files that don't have corresponding .json files
-    md_files = list(SUMMARY_DIR.glob("*.md"))
-    
-    for md_path in md_files:
-        arxiv_id = md_path.stem
-        json_path = SUMMARY_DIR / f"{arxiv_id}.json"
-        
-        # Skip if service record already exists
-        if json_path.exists():
-            migration_stats["skipped"] += 1
-            migration_stats["details"].append({
-                "arxiv_id": arxiv_id,
-                "status": "skipped",
-                "reason": "service record already exists"
-            })
-            continue
-        
-        migration_stats["total_legacy_files"] += 1
-        
-        try:
-            # Load summary content
-            summary_content = md_path.read_text(encoding="utf-8")
-            
-            # Load tags if available
-            tags_path = SUMMARY_DIR / f"{arxiv_id}.tags.json"
-            tags = {"top": [], "tags": []}
-            if tags_path.exists():
-                try:
-                    tags = json.loads(tags_path.read_text(encoding="utf-8"))
-                except Exception:
-                    pass
-            
-            # Create service record with file creation time as update time
-            service_record = create_service_record(arxiv_id, "system")
-            
-            # Use file creation time for updated_at
-            file_creation_time = datetime.fromtimestamp(md_path.stat().st_mtime)
-            
-            record = {
-                "service_data": service_record["service_data"],
-                "summary_data": {
-                    "content": summary_content,
-                    "tags": tags,
-                    "updated_at": file_creation_time.isoformat()
-                }
-            }
-            
-            # Save the new service record
-            json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-            
-            migration_stats["migrated"] += 1
-            migration_stats["details"].append({
-                "arxiv_id": arxiv_id,
-                "status": "migrated",
-                "update_time": file_creation_time.isoformat()
-            })
-            
-        except Exception as e:
-            migration_stats["errors"] += 1
-            migration_stats["details"].append({
-                "arxiv_id": arxiv_id,
-                "status": "error",
-                "error": str(e)
-            })
-    
-    return migration_stats
+
+
 
 # -----------------------------------------------------------------------------
 # Admin helpers
@@ -897,30 +734,30 @@ def base_css():
 @app.get("/static/css/<path:filename>")
 def static_css(filename):
     """Serve CSS files from the ui/css directory."""
-    return send_from_directory('ui/css', filename, mimetype="text/css")
+    return send_from_directory('../ui/css', filename, mimetype="text/css")
 
 
 @app.get("/static/js/<path:filename>")
 def static_js(filename):
     """Serve JavaScript files from the ui/js directory."""
-    return send_from_directory('ui/js', filename, mimetype="application/javascript")
+    return send_from_directory('../ui/js', filename, mimetype="application/javascript")
 
 
 @app.get("/static/favicon.svg")
 def static_favicon_svg():
     """Serve the static SVG favicon file."""
-    return send_from_directory('ui', 'favicon.svg', mimetype="image/svg+xml")
+    return send_from_directory('../ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
 @app.get("/static/favicon.ico")
 def static_favicon_ico():
     """Serve the static ICO favicon file, fallback to SVG if ICO not available."""
-    ico_path = Path('ui') / 'favicon.ico'
+    ico_path = Path('../ui') / 'favicon.ico'
     if ico_path.exists() and ico_path.stat().st_size > 0:
-        return send_from_directory('ui', 'favicon.ico', mimetype="image/x-icon")
+        return send_from_directory('../ui', 'favicon.ico', mimetype="image/x-icon")
     else:
         # Fallback to SVG if ICO file doesn't exist or is empty
-        return send_from_directory('ui', 'favicon.svg', mimetype="image/svg+xml")
+        return send_from_directory('../ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
 
@@ -1224,8 +1061,8 @@ def admin_migrate_legacy_summaries():
         return jsonify({"error": "unauthorized"}), 403
     
     try:
-        # Run the migration
-        migration_stats = migrate_legacy_summaries_to_service_record()
+        # Run the migration using the decoupled function
+        migration_stats = migrate_legacy_summaries_to_service_record(SUMMARY_DIR)
         
         # Clear the cache to force refresh of entries
         global _ENTRIES_CACHE
@@ -1769,6 +1606,21 @@ def submit_paper():
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Flask application for paper summaries")
+    parser.add_argument("--port", type=int, help="Port to run the server on")
+    parser.add_argument("--host", type=str, help="Host to bind the server to")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    args = parser.parse_args()
+    
+    # Override configuration with command line arguments
+    if args.port:
+        app_config.port = args.port
+    if args.host:
+        app_config.host = args.host
+    if args.debug:
+        app_config.debug = args.debug
+    
     print(f"✅ Serving summaries from {SUMMARY_DIR.resolve()}")
     print(f"📋 Configuration loaded:")
     print(f"   - LLM Provider: {llm_config.provider}")
@@ -1776,6 +1628,7 @@ if __name__ == "__main__":
     print(f"   - Model: {llm_config.model}")
     print(f"   - Daily Limit: {paper_config.daily_submission_limit}")
     print(f"   - Max Workers: {paper_config.max_workers}")
+    print(f"   - Server: {app_config.host}:{app_config.port}")
     app.run(
         host=app_config.host, 
         port=app_config.port, 

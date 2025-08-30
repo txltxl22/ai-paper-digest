@@ -13,7 +13,7 @@ def setup_app_dirs(sp, tmp_path):
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    import summary_page as sp
+    import app.main as sp
 
     setup_app_dirs(sp, tmp_path)
     sp.app.config.update(TESTING=True)
@@ -28,7 +28,7 @@ def read_user_json(sp, uid):
 
 
 def test_mark_read_saves_local_datetime_with_tz_and_counts_today(tmp_path, monkeypatch):
-    import summary_page as sp
+    import app.main as sp
 
     setup_app_dirs(sp, tmp_path)
     sp.app.config.update(TESTING=True)
@@ -59,7 +59,7 @@ def test_mark_read_saves_local_datetime_with_tz_and_counts_today(tmp_path, monke
 
 
 def test_event_ingest_filters_non_clicks_and_converts_timezone(tmp_path, monkeypatch):
-    import summary_page as sp
+    import app.main as sp
 
     setup_app_dirs(sp, tmp_path)
     sp.app.config.update(TESTING=True)
@@ -102,7 +102,7 @@ def test_event_ingest_filters_non_clicks_and_converts_timezone(tmp_path, monkeyp
 
 
 def test_event_ingest_allows_only_click_types(tmp_path, monkeypatch):
-    import summary_page as sp
+    import app.main as sp
 
     setup_app_dirs(sp, tmp_path)
     sp.app.config.update(TESTING=True)
@@ -127,7 +127,7 @@ def test_event_ingest_allows_only_click_types(tmp_path, monkeypatch):
 
 
 def test_index_renders_tags_and_filters(tmp_path, monkeypatch):
-    import summary_page as sp
+    import app.main as sp
 
     setup_app_dirs(sp, tmp_path)
     sp.app.config.update(TESTING=True)

@@ -10,7 +10,7 @@ from unittest.mock import patch, mock_open
 import pytest
 from datetime import datetime
 
-from summary_page import (
+from app.main import (
     save_uploaded_url,
     get_uploaded_urls,
     check_paper_ai_relevance,
@@ -27,7 +27,7 @@ class TestURLTracking:
         # Mock user data file
         user_file = tmp_path / "test_user.json"
         
-        with patch('summary_page._user_file') as mock_get_file:
+        with patch('app.main._user_file') as mock_get_file:
             mock_get_file.return_value = user_file
             
             # Test data
@@ -82,7 +82,7 @@ class TestURLTracking:
         with open(user_file, 'w', encoding='utf-8') as f:
             json.dump(existing_data, f)
         
-        with patch('summary_page._user_file') as mock_get_file:
+        with patch('app.main._user_file') as mock_get_file:
             mock_get_file.return_value = user_file
             
             # Test data
@@ -141,7 +141,7 @@ class TestURLTracking:
         with open(user_file, 'w', encoding='utf-8') as f:
             json.dump(user_data, f)
         
-        with patch('summary_page._user_file') as mock_get_file:
+        with patch('app.main._user_file') as mock_get_file:
             mock_get_file.return_value = user_file
             
             # Get uploaded URLs
@@ -157,7 +157,7 @@ class TestURLTracking:
         """Test getting uploaded URLs for new user."""
         user_file = tmp_path / "new_user.json"
         
-        with patch('summary_page._user_file') as mock_get_file:
+        with patch('app.main._user_file') as mock_get_file:
             mock_get_file.return_value = user_file
             
             # Get uploaded URLs for new user
@@ -178,7 +178,7 @@ class TestURLTracking:
         with open(user_file, 'w', encoding='utf-8') as f:
             json.dump(user_data, f)
         
-        with patch('summary_page._user_file') as mock_get_file:
+        with patch('app.main._user_file') as mock_get_file:
             mock_get_file.return_value = user_file
             
             # Get uploaded URLs
@@ -240,7 +240,7 @@ class TestURLErrorHandling:
         user_file = tmp_path / "test_user"
         user_file.mkdir()
         
-        with patch('summary_page._user_file') as mock_get_file:
+        with patch('app.main._user_file') as mock_get_file:
             mock_get_file.return_value = user_file
             
             # Should not raise exception
@@ -256,7 +256,7 @@ class TestURLErrorHandling:
         with open(user_file, 'w', encoding='utf-8') as f:
             f.write('{"invalid": json}')
         
-        with patch('summary_page._user_file') as mock_get_file:
+        with patch('app.main._user_file') as mock_get_file:
             mock_get_file.return_value = user_file
             
             # Should return empty list on error

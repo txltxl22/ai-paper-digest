@@ -42,7 +42,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import markdown
 import math
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='ui')
 app.wsgi_app = ProxyFix(
         app.wsgi_app,
         x_proto = 1,     # trust 1 hop for X-Forwarded-Proto
@@ -573,7 +573,7 @@ def append_event(uid: str, event_type: str, arxiv_id: str | None = None, meta: d
 # -----------------------------------------------------------------------------
 
 BASE_CSS = open(os.path.join('ui', 'base.css'), 'r', encoding='utf-8').read()
-BADGE_CSS = open(os.path.join('ui', 'css', 'badges.css'), 'r', encoding='utf-8').read()
+
 INDEX_TEMPLATE = open(os.path.join('ui', 'index.html'), 'r', encoding='utf-8').read()
 DETAIL_TEMPLATE = open(os.path.join('ui', 'detail.html'), 'r', encoding='utf-8').read()
 
@@ -887,19 +887,33 @@ def read_papers():
 def base_css():
     return Response(BASE_CSS, mimetype="text/css")
 
-@app.get("/assets/badges.css")
-def badge_css():
-    return Response(BADGE_CSS, mimetype="text/css")
 
 
-@app.get("/favicon.svg")
-def favicon_svg():
+
+
+
+
+# Unified static file routes for consistent url_for usage
+@app.get("/static/css/<path:filename>")
+def static_css(filename):
+    """Serve CSS files from the ui/css directory."""
+    return send_from_directory('ui/css', filename, mimetype="text/css")
+
+
+@app.get("/static/js/<path:filename>")
+def static_js(filename):
+    """Serve JavaScript files from the ui/js directory."""
+    return send_from_directory('ui/js', filename, mimetype="application/javascript")
+
+
+@app.get("/static/favicon.svg")
+def static_favicon_svg():
     """Serve the static SVG favicon file."""
     return send_from_directory('ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
-@app.get("/favicon.ico")
-def favicon_ico():
+@app.get("/static/favicon.ico")
+def static_favicon_ico():
     """Serve the static ICO favicon file, fallback to SVG if ICO not available."""
     ico_path = Path('ui') / 'favicon.ico'
     if ico_path.exists() and ico_path.stat().st_size > 0:
@@ -907,6 +921,9 @@ def favicon_ico():
     else:
         # Fallback to SVG if ICO file doesn't exist or is empty
         return send_from_directory('ui', 'favicon.svg', mimetype="image/svg+xml")
+
+
+
 
 
 @app.route("/event", methods=["POST"])

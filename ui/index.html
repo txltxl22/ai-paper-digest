@@ -6,11 +6,11 @@
   <title>arXiv最新AI论文速览速学</title>
   <meta name='viewport' content='width=device-width,initial-scale=1'>
   <link rel="stylesheet" href="{{ url_for('base_css') }}">
-  <link rel="stylesheet" href="{{ url_for('badge_css') }}">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/modal.css">
-  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="icon" href="./favicon.ico" sizes="any">
+  <link rel="stylesheet" href="{{ url_for('static_css', filename='badges.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_css', filename='components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_css', filename='modal.css') }}">
+  <link rel="icon" href="{{ url_for('static_favicon_svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ url_for('static_favicon_ico') }}" sizes="any">
 </head>
 
 <body>
@@ -41,12 +41,12 @@
   
   {% include 'components/admin-modal.html' %}
   <!-- JavaScript Modules -->
-  <script src="js/theme.js"></script>
-  <script src="js/toast.js"></script>
-  <script src="js/user-actions.js"></script>
-  <script src="js/article-actions.js"></script>
-  <script src="js/admin-modal.js"></script>
-  <script src="js/paper-submission.js"></script>
+  <script src="{{ url_for('static_js', filename='theme.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='toast.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='user-actions.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='article-actions.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='admin-modal.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='paper-submission.js') }}"></script>
   
   <script>
     // URL configuration for Flask templates

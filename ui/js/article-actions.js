@@ -8,6 +8,57 @@ class ArticleActions {
     document.addEventListener('click', this.handleClick.bind(this));
   }
 
+  // Save current scroll position relative to the target element
+  saveScrollPosition(element) {
+    const rect = element.getBoundingClientRect();
+    this.savedScrollPosition = {
+      top: window.pageYOffset + rect.top,
+      elementTop: rect.top,
+      elementHeight: rect.height
+    };
+  }
+
+  // Restore scroll position after action
+  restoreScrollPosition() {
+    if (this.savedScrollPosition) {
+      window.scrollTo({
+        top: this.savedScrollPosition.top,
+        behavior: 'instant' // Use instant to avoid animation
+      });
+      this.savedScrollPosition = null;
+    }
+  }
+
+  // Scroll to target card or find alternative
+  scrollToNextCard(targetCard) {
+    if (targetCard && targetCard.tagName === 'ARTICLE') {
+      // Scroll to the target card
+      const rect = targetCard.getBoundingClientRect();
+      const scrollTop = window.pageYOffset + rect.top - 20; // 20px offset for better visibility
+      window.scrollTo({
+        top: scrollTop,
+        behavior: 'instant'
+      });
+    } else {
+      // If no target card, try to find any remaining article
+      const articles = document.querySelectorAll('article');
+      if (articles.length > 0) {
+        const rect = articles[0].getBoundingClientRect();
+        const scrollTop = window.pageYOffset + rect.top - 20;
+        window.scrollTo({
+          top: scrollTop,
+          behavior: 'instant'
+        });
+      } else {
+        // No cards left, scroll to top
+        window.scrollTo({
+          top: 0,
+          behavior: 'instant'
+        });
+      }
+    }
+  }
+
   handleClick(ev) {
     if (ev.target.matches('.toggle-link')) {
       ev.preventDefault();
@@ -35,9 +86,18 @@ class ArticleActions {
 
   togglePreview(link) {
     const art = link.closest('article');
+    
+    // Save scroll position before toggle
+    this.saveScrollPosition(art);
+    
     const prev = art.querySelector('.preview-html');
     prev.classList.toggle('collapsed');
     link.textContent = prev.classList.contains('collapsed') ? '展开' : '收起';
+    
+    // Restore scroll position after toggle
+    setTimeout(() => {
+      this.restoreScrollPosition();
+    }, 0);
     
     // Track event
     const id = art.getAttribute('data-id');
@@ -60,10 +120,21 @@ class ArticleActions {
     const art = link.closest('article');
     const id = art.getAttribute('data-id');
     
+    // Save scroll position before removal
+    this.saveScrollPosition(art);
+    
+    // Capture next card reference before removal
+    const nextCard = art.nextElementSibling;
+    
     fetch(window.appUrls.mark_read + id, { method: 'POST' }).then(r => {
       if (r.ok) {
         art.remove();
         this.updateInfoBarCounts(-1, 1);
+        
+        // Scroll to next card after removal
+        setTimeout(() => {
+          this.scrollToNextCard(nextCard);
+        }, 0);
         
         // Track event
         const payload = {
@@ -86,9 +157,20 @@ class ArticleActions {
     const art = link.closest('article');
     const id = art.getAttribute('data-id');
     
+    // Save scroll position before removal
+    this.saveScrollPosition(art);
+    
+    // Capture next card reference before removal
+    const nextCard = art.nextElementSibling;
+    
     fetch(window.appUrls.unmark_read + id, { method: 'POST' }).then(r => {
       if (r.ok) {
         art.remove();
+        
+        // Scroll to next card after removal
+        setTimeout(() => {
+          this.scrollToNextCard(nextCard);
+        }, 0);
         
         // Track event
         const payload = {

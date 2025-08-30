@@ -99,21 +99,8 @@ class ArticleActions {
       this.restoreScrollPosition();
     }, 0);
     
-    // Track event
-    const id = art.getAttribute('data-id');
-    const payload = {
-      type: 'read_more',
-      arxiv_id: id,
-      meta: { collapsed: prev.classList.contains('collapsed') },
-      ts: new Date().toISOString(),
-      tz_offset_min: new Date().getTimezoneOffset()
-    };
-    
-    try {
-      navigator.sendBeacon('/event', JSON.stringify(payload));
-    } catch(e) {
-      console.warn('Failed to send event:', e);
-    }
+    // Track event using centralized tracker
+    window.eventTracker.trackReadMore(art, prev.classList.contains('collapsed'));
   }
 
   markRead(link) {
@@ -136,19 +123,8 @@ class ArticleActions {
           this.scrollToNextCard(nextCard);
         }, 0);
         
-        // Track event
-        const payload = {
-          type: 'mark_read',
-          arxiv_id: id,
-          ts: new Date().toISOString(),
-          tz_offset_min: new Date().getTimezoneOffset()
-        };
-        
-        try {
-          navigator.sendBeacon('/event', JSON.stringify(payload));
-        } catch(e) {
-          console.warn('Failed to send event:', e);
-        }
+        // Track event using centralized tracker
+        window.eventTracker.trackMarkRead(art);
       }
     });
   }
@@ -172,19 +148,8 @@ class ArticleActions {
           this.scrollToNextCard(nextCard);
         }, 0);
         
-        // Track event
-        const payload = {
-          type: 'unmark_read',
-          arxiv_id: id,
-          ts: new Date().toISOString(),
-          tz_offset_min: new Date().getTimezoneOffset()
-        };
-        
-        try {
-          navigator.sendBeacon('/event', JSON.stringify(payload));
-        } catch(e) {
-          console.warn('Failed to send event:', e);
-        }
+        // Track event using centralized tracker
+        window.eventTracker.trackUnmarkRead(art);
       }
     });
   }

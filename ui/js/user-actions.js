@@ -18,28 +18,8 @@ class UserActions {
       }
     });
 
-    // Login form submit
-    document.getElementById('user-form')?.addEventListener('submit', () => {
-      this.trackLogin();
-    });
-
-    // Read list click tracking
-    document.addEventListener('click', (ev) => {
-      const link = ev.target.closest('a[href*="/read"]');
-      if (link) {
-        this.trackReadList();
-      }
-    }, true);
-
-    // PDF click tracking
-    document.addEventListener('click', (ev) => {
-      const link = ev.target.closest('a.action-btn[href^="https://arxiv.org/pdf/"]');
-      if (link) {
-        const art = link.closest('article');
-        const id = art ? art.getAttribute('data-id') : null;
-        this.trackPdfOpen(id, link.getAttribute('href'));
-      }
-    }, true);
+    // Note: Event tracking is now handled by the centralized EventTracker
+    // Global listeners are set up in event-tracker.js
 
     // Tag filter auto-submit
     document.addEventListener('DOMContentLoaded', () => {
@@ -59,17 +39,8 @@ class UserActions {
   }
 
   logout() {
-    // Track logout event
-    try {
-      const payload = {
-        type: 'logout',
-        ts: new Date().toISOString(),
-        tz_offset_min: new Date().getTimezoneOffset()
-      };
-      navigator.sendBeacon('/event', JSON.stringify(payload));
-    } catch(e) {
-      console.warn('Failed to send logout event:', e);
-    }
+    // Track logout event using centralized tracker
+    window.eventTracker.trackLogout();
     
     document.cookie = 'uid=; Max-Age=0; path=/';
     location.reload();
@@ -81,47 +52,8 @@ class UserActions {
     });
   }
 
-  trackLogin() {
-    try {
-      const payload = {
-        type: 'login',
-        ts: new Date().toISOString(),
-        tz_offset_min: new Date().getTimezoneOffset()
-      };
-      navigator.sendBeacon('/event', JSON.stringify(payload));
-    } catch(e) {
-      console.warn('Failed to send login event:', e);
-    }
-  }
-
-  trackReadList() {
-    try {
-      const payload = {
-        type: 'read_list',
-        ts: new Date().toISOString(),
-        tz_offset_min: new Date().getTimezoneOffset()
-      };
-      navigator.sendBeacon('/event', JSON.stringify(payload));
-    } catch(e) {
-      console.warn('Failed to send read_list event:', e);
-    }
-  }
-
-  trackPdfOpen(arxivId, href) {
-    const payload = {
-      type: 'open_pdf',
-      arxiv_id: arxivId,
-      meta: { href },
-      ts: new Date().toISOString(),
-      tz_offset_min: new Date().getTimezoneOffset()
-    };
-    
-    try {
-      navigator.sendBeacon('/event', JSON.stringify(payload));
-    } catch(e) {
-      console.warn('Failed to send open_pdf event:', e);
-    }
-  }
+  // Note: Event tracking methods are now handled by the centralized EventTracker
+  // These methods are kept for backward compatibility but delegate to the tracker
 
   initTagFilter() {
     const container = document.getElementById('detail-chips');

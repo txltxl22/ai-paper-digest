@@ -386,23 +386,25 @@ def save_read_map(uid: str, read_map: dict[str, str | None]):
     save_user_data(uid, data)
 
 
+# Event tracking functions are now handled by the decoupled EventTracker class
+# This function is kept for backward compatibility but delegates to the tracker
 def append_event(uid: str, event_type: str, arxiv_id: str | None = None, meta: dict | None = None, ts: str | None = None):
-    """Append a single analytics event for the user.
+    """Append a single analytics event for the user (backward compatibility).
 
-    If ts is provided (ISO 8601, preferably with timezone offset), it will be
-    used. Otherwise, we store the server local timezone timestamp with offset.
+    This function is now a wrapper around the decoupled EventTracker.
     """
-    data = load_user_data(uid)
-    evt = {
-        "ts": ts or datetime.now().astimezone().isoformat(timespec="seconds"),
-        "type": event_type,
-        "arxiv_id": arxiv_id,
-        "meta": meta or {},
-        "path": request.path if request else None,
-        "ua": request.headers.get("User-Agent") if request else None,
-    }
-    data.setdefault("events", []).append(evt)
-    save_user_data(uid, data)
+    from .event_tracking.event_tracker import EventTracker
+    tracker = EventTracker(USER_DATA_DIR)
+    tracker.track_event(uid, event_type, arxiv_id, meta, ts)
+
+# -----------------------------------------------------------------------------
+# Event Tracking System
+# -----------------------------------------------------------------------------
+
+# Register event tracking blueprint
+from .event_tracking.routes import create_event_tracking_blueprint
+event_tracking_bp = create_event_tracking_blueprint(USER_DATA_DIR)
+app.register_blueprint(event_tracking_bp)
 
 # -----------------------------------------------------------------------------
 # Templates (plain strings — no Python f-strings)                               
@@ -744,54 +746,8 @@ def static_favicon_ico():
         return send_from_directory('../ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
-
-
-
-@app.route("/event", methods=["POST"])
-def ingest_event():
-    uid = request.cookies.get("uid")
-    if not uid:
-        return jsonify({"error": "no-uid"}), 400
-    try:
-        payload = request.get_json(silent=True)
-        if payload is None:
-            raw = request.get_data(as_text=True) or "{}"
-            try:
-                payload = json.loads(raw)
-            except Exception:
-                payload = {}
-        etype = str(payload.get("type", "")).strip()
-        arxiv_id = payload.get("arxiv_id")
-        meta = payload.get("meta") or {}
-        ts_client = payload.get("ts")
-        tz_off_min = payload.get("tz_offset_min")  # minutes where UTC - local
-        # keep only click events
-        allowed = {"mark_read", "unmark_read", "open_pdf", "login", "logout", "reset", "read_list", "read_more"}
-        if etype in allowed:
-            ts_local: str | None = None
-            try:
-                if ts_client:
-                    # parse client ts and adjust to local timezone if offset provided
-                    # accept 'Z' by replacing with +00:00
-                    dt_utc = datetime.fromisoformat(str(ts_client).replace('Z', '+00:00'))
-                    if isinstance(tz_off_min, int):
-                        tz = timezone(timedelta(minutes=-tz_off_min))
-                        dt_local = dt_utc.astimezone(tz)
-                        ts_local = dt_local.isoformat(timespec="seconds")
-                    else:
-                        ts_local = dt_utc.astimezone().isoformat(timespec="seconds")
-            except Exception:
-                ts_local = None
-            append_event(
-                uid,
-                etype,
-                arxiv_id=str(arxiv_id) if arxiv_id else None,
-                meta=meta,
-                ts=ts_local,
-            )
-        return jsonify({"status": "ok"})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
+# Event tracking routes are now handled by the decoupled event tracking system
+# The /event endpoint is registered via the event tracking blueprint
 
 
 @app.route("/admin/fetch_latest", methods=["POST"])

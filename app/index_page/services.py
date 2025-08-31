@@ -228,7 +228,7 @@ class EntryRenderer:
                 if json_path.exists():
                     data = json.loads(json_path.read_text(encoding="utf-8"))
                     summary_data = data.get("summary_data", {})
-                    md_text = summary_data.get("content", "")
+                    md_text = summary_data.get("markdown_content", summary_data.get("content", ""))
                 else:
                     # Fallback to legacy .md file
                     md_path = self.summary_dir / f"{meta['id']}.md"

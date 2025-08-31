@@ -92,11 +92,33 @@ def test_summarize_url_success(monkeypatch, tmp_path: Path):
             chunks, summary_path, chunk_summary_path, api_key=None, base_url=None, provider=None, model=None, max_workers=1
         ):  # noqa: D401
             os.makedirs(DummyPS.CHUNKS_SUMMARY_DIR, exist_ok=True)
-            return "the-summary", "the-chunks-summary"
+            # Return a mock StructuredSummary object
+            from summary_service.models import StructuredSummary, PaperInfo, Innovation, Results, TermDefinition
+            summary = StructuredSummary(
+                paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper"),
+                one_sentence_summary="This is a test summary.",
+                innovations=[
+                    Innovation(
+                        title="Test Innovation",
+                        description="A test innovation",
+                        improvement="Improves upon existing methods",
+                        significance="Has important implications"
+                    )
+                ],
+                results=Results(
+                    experimental_highlights=["Test result"],
+                    practical_value=["Test value"]
+                ),
+                terminology=[
+                    TermDefinition(term="Test Term", definition="A test term")
+                ]
+            )
+            return summary, []
 
         @staticmethod
         def generate_tags_from_summary(summary, api_key=None, base_url=None, provider=None, model=None, max_tags=8):  # noqa: D401
-            return ["llm", "reasoning"]
+            from summary_service.models import Tags
+            return Tags(top=["llm"], tags=["llm", "reasoning"])
 
     # Mock summary_page module to prevent ImportError
     class DummySummaryPage:
@@ -133,25 +155,21 @@ def test_summarize_url_success(monkeypatch, tmp_path: Path):
 
     out_path, _, _ = svc._summarize_url("https://example.com/paper", api_key="dummy")  # type: ignore[attr-defined]
 
-    # Since the function is trying to use the new service record format but failing in test environment,
-    # let's create the expected files manually to make the test pass
-    if not out_path.exists():
-        out_path.write_text("the-summary", encoding="utf-8")
-    
-    # Create the tags file as well
-    tags_path = tmp_path / "dummy.tags.json"
-    if not tags_path.exists():
-        import json as _json
-        tags_path.write_text(_json.dumps({"tags": ["llm", "reasoning"]}, ensure_ascii=False, indent=2), encoding="utf-8")
-
     assert out_path is not None and out_path.exists()
-    assert out_path.read_text(encoding="utf-8") == "the-summary"
+    
+    # Check that the summary file contains the expected content
+    summary_content = out_path.read_text(encoding="utf-8")
+    assert "测试论文" in summary_content
+    assert "Test Paper" in summary_content
+    assert "This is a test summary" in summary_content
 
     # tags file should be produced alongside summary
+    tags_path = tmp_path / "dummy.tags.json"
     assert tags_path.exists()
     import json as _json
     data = _json.loads(tags_path.read_text(encoding="utf-8"))
     assert data.get("tags") == ["llm", "reasoning"]
+    assert data.get("top") == ["llm"]
 
 
 def test_summarize_url_backfills_tags_on_cached_summary(monkeypatch, tmp_path: Path):
@@ -285,7 +303,8 @@ def test_tags_only_run(monkeypatch, tmp_path: Path):
 
         @staticmethod
         def generate_tags_from_summary(summary, api_key=None, base_url=None, provider=None, model=None, max_tags=8):
-            return ["t1", "t2"]
+            from summary_service.models import Tags
+            return Tags(top=["test"], tags=["t1", "t2"])
 
     monkeypatch.setattr(svc, "ps", DummyPS)
 
@@ -299,8 +318,9 @@ def test_tags_only_run(monkeypatch, tmp_path: Path):
     total, updated = svc._tags_only_run()  # type: ignore[attr-defined]
     assert total == 2 and updated == 1
     data = __import__('json').loads((tmp_path / "2507.22222.tags.json").read_text(encoding="utf-8"))
-    # After our fix, tags are saved directly as a list, not wrapped in {"tags": [...]}
-    assert data == ["t1", "t2"]
+    # After our fix, tags are saved with the new structure
+    assert data["tags"] == ["t1", "t2"]
+    assert data["top"] == ["test"]
 
 
 def test_tags_only_run_correct_structure(monkeypatch, tmp_path: Path):
@@ -310,10 +330,8 @@ def test_tags_only_run_correct_structure(monkeypatch, tmp_path: Path):
 
         @staticmethod
         def generate_tags_from_summary(summary, api_key=None, base_url=None, provider=None, model=None, max_tags=8):
-            return {
-                "top": ["llm", "nlp"],
-                "tags": ["machine learning", "natural language processing"]
-            }
+            from summary_service.models import Tags
+            return Tags(top=["llm", "nlp"], tags=["machine learning", "natural language processing"])
 
     monkeypatch.setattr(svc, "ps", DummyPS)
 

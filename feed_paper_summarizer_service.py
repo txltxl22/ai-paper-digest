@@ -287,14 +287,20 @@ def _summarize_url(
             max_workers=max_workers,
         )
 
-        chunks_summary_out_path.write_text(chunks_summary, encoding="utf-8")
+        # chunks_summary is now a list of ChunkSummary objects, already saved by progressive_summary
         
         # Generate and persist tags alongside the summary
         try:
             _LOG.info("🏷️  Generating tags for %s…", pdf_path.stem)
-            tag_raw = ps.generate_tags_from_summary(summary, api_key=api_key, 
+            
+            # Convert structured summary to markdown for tag generation
+            from summary_service.models import summary_to_markdown
+            summary_text = summary_to_markdown(summary) if summary else "Paper summary"
+            
+            tag_raw = ps.generate_tags_from_summary(summary_text, api_key=api_key, 
                                                   base_url=base_url, provider=provider, model=model)  # type: ignore[attr-defined]
-            tag_obj = tag_raw if isinstance(tag_raw, dict) else {"tags": list(tag_raw or []), "top": []}
+            # Convert Tags object to dictionary format
+            tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
             
             # Save using the new service record format
             try:
@@ -302,7 +308,7 @@ def _summarize_url(
                 from summary_service.record_manager import save_summary_with_service_record
                 save_summary_with_service_record(
                     arxiv_id=pdf_path.stem,
-                    summary_content=summary,
+                    summary_content=summary,  # Now a StructuredSummary object
                     tags=tag_obj,
                     summary_dir=ps.SUMMARY_DIR,  # type: ignore[attr-defined]
                     source_type="system",
@@ -311,7 +317,10 @@ def _summarize_url(
                 _LOG.info("✅  Saved summary with service record for %s", pdf_path.stem)
             except ImportError:
                 # Fallback to legacy format if summary_page module is not available
-                summary_path.write_text(summary, encoding="utf-8")
+                # Convert StructuredSummary to markdown
+                from summary_service.models import summary_to_markdown
+                summary_markdown = summary_to_markdown(summary) if summary else "Paper summary"
+                summary_path.write_text(summary_markdown, encoding="utf-8")
                 tags_path = ps.SUMMARY_DIR / (pdf_path.stem + ".tags.json")  # type: ignore[attr-defined]
                 tags_path.write_text(json.dumps(tag_obj, ensure_ascii=False, indent=2), encoding="utf-8")
                 _LOG.info("✅  Saved %d tag(s) for %s (legacy format)", len(tag_obj.get("tags", [])), pdf_path.stem)
@@ -319,7 +328,9 @@ def _summarize_url(
         except Exception as exc:
             _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
             # Still save the summary even if tag generation fails
-            summary_path.write_text(summary, encoding="utf-8")
+            from summary_service.models import summary_to_markdown
+            summary_markdown = summary_to_markdown(summary) if summary else "Paper summary"
+            summary_path.write_text(summary_markdown, encoding="utf-8")
 
         _LOG.info("✅  Done – summary saved to %s", summary_path)
         return summary_path, pdf_url, paper_subject
@@ -402,8 +413,10 @@ def _tags_only_run(provider: str = "deepseek", base_url: str = "https://api.deep
             summary_text = md_path.read_text(encoding="utf-8", errors="ignore")
             tags = ps.generate_tags_from_summary(summary_text, provider=provider,
                                                base_url=base_url, model=model, api_key=api_key)  # type: ignore[attr-defined]
-            tags_path.write_text(json.dumps({"tags": tags}, ensure_ascii=False, indent=2), encoding="utf-8")
-            _LOG.info("✅  Saved %d tag(s) for %s", len(tags), paper_id)
+            # Convert Tags object to dictionary format
+            tag_obj = {"tags": tags.tags, "top": tags.top} if hasattr(tags, 'tags') else {"tags": [], "top": []}
+            tags_path.write_text(json.dumps(tag_obj, ensure_ascii=False, indent=2), encoding="utf-8")
+            _LOG.info("✅  Saved %d tag(s) for %s", len(tag_obj.get("tags", [])), paper_id)
             updated += 1
         except Exception as exc:  # pylint: disable=broad-except
             _LOG.exception("Failed to generate tags for %s: %s", md_path.name, exc)

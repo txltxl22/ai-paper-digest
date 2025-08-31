@@ -9,7 +9,13 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Union
+
+from .models import (
+    StructuredSummary, Tags, ServiceRecord, SummaryRecord,
+    parse_summary, parse_tags, summary_to_dict, tags_to_dict,
+    summary_to_markdown
+)
 
 
 def create_service_record(arxiv_id: str, source_type: str = "system", user_id: str = None, 
@@ -47,16 +53,17 @@ def create_service_record(arxiv_id: str, source_type: str = "system", user_id: s
     return record
 
 
-def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: dict, 
-                                   summary_dir: Path, source_type: str = "system", 
-                                   user_id: str = None, original_url: str = None, 
-                                   ai_judgment: dict = None, first_created_at: str = None):
+def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, StructuredSummary], 
+                                   tags: Union[dict, Tags], summary_dir: Path, 
+                                   source_type: str = "system", user_id: str = None, 
+                                   original_url: str = None, ai_judgment: dict = None, 
+                                   first_created_at: str = None):
     """Save a summary with its service record in JSON format.
     
     Args:
         arxiv_id: The arXiv ID of the paper
-        summary_content: The markdown summary content
-        tags: Tags dictionary with top and detail tags
+        summary_content: The summary content (markdown string or StructuredSummary object)
+        tags: Tags dictionary or Tags object
         summary_dir: Directory where summaries are stored
         source_type: Either "system" or "user"
         user_id: The user ID who uploaded the paper (if source_type is "user")
@@ -66,9 +73,30 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: 
     """
     # Create the combined record
     record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment, first_created_at)
+    
+    # Handle different input types
+    if isinstance(summary_content, StructuredSummary):
+        summary_dict = summary_to_dict(summary_content)
+        markdown_content = summary_to_markdown(summary_content)
+    else:
+        # Assume it's a markdown string - try to parse as structured JSON first
+        try:
+            summary_dict = json.loads(summary_content)
+            markdown_content = summary_content  # Keep original for backward compatibility
+        except (json.JSONDecodeError, ValueError):
+            # It's plain markdown
+            summary_dict = {"content": summary_content}
+            markdown_content = summary_content
+    
+    if isinstance(tags, Tags):
+        tags_dict = tags_to_dict(tags)
+    else:
+        tags_dict = tags
+    
     record["summary_data"] = {
-        "content": summary_content,
-        "tags": tags,
+        "structured_content": summary_dict,
+        "markdown_content": markdown_content,
+        "tags": tags_dict,
         "updated_at": datetime.now().isoformat()
     }
     
@@ -80,11 +108,11 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: 
     # Also save the legacy .md and .tags.json files for backward compatibility
     md_path = summary_dir / f"{arxiv_id}.md"
     with open(md_path, 'w', encoding='utf-8') as f:
-        f.write(summary_content)
+        f.write(markdown_content)
     
     tags_path = summary_dir / f"{arxiv_id}.tags.json"
     with open(tags_path, 'w', encoding='utf-8') as f:
-        json.dump(tags, f, ensure_ascii=False, indent=2)
+        json.dump(tags_dict, f, ensure_ascii=False, indent=2)
 
 
 def load_summary_with_service_record(arxiv_id: str, summary_dir: Path) -> Optional[Dict[str, Any]]:
@@ -101,7 +129,14 @@ def load_summary_with_service_record(arxiv_id: str, summary_dir: Path) -> Option
     if json_path.exists():
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                record = json.load(f)
+                
+            # Handle new structured format
+            if "summary_data" in record and "structured_content" in record["summary_data"]:
+                return record
+            
+            # Handle legacy format
+            return record
         except Exception as e:
             print(f"Error loading service record for {arxiv_id}: {e}")
     
@@ -143,7 +178,8 @@ def load_legacy_summary(arxiv_id: str, summary_dir: Path) -> Optional[Dict[str, 
         return {
             "service_data": service_record["service_data"],
             "summary_data": {
-                "content": summary_content,
+                "structured_content": {"content": summary_content},
+                "markdown_content": summary_content,
                 "tags": tags,
                 "updated_at": datetime.fromtimestamp(md_path.stat().st_mtime).isoformat()
             }
@@ -151,6 +187,67 @@ def load_legacy_summary(arxiv_id: str, summary_dir: Path) -> Optional[Dict[str, 
     except Exception as e:
         print(f"Error loading legacy summary for {arxiv_id}: {e}")
         return None
+
+
+def get_structured_summary(arxiv_id: str, summary_dir: Path) -> Optional[StructuredSummary]:
+    """Get structured summary object for a paper.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+        summary_dir: Directory where summaries are stored
+    
+    Returns:
+        StructuredSummary object or None if not found
+    """
+    record = load_summary_with_service_record(arxiv_id, summary_dir)
+    if not record or "summary_data" not in record:
+        return None
+    
+    summary_data = record["summary_data"]
+    
+    # Try to parse structured content
+    if "structured_content" in summary_data:
+        structured_content = summary_data["structured_content"]
+        
+        # Check if it's already a structured summary
+        if isinstance(structured_content, dict) and "paper_info" in structured_content:
+            try:
+                return parse_summary(json.dumps(structured_content))
+            except Exception:
+                pass
+    
+    # Fallback to markdown content
+    if "markdown_content" in summary_data:
+        # For now, return None since we can't easily parse markdown back to structured format
+        # In the future, we could implement markdown to structured conversion
+        return None
+    
+    return None
+
+
+def get_tags(arxiv_id: str, summary_dir: Path) -> Optional[Tags]:
+    """Get tags object for a paper.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+        summary_dir: Directory where summaries are stored
+    
+    Returns:
+        Tags object or None if not found
+    """
+    record = load_summary_with_service_record(arxiv_id, summary_dir)
+    if not record or "summary_data" not in record:
+        return None
+    
+    summary_data = record["summary_data"]
+    
+    if "tags" in summary_data:
+        try:
+            return parse_tags(json.dumps(summary_data["tags"]))
+        except Exception:
+            pass
+    
+    return None
 
 
 def migrate_legacy_summaries_to_service_record(summary_dir: Path) -> Dict[str, Any]:
@@ -214,7 +311,8 @@ def migrate_legacy_summaries_to_service_record(summary_dir: Path) -> Dict[str, A
             record = {
                 "service_data": service_record["service_data"],
                 "summary_data": {
-                    "content": summary_content,
+                    "structured_content": {"content": summary_content},
+                    "markdown_content": summary_content,
                     "tags": tags,
                     "updated_at": file_creation_time.isoformat()
                 }

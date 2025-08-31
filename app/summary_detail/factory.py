@@ -18,6 +18,7 @@ def create_summary_detail_module(summary_dir, detail_template: str) -> dict:
     # Create services
     summary_loader = SummaryLoader(summary_dir)
     summary_renderer = SummaryRenderer()
+    summary_renderer.loader = summary_loader  # Pass loader reference to renderer
     
     # Create routes
     blueprint = create_summary_detail_routes(summary_loader, summary_renderer, detail_template)

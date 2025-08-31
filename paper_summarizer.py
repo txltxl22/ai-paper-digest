@@ -5,6 +5,7 @@ and produces a concise summary with DeepSeek-v3 (or any OpenAI-compatible) LLM.
 This revision:
 - Caches intermediate files (PDF, markdown, chunk summaries)
 - Graceful error handling
+- Uses structured JSON schema for summaries
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import time
 from typing import Iterable, List, Optional, Tuple
 import re
 
+from langchain_deepseek.chat_models import DEFAULT_API_BASE as DEEPSEEK_DEFAULT_API_BASE
 import pymupdf4llm
 try:
     import pymupdf as fitz
@@ -34,11 +36,17 @@ from langchain_ollama import OllamaLLM
 from langchain_openai import ChatOpenAI
 from tqdm import tqdm
 
+# Import the new summary schema
+from summary_service.models import (
+    ChunkSummary, StructuredSummary, Tags, Innovation, TermDefinition,
+    parse_chunk_summary, parse_summary, parse_tags
+)
+
 
 # ---------------------------------------------------------------------------
 # Configuration & constants
 # ---------------------------------------------------------------------------
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 MODEL_NAME = "deepseek-chat"
 CHUNK_LENGTH = 5000
 CHUNK_OVERLAP_RATIO = 0.05
@@ -473,7 +481,7 @@ def llm_invoke(
             timeout=None,
             max_retries=2,
             api_key=api_key,
-            api_base=base_url,
+            api_base=base_url if base_url else DEEPSEEK_DEFAULT_API_BASE,
         )
         return llm.invoke(messages)
 
@@ -487,47 +495,125 @@ def progressive_summary(
     provider: str = DEFAULT_LLM_PROVIDER,
     model: str = None,
     max_workers: int = 4,
-) -> Tuple[str, str]:
-    if summary_path.exists():
+    use_summary_cache: bool = True,
+    use_chunk_summary_cache: bool = True,
+) -> Tuple[StructuredSummary, List[ChunkSummary]]:
+    """Generate structured summary using JSON schema-based prompts."""
+    if summary_path.exists() and use_summary_cache:
         _LOG.info(f"Summary cache hit for {summary_path}.")
-        return open(summary_path).read(), open(chunk_summary_path).read()
+        # Try to load existing structured summary
+        try:
+            with open(summary_path, 'r', encoding='utf-8') as f:
+                summary_data = json.load(f)
+            summary = parse_summary(json.dumps(summary_data))
+
+            # Load chunk summaries if available
+            chunk_summaries = []
+            if chunk_summary_path.exists():
+                try:
+                    with open(chunk_summary_path, 'r', encoding='utf-8') as f:
+                        chunk_data = json.load(f)
+                    chunk_summaries = [parse_chunk_summary(json.dumps(chunk)) for chunk in chunk_data]
+                except Exception:
+                    pass
+
+            return summary, chunk_summaries
+        except Exception:
+            _LOG.warning("Failed to load cached structured summary, regenerating...")
 
     chunks = list(chunks)
+    chunk_summaries: List[ChunkSummary] = [None] * len(chunks)  # type: ignore
 
-    summaries: List[str] = [None] * len(chunks)
-
-    def _summarize_one(idx: int, chunk: str):
+    def _summarize_one(idx: int, chunk: str) -> Tuple[int, ChunkSummary]:
         msg = HumanMessage(
             PromptTemplate.from_file(
-                os.path.join("prompts", "chunk_summary.md"), encoding="utf-8"
+                os.path.join("prompts", "chunk_summary.json.md"), encoding="utf-8"
             ).format(chunk_content=chunk)
         )
         resp = llm_invoke([msg], api_key=api_key, base_url=base_url, provider=provider, model=model)
-        return idx, resp.content
 
-    if not chunk_summary_path.exists():
+        # Parse the JSON response
+        try:
+            chunk_summary = parse_chunk_summary(resp.content)
+            return idx, chunk_summary
+        except Exception as e:
+            _LOG.error(f"Failed to parse chunk summary for chunk {idx}: {e}")
+            # Return a default chunk summary
+            default_summary = ChunkSummary(
+                main_content=f"Error parsing chunk {idx},\n original content: {chunk},\n resp: {resp.content}",
+                innovations=[],
+                key_terms=[],
+            )
+            return idx, default_summary
+
+    if not chunk_summary_path.exists() or not use_chunk_summary_cache:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(_summarize_one, i, c): i for i, c in enumerate(chunks)
             }
             for future in tqdm(
-                as_completed(futures), total=len(futures), desc="Summarizing"
+                as_completed(futures), total=len(futures), desc="Summarizing chunks"
             ):
-                i, summary = future.result()
-                summaries[i] = summary
-        joined = "\n\n".join(summaries)
-    else:
-        joined = open(chunk_summary_path, "r").read()
+                i, chunk_summary = future.result()
+                chunk_summaries[i] = chunk_summary
 
-    # Final pass
-    final = llm_invoke(
+        # Save chunk summaries
+        chunk_summary_path.write_text(
+            json.dumps([{
+                "main_content": cs.main_content,
+                "innovations": [
+                    {
+                        "title": inv.title,
+                        "description": inv.description,
+                        "improvement": inv.improvement,
+                        "significance": inv.significance
+                    }
+                    for inv in cs.innovations
+                ],
+                "key_terms": [
+                    {
+                        "term": kt.term,
+                        "definition": kt.definition
+                    }
+                    for kt in cs.key_terms
+                ]
+            } for cs in chunk_summaries], ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+    else:
+        # Load existing chunk summaries
+        try:
+            with open(chunk_summary_path, 'r', encoding='utf-8') as f:
+                chunk_data = json.load(f)
+            chunk_summaries = []
+            for chunk in chunk_data:
+                # Convert dictionaries to proper objects
+                innovations = [Innovation(**inv) for inv in chunk["innovations"]]
+                key_terms = [TermDefinition(**kt) for kt in chunk["key_terms"]]
+                chunk_summaries.append(ChunkSummary(
+                    main_content=chunk["main_content"],
+                    innovations=innovations,
+                    key_terms=key_terms
+                ))
+        except Exception as e:
+            _LOG.error(f"Failed to load chunk summaries: {e}")
+            return None, []  # type: ignore
+
+    # Combine chunk summaries for final summary
+    combined_content = "\n\n".join([
+        f"Chunk {i+1}:\n{cs.main_content}\n\nInnovations: {', '.join([inv.title for inv in cs.innovations])}\n\nKey Terms: {', '.join([kt.term for kt in cs.key_terms])}"
+        for i, cs in enumerate(chunk_summaries)
+    ])
+
+    # Generate final structured summary
+    final_msg = llm_invoke(
         [
-            AIMessage(
+            HumanMessage(
                 PromptTemplate.from_file(
-                    os.path.join("prompts", "summary.md"), encoding="utf-8"
-                ).format()
+                    os.path.join("prompts", "summary.json.md"), encoding="utf-8"
+                ).template
             ),
-            HumanMessage(joined),
+            HumanMessage(combined_content),
         ],
         api_key=api_key,
         base_url=base_url,
@@ -535,7 +621,45 @@ def progressive_summary(
         model=model,
     )
 
-    return final.content, joined
+    try:
+        summary = parse_summary(final_msg.content)
+
+        # Save structured summary
+        summary_path.write_text(
+            json.dumps({
+                "paper_info": {
+                    "title_zh": summary.paper_info.title_zh,
+                    "title_en": summary.paper_info.title_en
+                },
+                "one_sentence_summary": summary.one_sentence_summary,
+                "innovations": [
+                    {
+                        "title": innovation.title,
+                        "description": innovation.description,
+                        "improvement": innovation.improvement,
+                        "significance": innovation.significance
+                    }
+                    for innovation in summary.innovations
+                ],
+                "results": {
+                    "experimental_highlights": summary.results.experimental_highlights,
+                    "practical_value": summary.results.practical_value
+                },
+                "terminology": [
+                    {
+                        "term": term.term,
+                        "definition": term.definition
+                    }
+                    for term in summary.terminology
+                ]
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+
+        return summary, chunk_summaries
+    except Exception as e:
+        _LOG.error(f"Failed to parse final summary: {e}")
+        return None, chunk_summaries  # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -550,13 +674,13 @@ def generate_tags_from_summary(
     provider: str = DEFAULT_LLM_PROVIDER,
     model: str = None,
     max_tags: int = 8,
-) -> dict:
+) -> Tags:
     """Generate AI-aware top-level and detailed tags using the LLM.
 
-    Reads prompt from prompts/tags.md. Returns a dict: {"top": [..], "tags": [..]}.
+    Reads prompt from prompts/tags.json.md. Returns a Tags object.
     """
     tmpl = PromptTemplate.from_file(
-        os.path.join("prompts", "tags.md"), encoding="utf-8"
+        os.path.join("prompts", "tags.json.md"), encoding="utf-8"
     ).format(summary_content=summary_text)
 
     resp = llm_invoke([HumanMessage(content=tmpl)], api_key=api_key, base_url=base_url, provider=provider, model=model)
@@ -571,79 +695,50 @@ def generate_tags_from_summary(
     if fenced_match:
         raw = fenced_match.group(1).strip()
 
-    # Try strict JSON parse first
     try:
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            tags = [str(t).strip() for t in data.get("tags", []) if str(t).strip()]
-            top = [str(t).strip() for t in data.get("top", []) if str(t).strip()]
-        elif isinstance(data, list):
-            # backward compatibility: array treated as detailed tags only
-            tags = [str(t).strip() for t in data if str(t).strip()]
-            top = []
-        else:
-            tags, top = [], []
-    except Exception:
-        # Try to locate a JSON object or array within the text
-        obj = re.search(r"\{[\s\S]*\}", raw)
-        if obj:
-            try:
-                data = json.loads(obj.group(0))
-                if isinstance(data, dict):
-                    tags = [str(t).strip() for t in data.get("tags", []) if str(t).strip()]
-                    top = [str(t).strip() for t in data.get("top", []) if str(t).strip()]
-                elif isinstance(data, list):
-                    tags = [str(t).strip() for t in data if str(t).strip()]
-                    top = []
-                else:
-                    tags, top = [], []
-            except Exception:
-                tags, top = [], []
-        else:
-            # Fallback: allow comma/line separated list for detailed tags only
-            if raw.startswith("-") or "\n" in raw:
-                parts = [p.strip(" -\t") for p in raw.splitlines()]
-            else:
-                parts = [p.strip() for p in raw.split(",")]
-            tags = [p for p in parts if p]
-            top = []
-
-    # Normalize and cap
-    normalized: List[str] = []
-    seen = set()
-    for t in tags:
-        norm = " ".join(t.split()).lower()
-        if norm and norm not in seen:
-            seen.add(norm)
-            normalized.append(norm)
-        if len(normalized) >= max_tags:
-            break
-
-    # Ensure a minimum of 3 tags if possible by splitting slashes etc.
-    if len(normalized) < 3:
-        extras: List[str] = []
-        for t in normalized:
-            for part in t.replace("/", " ").split():
-                if part and part not in seen:
-                    seen.add(part)
-                    extras.append(part)
-                if len(normalized) + len(extras) >= 3:
-                    break
-            if len(normalized) + len(extras) >= 3:
+        tags = parse_tags(raw)
+        
+        # Normalize and cap
+        normalized_tags: List[str] = []
+        seen = set()
+        for t in tags.tags:
+            norm = " ".join(t.split()).lower()
+            if norm and norm not in seen:
+                seen.add(norm)
+                normalized_tags.append(norm)
+            if len(normalized_tags) >= max_tags:
                 break
-        normalized.extend(extras)
 
-    # normalize top-level too and ensure subset of allowed set
-    allowed_top = {"llm","nlp","cv","ml","rl","agents","systems","theory","robotics","audio","multimodal"}
-    top_norm: List[str] = []
-    seen_top = set()
-    for t in top:
-        k = " ".join(str(t).split()).lower()
-        if k in allowed_top and k not in seen_top:
-            seen_top.add(k)
-            top_norm.append(k)
+        # Ensure a minimum of 3 tags if possible by splitting slashes etc.
+        if len(normalized_tags) < 3:
+            extras: List[str] = []
+            for t in normalized_tags:
+                for part in t.replace("/", " ").split():
+                    if part and part not in seen:
+                        seen.add(part)
+                        extras.append(part)
+                    if len(normalized_tags) + len(extras) >= 3:
+                        break
+                if len(normalized_tags) + len(extras) >= 3:
+                    break
+            normalized_tags.extend(extras)
 
-    return {"top": top_norm, "tags": normalized}
+        # normalize top-level too and ensure subset of allowed set
+        allowed_top = {"llm","nlp","cv","ml","rl","agents","systems","theory","robotics","audio","multimodal"}
+        top_norm: List[str] = []
+        seen_top = set()
+        for t in tags.top:
+            k = " ".join(str(t).split()).lower()
+            if k in allowed_top and k not in seen_top:
+                seen_top.add(k)
+                top_norm.append(k)
+
+        return Tags(top=top_norm, tags=normalized_tags)
+        
+    except Exception as e:
+        _LOG.error(f"Failed to parse tags: {e}")
+        # Return default tags
+        return Tags(top=[], tags=[])
 
 
 # ---------------------------------------------------------------------------
@@ -692,14 +787,21 @@ def main() -> None:
         chunks = chunk_text(text)
         _LOG.info("Split into %d chunks", len(chunks))
 
-        summary_path = SUMMARY_DIR / (pdf_path.stem + ".md")
-        summary = progressive_summary(
-            chunks, summary_path=summary_path, api_key=args.api_key,
-            base_url=args.base_url, provider=args.provider, ollama_base_url=args.ollama_base_url, 
-            ollama_model=args.ollama_model
+        summary_path = SUMMARY_DIR / (pdf_path.stem + ".json")
+        chunk_summary_path = CHUNKS_SUMMARY_DIR / (pdf_path.stem + ".json")
+        
+        summary, chunk_summaries = progressive_summary(
+            chunks, summary_path=summary_path, chunk_summary_path=chunk_summary_path,
+            api_key=args.api_key, base_url=args.base_url, provider=args.provider, 
+            ollama_base_url=args.ollama_base_url, ollama_model=args.ollama_model
         )
-        summary_path.write_text(summary.content, encoding="utf-8")
-        print("\n" + "=" * 80 + "\nFINAL SUMMARY saved to:\n" + str(summary_path))
+        
+        if summary:
+            print("\n" + "=" * 80 + "\nFINAL SUMMARY saved to:\n" + str(summary_path))
+            print(f"Paper: {summary.paper_info.title_zh}")
+            print(f"Summary: {summary.one_sentence_summary}")
+        else:
+            print("\n" + "=" * 80 + "\nERROR: Failed to generate structured summary")
 
     except Exception as e:
         _LOG.error("Error: %s", e)

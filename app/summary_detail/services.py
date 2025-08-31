@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 import markdown
 from .models import SummaryData, ServiceData
+from summary_service.record_manager import get_structured_summary, get_tags
 
 
 class SummaryLoader:
@@ -19,6 +20,14 @@ class SummaryLoader:
     def load_summary(self, arxiv_id: str) -> Optional[Dict[str, Any]]:
         """Load summary data for a specific paper."""
         return self._load_summary(arxiv_id, self.summary_dir)
+    
+    def load_structured_summary(self, arxiv_id: str):
+        """Load structured summary object for a specific paper."""
+        return get_structured_summary(arxiv_id, self.summary_dir)
+    
+    def load_tags(self, arxiv_id: str):
+        """Load tags object for a specific paper."""
+        return get_tags(arxiv_id, self.summary_dir)
 
 
 class SummaryRenderer:
@@ -40,14 +49,21 @@ class SummaryRenderer:
     def render_summary(self, summary_data: Dict[str, Any], service_data: Dict[str, Any]) -> Dict[str, Any]:
         """Render a complete summary for display."""
         # Extract data
-        content = summary_data.get("content", "")
+        content = summary_data.get("markdown_content", summary_data.get("content", ""))
         tags_dict = summary_data.get("tags", {})
+        
+        # Try to load structured summary
+        arxiv_id = service_data.get("arxiv_id", "")
+        structured_summary = None
+        if arxiv_id:
+            structured_summary = self.loader.load_structured_summary(arxiv_id) if hasattr(self, 'loader') else None
         
         # Create model objects
         summary = SummaryData(
-            arxiv_id=summary_data.get("arxiv_id", ""),
+            arxiv_id=arxiv_id,
             content=content,
-            tags=tags_dict
+            tags=tags_dict,
+            structured_summary=structured_summary
         )
         
         service = ServiceData(
@@ -65,5 +81,11 @@ class SummaryRenderer:
             "detail_tags": summary.get_detail_tags(),
             "source_type": service.source_type,
             "user_id": service.user_id,
-            "original_url": service.original_url
+            "original_url": service.original_url,
+            "structured_summary": structured_summary,
+            "paper_title": summary.get_paper_title(),
+            "one_sentence_summary": summary.get_one_sentence_summary(),
+            "innovations": summary.get_innovations(),
+            "results": summary.get_results(),
+            "terminology": summary.get_terminology()
         }

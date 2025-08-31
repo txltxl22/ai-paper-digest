@@ -1,0 +1,48 @@
+---
+description: rule to keep architecture.mdc updated when making architectural changes
+globs: 
+alwaysApply: true
+---
+
+# Architecture Update Rule
+
+## When to Update `.cursor/rules/architecture.mdc`:
+
+### Core Changes
+- New major components (.py files with significant functionality)
+- Core function modifications in `paper_summarizer.py`, `feed_paper_summarizer_service.py`, `app/main.py`
+- LLM integration changes or new providers
+- Data flow modifications
+
+### Structure Changes
+- New directories or file moves
+- New `app/` subsystems
+- New data storage locations
+- File organization changes
+
+### Config Changes
+- New `config_manager.py` classes
+- Configuration pattern changes
+- Environment variable handling changes
+
+### Pattern Changes
+- LLM usage patterns across project
+- Error handling patterns
+- Caching mechanisms
+- Logging patterns
+
+## Update Process
+1. **Before**: Review current architecture.mdc
+2. **During**: Track what needs updating
+3. **After**: Update architecture.mdc
+4. **Verify**: Ensure accuracy
+
+## What to Update
+- Component descriptions and functions
+- Directory structure
+- Data flow diagrams
+- Development guidelines
+- Running instructions
+
+## Priority: HIGH
+Architectural changes without documentation updates confuse development and break consistency.

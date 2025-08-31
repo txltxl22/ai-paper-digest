@@ -1,0 +1,97 @@
+---
+description: comprehensive architecture introduction and development guide
+globs: 
+alwaysApply: true
+---
+
+# AI-paper-digest - Architecture Guide
+
+## Overview
+AI-powered research paper summarization system: RSS feeds → PDF download → text extraction → LLM summarization → web interface.
+
+## Core Components
+
+### 1. Paper Processing (`paper_summarizer.py`)
+**Core engine**: PDF download, text extraction, LLM summarization
+**Key functions**: `resolve_pdf_url()`, `download_pdf()`, `extract_markdown()`, `chunk_text()`, `progressive_summary()`, `generate_tags_from_summary()`
+**LLM Support**: DeepSeek (default), Ollama, OpenAI-compatible APIs
+**Cache**: PDFs (`papers/`), markdown (`markdown/`), summaries (`summary/`)
+
+### 2. RSS Service (`feed_paper_summarizer_service.py`)
+**Orchestrator**: RSS feed processing pipeline
+**Key functions**: `_summarize_url()`, `main()` (CLI entry)
+**Modes**: Regular, extract-only, tags-only, local processing
+
+### 3. Web App (`app/main.py`)
+**Flask server**: User interface and API endpoints
+**Subsystems**: `fetch/`, `paper_submission/`, `summary_detail/`, `user_management/`, `event_tracking/`, `index_page/`
+
+### 4. Config (`config_manager.py`)
+**Centralized settings**: `LLMConfig`, `AppConfig`, `PaperProcessingConfig`, `PathsConfig`
+
+## Data Flow
+```
+RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → LLM → Summary + Tags
+                                                      ↓
+                                              Web App (Flask) → User Interface
+```
+
+## Directory Structure
+```
+├── paper_summarizer.py              # Core processing engine
+├── feed_paper_summarizer_service.py # RSS service orchestrator
+├── config_manager.py                # Configuration management
+├── app/                             # Web application
+│   ├── main.py                      # Flask app entry point
+│   ├── fetch/                       # RSS fetching subsystem
+│   ├── paper_submission/            # User submissions
+│   ├── summary_detail/              # Summary display
+│   ├── user_management/             # User auth & data
+│   ├── event_tracking/              # Analytics
+│   └── index_page/                  # Main page
+├── papers/                          # Downloaded PDFs
+├── markdown/                        # Extracted text
+├── summary/                         # Generated summaries
+├── user_data/                       # User-specific data
+├── prompts/                         # LLM prompt templates
+├── ui/                              # Frontend templates
+└── tests/                           # Test suite
+```
+
+## Development Guidelines
+
+### Where to Read
+1. **Start**: `paper_summarizer.py` (core processing)
+2. **Service**: `feed_paper_summarizer_service.py` (RSS handling)
+3. **Web**: `app/main.py` (Flask app)
+4. **Config**: `config_manager.py` (settings)
+
+### Where to Modify
+1. **LLM Integration**: `paper_summarizer.py` functions
+2. **Processing Logic**: `feed_paper_summarizer_service.py` pipeline
+3. **Web Features**: `app/main.py` routes + subsystem modules
+4. **UI**: `ui/` directory templates
+5. **Config**: `config_manager.py` settings
+
+### Where to Test
+1. **Unit Tests**: `tests/` directory
+2. **Integration**: `feed_paper_summarizer_service.py` pipeline
+3. **Web Tests**: Flask app endpoints
+
+### Key Patterns
+1. **LLM Usage**: Follow `paper_summarizer.py` patterns
+2. **Error Handling**: Use service layer patterns
+3. **Caching**: Leverage existing PDF/markdown/summary cache
+4. **Configuration**: Use `ConfigManager` consistently
+5. **Logging**: Use thread-safe patterns
+
+### Running
+- **Dev**: `uv run python run_app.py` (foreground)
+- **Processing**: `uv run python feed_paper_summarizer_service.py <rss_url>`
+- **Testing**: `uv run python -m pytest tests/`
+
+### Data Storage
+- **Summaries**: JSON service records in `summary/`
+- **User Data**: JSON files in `user_data/`
+- **Config**: `web_app_config.json` + env vars
+- **Cache**: PDFs, markdown, intermediate files

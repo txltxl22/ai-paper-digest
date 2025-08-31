@@ -200,38 +200,65 @@ def summarize_paper_url(
                 max_workers=max_workers,
             )
 
-            # Generate and persist tags alongside the summary
-            try:
-                _LOG.info("🏷️  Generating tags for %s", pdf_path.stem)
-                
-                # Convert structured summary to markdown for tag generation
-                summary_text = summary_to_markdown(summary) if summary else "Paper summary"
-                
-                tag_raw = generate_tags_from_summary(
-                    summary_text, 
-                    api_key=api_key, 
-                    base_url=base_url, 
-                    provider=provider, 
-                    model=model
-                )
-                tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
-                
-                # Save using the new service record format
-                save_summary_with_service_record(
-                    arxiv_id=pdf_path.stem,
-                    summary_content=summary,  # Now a StructuredSummary object
-                    tags=tag_obj,
-                    summary_dir=SUMMARY_DIR,
-                    source_type="system",
-                    original_url=pdf_url
-                )
-                _LOG.info("✅  Saved summary with service record for %s", pdf_path.stem)
+            # Save structured summary immediately after LLM generation
+            if summary:
+                try:
+                    _LOG.info("💾 Saving structured summary for %s", pdf_path.stem)
                     
-            except Exception as exc:
-                _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
-                # Still save the summary even if tag generation fails
-                summary_markdown = summary_to_markdown(summary) if summary else "Paper summary"
+                    # Save using the new service record format immediately
+                    save_summary_with_service_record(
+                        arxiv_id=pdf_path.stem,
+                        summary_content=summary,  # StructuredSummary object from LLM
+                        tags={"top": [], "tags": []},  # Empty tags for now
+                        summary_dir=SUMMARY_DIR,
+                        source_type="system",
+                        original_url=pdf_url
+                    )
+                    _LOG.info("✅  Saved structured summary with service record for %s", pdf_path.stem)
+                except Exception as exc:
+                    _LOG.exception("Failed to save structured summary for %s: %s", pdf_path.stem, exc)
+                    # Fallback to markdown if service record saving fails
+                    summary_markdown = summary_to_markdown(summary) if summary else "Paper summary"
+                    summary_path.write_text(summary_markdown, encoding="utf-8")
+            else:
+                _LOG.error("❌ LLM failed to generate structured summary for %s", pdf_path.stem)
+                # Generate a basic markdown summary as fallback
+                summary_markdown = f"# {pdf_path.stem}\n\nLLM failed to generate structured summary. Please try again later."
                 summary_path.write_text(summary_markdown, encoding="utf-8")
+            
+            # Generate and persist tags alongside the summary
+            if summary:  # Only generate tags if we have a structured summary
+                try:
+                    _LOG.info("🏷️  Generating tags for %s", pdf_path.stem)
+                    
+                    # Convert structured summary to markdown for tag generation
+                    summary_text = summary_to_markdown(summary)
+                    
+                    tag_raw = generate_tags_from_summary(
+                        summary_text, 
+                        api_key=api_key, 
+                        base_url=base_url, 
+                        provider=provider, 
+                        model=model
+                    )
+                    tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
+                    
+                    # Update the service record with tags
+                    save_summary_with_service_record(
+                        arxiv_id=pdf_path.stem,
+                        summary_content=summary,  # StructuredSummary object
+                        tags=tag_obj,
+                        summary_dir=SUMMARY_DIR,
+                        source_type="system",
+                        original_url=pdf_url
+                    )
+                    _LOG.info("✅  Updated summary with tags for %s", pdf_path.stem)
+                        
+                except Exception as exc:
+                    _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
+                    # Tags failed, but structured summary is already saved
+            else:
+                _LOG.warning("⚠️  Skipping tag generation for %s - no structured summary available", pdf_path.stem)
 
             _LOG.info("✅  Done – summary saved to %s", summary_path)
             return summary_path, pdf_url, paper_subject

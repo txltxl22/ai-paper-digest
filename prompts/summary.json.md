@@ -53,6 +53,8 @@
 
 ---
 
-**执行指令**：
-
-* 等待用户输入所有chunk-summary后再统一输出总结，不要中途输出任何结果。
+## 所有Chunk的Summary内容
+所有Chunk的summary内容：
+```json
+{chunks_summary}
+```

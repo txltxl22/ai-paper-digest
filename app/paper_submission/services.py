@@ -43,23 +43,18 @@ class PaperSubmissionService:
     
     def _update_progress(self, task_id: str, step: str, progress: int, details: str = ""):
         """Update progress for a specific task."""
-        print(f"DEBUG: Updating progress cache for {task_id}: {step} - {progress}% - {details}")
         self.progress_cache[task_id] = {
             "step": step,
             "progress": progress,
             "details": details,
             "timestamp": datetime.now().isoformat()
         }
-        print(f"DEBUG: Progress cache now has {len(self.progress_cache)} tasks")
     
     def get_progress(self, task_id: str) -> Dict[str, Any]:
         """Get progress for a specific task."""
-        print(f"DEBUG: Getting progress for {task_id}, cache has {len(self.progress_cache)} tasks")
         if task_id in self.progress_cache:
-            print(f"DEBUG: Found task {task_id} in cache")
             return self.progress_cache[task_id]
         else:
-            print(f"DEBUG: Task {task_id} not found in cache")
             return {
                 "step": "unknown",
                 "progress": 0,
@@ -128,7 +123,6 @@ class PaperSubmissionService:
                 downloaded_mb = downloaded / (1024 * 1024)
                 total_mb = total / (1024 * 1024) if total > 0 else 0
                 details = f"正在下载PDF... {percent}% ({downloaded_mb:.1f}MB / {total_mb:.1f}MB)"
-                print(f"DEBUG: Download progress callback: {percent}% ({downloaded_mb:.1f}MB / {total_mb:.1f}MB)")
                 self._update_progress(task_id, "downloading", overall_progress, details)
             
             try:
@@ -269,8 +263,42 @@ class PaperSubmissionService:
                 self._update_progress(task_id, "summarizing", 95, "摘要生成完成")
                 
                 if summary_path:
-                    # Read the generated summary content
+                    # The paper summarizer should have created structured data
+                    # Check if there's a structured summary JSON file
+                    summary_json_path = self.summary_dir / f"{arxiv_id}.json"
+                    
+                    # Read the generated summary content (markdown for fallback)
                     summary_content = summary_path.read_text(encoding="utf-8")
+                    
+                                        # If structured summary exists, use it instead of markdown
+                    if summary_json_path.exists():
+                        try:
+                            with open(summary_json_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                            
+                            # Check if this is a service record format
+                            if 'summary_data' in data and 'structured_content' in data['summary_data']:
+                                structured_content = data['summary_data']['structured_content']
+                                if structured_content and isinstance(structured_content, dict) and 'paper_info' in structured_content:
+                                    from summary_service.models import parse_summary
+                                    # Parse the structured summary from the service record
+                                    structured_summary = parse_summary(json.dumps(structured_content))
+                                    summary_content = structured_summary
+                                    print(f"✅ Using structured summary from service record for {arxiv_id}")
+                                else:
+                                    summary_content = summary_path.read_text(encoding="utf-8")
+                            else:
+                                # Try to parse as raw structured data (legacy format)
+                                from summary_service.models import parse_summary
+                                structured_summary = parse_summary(json.dumps(data))
+                                summary_content = structured_summary
+                        except Exception as e:
+                            print(f"Error loading structured summary, using markdown: {e}")
+                            # Fallback to markdown if structured parsing fails
+                            summary_content = summary_path.read_text(encoding="utf-8")
+                    else:
+                        print(f"❌ No structured summary found at {summary_json_path}")
+                        summary_content = summary_path.read_text(encoding="utf-8")
                     
                     # Read the generated tags
                     tags_path = self.summary_dir / f"{arxiv_id}.tags.json"

@@ -98,6 +98,7 @@ def progressive_summary(
             )
             return idx, default_summary
 
+    chunk_data = None
     if not chunk_summary_path.exists() or not use_chunk_summary_cache:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -109,31 +110,29 @@ def progressive_summary(
                 i, chunk_summary = future.result()
                 chunk_summaries[i] = chunk_summary
 
-        # Save chunk summaries
-        chunk_summary_path.write_text(
-            json.dumps(
-                [
+        # Save chunk summaries and prepare chunk_data for final summary
+        chunk_data = [
+            {
+                "main_content": cs.main_content,
+                "innovations": [
                     {
-                        "main_content": cs.main_content,
-                        "innovations": [
-                            {
-                                "title": inv.title,
-                                "description": inv.description,
-                                "improvement": inv.improvement,
-                                "significance": inv.significance,
-                            }
-                            for inv in cs.innovations
-                        ],
-                        "key_terms": [
-                            {"term": kt.term, "definition": kt.definition}
-                            for kt in cs.key_terms
-                        ],
+                        "title": inv.title,
+                        "description": inv.description,
+                        "improvement": inv.improvement,
+                        "significance": inv.significance,
                     }
-                    for cs in chunk_summaries
+                    for inv in cs.innovations
                 ],
-                ensure_ascii=False,
-                indent=2,
-            ),
+                "key_terms": [
+                    {"term": kt.term, "definition": kt.definition}
+                    for kt in cs.key_terms
+                ],
+            }
+            for cs in chunk_summaries
+        ]
+        
+        chunk_summary_path.write_text(
+            json.dumps(chunk_data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
     else:
@@ -157,24 +156,16 @@ def progressive_summary(
             _LOG.error(f"Failed to load chunk summaries: {e}")
             return None, []  # type: ignore
 
-    # Combine chunk summaries for final summary
-    combined_content = "\n\n".join(
-        [
-            f"Chunk {i+1}:\n{cs.main_content}\n\nInnovations: {', '.join([inv.title for inv in cs.innovations])}\n\nKey Terms: {', '.join([kt.term for kt in cs.key_terms])}"
-            for i, cs in enumerate(chunk_summaries)
-        ]
-    )
-
     # Generate final structured summary
+    prompt_template = PromptTemplate.from_file(
+        os.path.join("prompts", "summary.json.md"), encoding="utf-8"
+    )
+    
+    # Create the complete prompt with chunk summaries
+    complete_prompt = prompt_template.format(chunks_summary=json.dumps(chunk_data))
+
     final_msg = llm_invoke(
-        [
-            HumanMessage(
-                PromptTemplate.from_file(
-                    os.path.join("prompts", "summary.json.md"), encoding="utf-8"
-                ).template
-            ),
-            HumanMessage(combined_content),
-        ],
+        [HumanMessage(content=complete_prompt)],
         api_key=api_key,
         base_url=base_url,
         provider=provider,
@@ -184,42 +175,44 @@ def progressive_summary(
     try:
         summary = parse_summary(final_msg.content)
 
-        # Save structured summary
-        summary_path.write_text(
-            json.dumps(
-                {
-                    "paper_info": {
-                        "title_zh": summary.paper_info.title_zh,
-                        "title_en": summary.paper_info.title_en,
+        # Save summary cache if enabled
+        if use_summary_cache:
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "paper_info": {
+                            "title_zh": summary.paper_info.title_zh,
+                            "title_en": summary.paper_info.title_en,
+                        },
+                        "one_sentence_summary": summary.one_sentence_summary,
+                        "innovations": [
+                            {
+                                "title": inv.title,
+                                "description": inv.description,
+                                "improvement": inv.improvement,
+                                "significance": inv.significance,
+                            }
+                            for inv in summary.innovations
+                        ],
+                        "results": {
+                            "experimental_highlights": summary.results.experimental_highlights,
+                            "practical_value": summary.results.practical_value,
+                        },
+                        "terminology": [
+                            {"term": term.term, "definition": term.definition}
+                            for term in summary.terminology
+                        ],
                     },
-                    "one_sentence_summary": summary.one_sentence_summary,
-                    "innovations": [
-                        {
-                            "title": innovation.title,
-                            "description": innovation.description,
-                            "improvement": innovation.improvement,
-                            "significance": innovation.significance,
-                        }
-                        for innovation in summary.innovations
-                    ],
-                    "results": {
-                        "experimental_highlights": summary.results.experimental_highlights,
-                        "practical_value": summary.results.practical_value,
-                    },
-                    "terminology": [
-                        {"term": term.term, "definition": term.definition}
-                        for term in summary.terminology
-                    ],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
 
         return summary, chunk_summaries
     except Exception as e:
         _LOG.error(f"Failed to parse final summary: {e}")
+        _LOG.error(f"LLM response was: {final_msg.content}")
         return None, chunk_summaries  # type: ignore
 
 

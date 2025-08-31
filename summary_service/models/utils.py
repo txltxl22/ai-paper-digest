@@ -181,6 +181,7 @@ def summary_to_markdown(summary: StructuredSummary) -> str:
     # Paper title
     md_lines.append("")
     md_lines.append(f"**{summary.paper_info.title_zh}**")
+    md_lines.append("")
     md_lines.append(f"**{summary.paper_info.title_en}**")
     md_lines.append("\n---\n")
     

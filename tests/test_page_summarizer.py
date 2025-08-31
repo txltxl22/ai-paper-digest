@@ -142,8 +142,9 @@ def test_progressive_summary(monkeypatch, tmp_path):
     def fake_llm(messages, api_key=None, **kwargs):
         calls.append(messages)
 
-        # Check if this is the final summary call (has 2 messages, both are HumanMessage)
-        if len(messages) == 2 and isinstance(messages[0], HumanMessage) and isinstance(messages[1], HumanMessage):
+        # Check if this is the final summary call by looking for "AI助手论文总结" in the content
+        message_content = messages[0].content if messages else ""
+        if "AI助手论文总结" in message_content:
             # Return structured summary JSON
             return AIMessage(content=json.dumps({
                 "paper_info": {
@@ -207,8 +208,9 @@ def test_progressive_summary_cache_logic(monkeypatch, tmp_path):
     def fake_llm(messages, api_key=None, **kwargs):
         calls.append(messages)
         
-        # Check if this is the final summary call (has 2 messages, both are HumanMessage)
-        if len(messages) == 2 and isinstance(messages[0], HumanMessage) and isinstance(messages[1], HumanMessage):
+        # Check if this is the final summary call by looking for "AI助手论文总结" in the content
+        message_content = messages[0].content if messages else ""
+        if "AI助手论文总结" in message_content:
             # Return structured summary JSON
             return AIMessage(content=json.dumps({
                 "paper_info": {
@@ -356,8 +358,9 @@ def test_progressive_summary_cache_logic(monkeypatch, tmp_path):
 def test_progressive_summary_cache_file_creation(monkeypatch, tmp_path):
     """Test that cache files are created correctly."""
     def fake_llm(messages, api_key=None, **kwargs):
-        # Check if this is the final summary call
-        if len(messages) == 2 and isinstance(messages[0], HumanMessage) and isinstance(messages[1], HumanMessage):
+        # Check if this is the final summary call by looking for "AI助手论文总结" in the content
+        message_content = messages[0].content if messages else ""
+        if "AI助手论文总结" in message_content:
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
@@ -435,8 +438,9 @@ def test_progressive_summary_cache_file_creation(monkeypatch, tmp_path):
 def test_progressive_summary_cache_corruption_handling(monkeypatch, tmp_path):
     """Test handling of corrupted cache files."""
     def fake_llm(messages, api_key=None, **kwargs):
-        # Check if this is the final summary call
-        if len(messages) == 2 and isinstance(messages[0], HumanMessage) and isinstance(messages[1], HumanMessage):
+        # Check if this is the final summary call by looking for "AI助手论文总结" in the content
+        message_content = messages[0].content if messages else ""
+        if "AI助手论文总结" in message_content:
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
@@ -513,8 +517,9 @@ def test_progressive_summary_cache_corruption_handling(monkeypatch, tmp_path):
 def test_progressive_summary_cache_missing_chunk_file(monkeypatch, tmp_path):
     """Test behavior when chunk summary file is missing but summary file exists."""
     def fake_llm(messages, api_key=None, **kwargs):
-        # Check if this is the final summary call
-        if len(messages) == 2 and isinstance(messages[0], HumanMessage) and isinstance(messages[1], HumanMessage):
+        # Check if this is the final summary call by looking for "AI助手论文总结" in the content
+        message_content = messages[0].content if messages else ""
+        if "AI助手论文总结" in message_content:
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
@@ -616,8 +621,9 @@ def test_progressive_summary_cache_missing_chunk_file(monkeypatch, tmp_path):
 def test_progressive_summary_cache_default_values(monkeypatch, tmp_path):
     """Test that cache parameters default to True."""
     def fake_llm(messages, api_key=None, **kwargs):
-        # Check if this is the final summary call
-        if len(messages) == 2 and isinstance(messages[0], HumanMessage) and isinstance(messages[1], HumanMessage):
+        # Check if this is the final summary call by looking for "AI助手论文总结" in the content
+        message_content = messages[0].content if messages else ""
+        if "AI助手论文总结" in message_content:
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
@@ -705,8 +711,9 @@ def test_progressive_summary_cache_default_values(monkeypatch, tmp_path):
 def test_progressive_summary_cache_only_chunk_exists(monkeypatch, tmp_path):
     """Test behavior when only chunk summary cache exists but not summary cache."""
     def fake_llm(messages, api_key=None, **kwargs):
-        # Check if this is the final summary call
-        if len(messages) == 2 and isinstance(messages[0], HumanMessage) and isinstance(messages[1], HumanMessage):
+        # Check if this is the final summary call by looking for "AI助手论文总结" in the content
+        message_content = messages[0].content if messages else ""
+        if "AI助手论文总结" in message_content:
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",

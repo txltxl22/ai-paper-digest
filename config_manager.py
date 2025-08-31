@@ -19,6 +19,7 @@ class LLMConfig:
     model: str
     max_tokens: int
     temperature: float
+    max_input_char: int
 
 
 @dataclass
@@ -85,7 +86,8 @@ class ConfigManager:
                 "base_url": "https://api.deepseek.com/v1",
                 "model": "deepseek-chat",
                 "max_tokens": 4000,
-                "temperature": 0.1
+                "temperature": 0.1,
+                "max_input_char": 100000
             },
             "app": {
                 "host": "0.0.0.0",
@@ -134,6 +136,9 @@ class ConfigManager:
         if os.getenv("LLM_MODEL"):
             self._config["llm"]["model"] = os.getenv("LLM_MODEL")
         
+        if os.getenv("LLM_MAX_INPUT_CHAR"):
+            self._config["llm"]["max_input_char"] = int(os.getenv("LLM_MAX_INPUT_CHAR"))
+        
         # App settings
         if os.getenv("APP_HOST"):
             self._config["app"]["host"] = os.getenv("APP_HOST")
@@ -174,7 +179,8 @@ class ConfigManager:
             base_url=llm_config["base_url"],
             model=llm_config["model"],
             max_tokens=llm_config["max_tokens"],
-            temperature=llm_config["temperature"]
+            temperature=llm_config["temperature"],
+            max_input_char=llm_config["max_input_char"]
         )
     
     def get_app_config(self) -> AppConfig:

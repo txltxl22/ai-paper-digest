@@ -259,7 +259,7 @@ class PaperSubmissionService:
                     base_url=self.llm_config.base_url,
                     provider=self.llm_config.provider,
                     model=self.llm_config.model,
-                    max_input_char=100000,
+                    max_input_char=self.llm_config.max_input_char,
                     extract_only=False,
                     local=False,
                     max_workers=self.paper_config.max_workers

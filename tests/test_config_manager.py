@@ -179,7 +179,8 @@ class TestConfigManager:
                 "base_url": "https://api.openai.com/v1",
                 "model": "gpt-4",
                 "max_tokens": 4000,
-                "temperature": 0.1
+                "temperature": 0.1,
+                "max_input_char": 10000
             }
         }
         
@@ -331,7 +332,8 @@ class TestConfigDataClasses:
             base_url="https://api.deepseek.com/v1",
             model="deepseek-chat",
             max_tokens=4000,
-            temperature=0.1
+            temperature=0.1,
+            max_input_char=10000
         )
         
         assert config.provider == "deepseek"

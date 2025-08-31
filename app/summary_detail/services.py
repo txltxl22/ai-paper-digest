@@ -3,6 +3,7 @@ Summary detail services for loading and rendering individual papers.
 """
 from typing import Optional, Dict, Any
 from pathlib import Path
+import json
 import markdown
 from .models import SummaryData, ServiceData
 from summary_service.record_manager import get_structured_summary, get_tags
@@ -50,6 +51,29 @@ class SummaryRenderer:
         """Render a complete summary for display."""
         # Extract data
         content = summary_data.get("markdown_content", summary_data.get("content", ""))
+        
+        # If content is empty or None, try to generate from structured content
+        if not content and "structured_content" in summary_data:
+            from summary_service.models import summary_to_markdown, parse_summary
+            try:
+                structured_content = summary_data.get("structured_content", {})
+                if structured_content and isinstance(structured_content, dict):
+                    if "paper_info" in structured_content:
+                        # Convert dictionary to StructuredSummary object
+                        structured_summary = parse_summary(json.dumps(structured_content))
+                        content = summary_to_markdown(structured_summary)
+                    elif "content" in structured_content:
+                        # This should not happen anymore with the fix above
+                        print(f"Warning: Found legacy content in structured_content")
+                        content = structured_content.get("content", "")
+            except Exception as e:
+                print(f"Error converting structured content to markdown: {e}")
+        
+        # If content is still empty, show a message
+        if not content:
+            arxiv_id = service_data.get("arxiv_id", "Unknown")
+            content = f"## 📄 论文总结\n\n**{arxiv_id}**\n\n⚠️ 内容暂时不可用\n\n该论文的摘要内容当前不可用。请稍后再试或联系管理员。"
+        
         tags_dict = summary_data.get("tags", {})
         
         # Try to load structured summary

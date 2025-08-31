@@ -208,8 +208,8 @@ def _download_pdf_single_attempt(
                     # Call progress callback if provided
                     if progress_callback and total > 0:
                         progress_percent = int((downloaded_size / total) * 100)
-                        # Call callback more frequently (every 1% or every 50KB)
-                        if downloaded_size % 51200 == 0 or progress_percent % 5 == 0:
+                        # Call callback more frequently (every 100KB or every 2%)
+                        if downloaded_size % 102400 == 0 or progress_percent % 2 == 0:
                             progress_callback(progress_percent, downloaded_size, total)
 
                     # Check for progress timeout (stalled download)

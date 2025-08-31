@@ -41,6 +41,23 @@ from .logging_config import (
     get_logger,
     ThreadSafeLoggingConfig,
 )
+from .record_manager import (
+    create_service_record,
+    save_summary_with_service_record,
+    load_summary_with_service_record,
+    load_legacy_summary,
+    get_structured_summary,
+    get_tags,
+    migrate_legacy_summaries_to_service_record,
+    check_paper_processed_globally,
+)
+from .paper_info_extractor import (
+    PaperInfoExtractor,
+    extract_title,
+    extract_abstract,
+    get_paper_info,
+    extract_arxiv_id,
+)
 
 __all__ = [
     "SummaryGenerator",
@@ -74,4 +91,17 @@ __all__ = [
     "stop_logging",
     "get_logger",
     "ThreadSafeLoggingConfig",
+    "create_service_record",
+    "save_summary_with_service_record",
+    "load_summary_with_service_record",
+    "load_legacy_summary",
+    "get_structured_summary",
+    "get_tags",
+    "migrate_legacy_summaries_to_service_record",
+    "check_paper_processed_globally",
+    "PaperInfoExtractor",
+    "extract_title",
+    "extract_abstract",
+    "get_paper_info",
+    "extract_arxiv_id",
 ]

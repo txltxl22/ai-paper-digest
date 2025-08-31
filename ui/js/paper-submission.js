@@ -82,7 +82,7 @@ class PaperSubmission {
           statusText.textContent = '正在处理论文...';
           progressFill.style.width = '0%';
           if (progressText) progressText.textContent = '0%';
-          if (currentStep) currentStep.textContent = '准备下载...';
+          if (currentStep) currentStep.textContent = '论文下载中...';
           if (fileSizeInfo) fileSizeInfo.textContent = '';
           
           // Hide download progress section initially
@@ -116,15 +116,12 @@ class PaperSubmission {
           
           if (response.ok && result.success) {
             // Success - progress tracking will handle the UI updates
-            showToast('✅ 论文处理成功！页面将在5秒后刷新...');
+            showToast('✅ 论文提交成功！正在处理中...');
             
             // Clear input
             urlInput.value = '';
             
-            // Refresh page after delay
-            setTimeout(() => {
-              location.reload();
-            }, 5000);
+            // Don't refresh page immediately - let progress tracking handle it
             
           } else {
             // Error - stop progress tracking
@@ -189,7 +186,18 @@ class PaperSubmission {
     const downloadSpeed = downloadProgressSection?.querySelector('#download-speed');
     const downloadSize = downloadProgressSection?.querySelector('#download-size');
     
-    this.progressInterval = setInterval(async () => {
+    console.log('Download progress elements:', {
+      section: !!downloadProgressSection,
+      fill: !!downloadProgressFill,
+      text: !!downloadProgressText,
+      speed: !!downloadSpeed,
+      size: !!downloadSize
+    });
+    
+    let isDownloading = false;
+    let pollInterval = 200; // Start with fast polling
+    
+    const pollProgress = async () => {
       try {
         const response = await fetch(`/download_progress/${taskId}`);
         if (response.ok) {
@@ -210,7 +218,9 @@ class PaperSubmission {
           }
           
           // Handle download progress separately
-          if (progress.step === 'downloading' && progress.details.includes('Downloading PDF')) {
+          console.log('Checking download progress:', progress.step, progress.details);
+          if (progress.step === 'downloading' && progress.details.includes('正在下载PDF')) {
+            console.log('Showing download progress section');
             // Show download progress section
             if (downloadProgressSection) {
               downloadProgressSection.style.display = 'block';
@@ -234,11 +244,28 @@ class PaperSubmission {
             if (downloadSpeed) {
               downloadSpeed.textContent = '下载中...';
             }
-          } else {
-            // Hide download progress section for non-download steps
+          } else if (progress.step !== 'downloading') {
+            // Only hide download progress section for non-download steps
             if (downloadProgressSection) {
               downloadProgressSection.style.display = 'none';
             }
+          }
+          
+          // Check if we're in download phase
+          const wasDownloading = isDownloading;
+          isDownloading = progress.step === 'downloading' && progress.details.includes('正在下载PDF');
+          
+          // Adjust polling interval based on phase
+          if (isDownloading && !wasDownloading) {
+            // Just entered download phase, slow down polling
+            console.log('Entering download phase, slowing down polling to 3 seconds');
+            clearInterval(this.progressInterval);
+            this.progressInterval = setInterval(pollProgress, 3000);
+          } else if (!isDownloading && wasDownloading) {
+            // Just left download phase, speed up polling
+            console.log('Leaving download phase, speeding up polling to 200ms');
+            clearInterval(this.progressInterval);
+            this.progressInterval = setInterval(pollProgress, 200);
           }
           
           // Update status based on step
@@ -290,7 +317,10 @@ class PaperSubmission {
       } catch (error) {
         console.error('Progress tracking error:', error);
       }
-    }, 200); // Poll every 200ms for faster updates
+    };
+    
+    // Start polling
+    this.progressInterval = setInterval(pollProgress, pollInterval);
   }
 
   stopProgressTracking() {

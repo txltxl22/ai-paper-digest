@@ -176,23 +176,19 @@ def summary_to_markdown(summary: StructuredSummary) -> str:
     """Convert StructuredSummary to markdown format for backward compatibility."""
     md_lines = []
     
-    # Paper title
-    md_lines.append(f"# {summary.paper_info.title_zh}")
-    md_lines.append(f"# {summary.paper_info.title_en}")
-    md_lines.append("")
-    
-    # One sentence summary
     md_lines.append("## 📄 论文总结")
+    
+    # Paper title
     md_lines.append("")
     md_lines.append(f"**{summary.paper_info.title_zh}**")
     md_lines.append(f"**{summary.paper_info.title_en}**")
-    md_lines.append("")
+    md_lines.append("\n---\n")
     
     # One sentence summary
     md_lines.append("### 1️⃣ 一句话总结")
     md_lines.append("")
     md_lines.append(summary.one_sentence_summary)
-    md_lines.append("")
+    md_lines.append("\n---\n")
     
     # Innovations
     md_lines.append("### 2️⃣ 论文创新点")
@@ -204,6 +200,7 @@ def summary_to_markdown(summary: StructuredSummary) -> str:
         md_lines.append(f"* **与已有方法的区别/改进**：{innovation.improvement}")
         md_lines.append(f"* **为什么有意义**：{innovation.significance}")
         md_lines.append("")
+    md_lines.append("\n---\n")
     
     # Results
     md_lines.append("### 3️⃣ 主要结果与价值")
@@ -223,6 +220,8 @@ def summary_to_markdown(summary: StructuredSummary) -> str:
             md_lines.append(f"* {value}")
         md_lines.append("")
     
+    md_lines.append("\n---\n")
+
     # Terminology
     if summary.terminology:
         md_lines.append("### 4️⃣ 术语表")

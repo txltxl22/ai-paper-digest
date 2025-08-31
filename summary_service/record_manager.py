@@ -84,8 +84,8 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, 
             summary_dict = json.loads(summary_content)
             markdown_content = summary_content  # Keep original for backward compatibility
         except (json.JSONDecodeError, ValueError):
-            # It's plain markdown
-            summary_dict = {"content": summary_content}
+            # It's plain markdown - don't put markdown in structured_content
+            summary_dict = {}  # Empty structured content for legacy markdown
             markdown_content = summary_content
     
     if isinstance(tags, Tags):
@@ -337,3 +337,34 @@ def migrate_legacy_summaries_to_service_record(summary_dir: Path) -> Dict[str, A
             })
     
     return migration_stats
+
+
+def check_paper_processed_globally(paper_url: str, summary_dir: Path) -> bool:
+    """Check if a paper has been processed globally by looking in the summary directory.
+    
+    Args:
+        paper_url: The URL of the paper to check
+        summary_dir: Directory where summaries are stored
+        
+    Returns:
+        True if the paper has been processed and summary exists, False otherwise
+    """
+    try:
+        from .paper_info_extractor import extract_arxiv_id
+        import hashlib
+        
+        # Extract arXiv ID from URL using the centralized method
+        arxiv_id = extract_arxiv_id(paper_url)
+        
+        # If we couldn't extract arXiv ID, use a hash of the URL as fallback
+        if arxiv_id is None:
+            arxiv_id = hashlib.md5(paper_url.encode()).hexdigest()[:8]
+        
+        # Check if summary file exists
+        summary_file = summary_dir / f"{arxiv_id}.json"
+        return summary_file.exists()
+        
+    except Exception as e:
+        # Log error but don't fail - return False to allow processing to continue
+        print(f"Error checking if paper processed globally: {e}")
+        return False

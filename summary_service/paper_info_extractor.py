@@ -476,3 +476,19 @@ def get_paper_info(url: str, timeout: int = 10) -> Dict[str, Any]:
         return extractor.get_paper_info(url)
     finally:
         extractor.close()
+
+
+def extract_arxiv_id(url: str) -> Optional[str]:
+    """Extract arXiv ID from URL using default settings.
+    
+    Args:
+        url: URL to extract arXiv ID from
+        
+    Returns:
+        Extracted arXiv ID or None
+    """
+    extractor = PaperInfoExtractor()
+    try:
+        return extractor.extract_arxiv_id_from_url(url)
+    finally:
+        extractor.close()

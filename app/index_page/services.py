@@ -2,6 +2,7 @@
 Index page services for entry scanning, filtering, and rendering.
 """
 from datetime import datetime
+import logging
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 import json
@@ -229,6 +230,32 @@ class EntryRenderer:
                     data = json.loads(json_path.read_text(encoding="utf-8"))
                     summary_data = data.get("summary_data", {})
                     md_text = summary_data.get("markdown_content", summary_data.get("content", ""))
+                    
+                    # If markdown content is empty or None, try to generate from structured content
+                    if not md_text and "structured_content" in summary_data:
+                        try:
+                            structured_content = summary_data.get("structured_content", {})
+                            if structured_content and isinstance(structured_content, dict):
+                                if "paper_info" in structured_content:
+                                    # Use the structured content directly - it should already be in the right format
+                                    from summary_service.models import summary_to_markdown, parse_summary
+                                    structured_summary = parse_summary(json.dumps(structured_content))
+                                    md_text = summary_to_markdown(structured_summary)
+                                elif "content" in structured_content:
+                                    # This should not happen anymore with the fix above
+                                    logging.warning(f"Found legacy content in structured_content for {meta['id']}")
+                                    md_text = structured_content.get("content", "")
+                        except Exception as e:
+                            logging.error(f"Error converting structured content to markdown: {e}")
+                    
+                    # If content is still empty, try to fall back to .md file
+                    if not md_text:
+                        md_path = self.summary_dir / f"{meta['id']}.md"
+                        if md_path.exists():
+                            md_text = md_path.read_text(encoding="utf-8", errors="ignore")
+                        else:
+                            # No content available, show a message
+                            md_text = f"## 📄 论文总结\n\n**{meta['id']}**\n\n⚠️ 内容暂时不可用\n\n该论文的摘要内容当前不可用。请稍后再试或联系管理员。"
                 else:
                     # Fallback to legacy .md file
                     md_path = self.summary_dir / f"{meta['id']}.md"

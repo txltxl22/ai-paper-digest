@@ -38,46 +38,34 @@ class PaperSubmissionService:
         self.max_pdf_size_mb = max_pdf_size_mb
         self.index_page_module = index_page_module
         self.progress_cache = {}  # Store progress for each task
-        self.progress_cache_file = Path("data/progress_cache.json")
-        self.progress_cache_file.parent.mkdir(exist_ok=True)
-        self._load_progress_cache()
     
-    def _load_progress_cache(self):
-        """Load progress cache from file."""
-        try:
-            if self.progress_cache_file.exists():
-                with open(self.progress_cache_file, 'r') as f:
-                    self.progress_cache = json.load(f)
-        except Exception as e:
-            print(f"Failed to load progress cache: {e}")
-            self.progress_cache = {}
-    
-    def _save_progress_cache(self):
-        """Save progress cache to file."""
-        try:
-            with open(self.progress_cache_file, 'w') as f:
-                json.dump(self.progress_cache, f, indent=2)
-        except Exception as e:
-            print(f"Failed to save progress cache: {e}")
+
     
     def _update_progress(self, task_id: str, step: str, progress: int, details: str = ""):
         """Update progress for a specific task."""
+        print(f"DEBUG: Updating progress cache for {task_id}: {step} - {progress}% - {details}")
         self.progress_cache[task_id] = {
             "step": step,
             "progress": progress,
             "details": details,
             "timestamp": datetime.now().isoformat()
         }
-        self._save_progress_cache()
+        print(f"DEBUG: Progress cache now has {len(self.progress_cache)} tasks")
     
     def get_progress(self, task_id: str) -> Dict[str, Any]:
         """Get progress for a specific task."""
-        return self.progress_cache.get(task_id, {
-            "step": "unknown",
-            "progress": 0,
-            "details": "任务未找到",
-            "timestamp": datetime.now().isoformat()
-        })
+        print(f"DEBUG: Getting progress for {task_id}, cache has {len(self.progress_cache)} tasks")
+        if task_id in self.progress_cache:
+            print(f"DEBUG: Found task {task_id} in cache")
+            return self.progress_cache[task_id]
+        else:
+            print(f"DEBUG: Task {task_id} not found in cache")
+            return {
+                "step": "unknown",
+                "progress": 0,
+                "details": "任务未找到",
+                "timestamp": datetime.now().isoformat()
+            }
     
     def submit_paper(self, paper_url: str, uid: str) -> PaperSubmissionResult:
         """Submit a paper URL for processing."""
@@ -140,6 +128,7 @@ class PaperSubmissionService:
                 downloaded_mb = downloaded / (1024 * 1024)
                 total_mb = total / (1024 * 1024) if total > 0 else 0
                 details = f"正在下载PDF... {percent}% ({downloaded_mb:.1f}MB / {total_mb:.1f}MB)"
+                print(f"DEBUG: Download progress callback: {percent}% ({downloaded_mb:.1f}MB / {total_mb:.1f}MB)")
                 self._update_progress(task_id, "downloading", overall_progress, details)
             
             try:
@@ -186,14 +175,31 @@ class PaperSubmissionService:
             is_ai, confidence, tags = self.ai_checker.check_paper_ai_relevance(text_content, paper_url)
             self._update_progress(task_id, "checking", 80, f"AI检查完成 (置信度: {confidence:.2f})")
             
-            # Check if paper has already been processed successfully
-            already_processed = self.user_data_manager.has_processed_paper(uid, paper_url)
+            # Check if paper has already been processed globally (for all users)
+            already_processed = self._check_paper_processed_globally(paper_url)
             
             # Only increment daily limit if paper hasn't been processed before
             if not already_processed:
                 increment_daily_limit(client_ip, self.limit_file)
             
             if not is_ai:
+                # If paper is not AI-related but has already been processed globally, allow access
+                if already_processed:
+                    arxiv_id = self._extract_arxiv_id_from_url(paper_url)
+                    # Save user's upload attempt as successful (already processed)
+                    self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
+                        "success": True,
+                        "message": "Paper already processed globally (non-AI)",
+                        "arxiv_id": arxiv_id
+                    })
+                    
+                    self._update_progress(task_id, "completed", 100, "论文已存在，处理完成")
+                    return PaperSubmissionResult(
+                        success=True,
+                        message="这篇论文已经被处理过了，您可以在搜索结果中找到它。",
+                        task_id=task_id
+                    )
+                
                 # Save failed upload attempt
                 self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
                     "success": False,
@@ -217,29 +223,8 @@ class PaperSubmissionService:
                 # Use the same summarization logic as in feed_paper_summarizer_service
                 import feed_paper_summarizer_service as fps
                 
-                # Extract arXiv ID from the paper URL first
-                arxiv_id = None
-                try:
-                    # Try to extract arXiv ID from URL
-                    if "arxiv.org" in paper_url:
-                        import re
-                        match = re.search(r'arxiv\.org/(?:abs|pdf)/(\d+\.\d+)', paper_url)
-                        if match:
-                            arxiv_id = match.group(1)
-                    elif "huggingface.co" in paper_url:
-                        # For HuggingFace papers, use a different extraction method
-                        import re
-                        match = re.search(r'papers/(\d+\.\d+)', paper_url)
-                        if match:
-                            arxiv_id = match.group(1)
-                except Exception:
-                    pass
-                
-                # If we couldn't extract arXiv ID, we'll use a fallback
-                if not arxiv_id:
-                    # Use a hash of the URL as fallback ID
-                    import hashlib
-                    arxiv_id = hashlib.md5(paper_url.encode()).hexdigest()[:8]
+                # Extract arXiv ID from the paper URL using centralized method
+                arxiv_id = self._extract_arxiv_id_from_url(paper_url)
                 
                 # Check if this paper already exists to preserve first creation time
                 existing_summary_path = self.summary_dir / f"{arxiv_id}.json"
@@ -251,6 +236,22 @@ class PaperSubmissionService:
                         first_created_at = existing_service_data.get("first_created_at") or existing_service_data.get("created_at")
                     except Exception:
                         pass
+                    
+                    # If paper already exists globally, save user's attempt and return success
+                    if already_processed:
+                        # Save user's upload attempt as successful (already processed)
+                        self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
+                            "success": True,
+                            "message": "Paper already processed globally",
+                            "arxiv_id": arxiv_id
+                        })
+                        
+                        self._update_progress(task_id, "completed", 100, "论文已存在，处理完成")
+                        return PaperSubmissionResult(
+                            success=True,
+                            message="这篇论文已经被处理过了，您可以在搜索结果中找到它。",
+                            task_id=task_id
+                        )
                 
                 # Process the paper
                 summary_path, _, paper_subject = fps._summarize_url(
@@ -409,6 +410,25 @@ class PaperSubmissionService:
                 "next_reset": (datetime.now() + timedelta(days=1)).isoformat(),
                 "next_reset_formatted": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
             }
+    
+    def _check_paper_processed_globally(self, paper_url: str) -> bool:
+        """Check if a paper has been processed globally by looking in the summary directory."""
+        from summary_service.record_manager import check_paper_processed_globally
+        return check_paper_processed_globally(paper_url, self.summary_dir)
+    
+    def _extract_arxiv_id_from_url(self, paper_url: str) -> str:
+        """Extract arXiv ID from paper URL using the same logic as the system."""
+        from summary_service.paper_info_extractor import extract_arxiv_id
+        import hashlib
+        
+        # Use the centralized arXiv ID extraction from summary_service
+        arxiv_id = extract_arxiv_id(paper_url)
+        
+        # If we couldn't extract arXiv ID, use a hash of the URL as fallback
+        if arxiv_id is None:
+            return hashlib.md5(paper_url.encode()).hexdigest()[:8]
+        
+        return arxiv_id
     
     def get_ai_cache_stats(self) -> Dict[str, Any]:
         """Get AI cache statistics for maintenance."""

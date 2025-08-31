@@ -248,15 +248,11 @@ def static_favicon_svg():
     return send_from_directory('../ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
-@app.get("/static/favicon.ico")
-def static_favicon_ico():
-    """Serve the static ICO favicon file, fallback to SVG if ICO not available."""
-    ico_path = Path('../ui') / 'favicon.ico'
-    if ico_path.exists() and ico_path.stat().st_size > 0:
-        return send_from_directory('../ui', 'favicon.ico', mimetype="image/x-icon")
-    else:
-        # Fallback to SVG if ICO file doesn't exist or is empty
-        return send_from_directory('../ui', 'favicon.svg', mimetype="image/svg+xml")
+@app.get("/favicon.ico")
+def root_favicon_ico():
+    """Serve the root favicon.ico file."""
+    # Serve SVG favicon for ICO requests
+    return send_from_directory('../ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
 # Event tracking routes are now handled by the decoupled event tracking system

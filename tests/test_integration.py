@@ -266,11 +266,6 @@ class TestStaticFileAccessibility:
         assert response.status_code == 200
         assert 'image/x-icon' in response.headers['Content-Type'] or 'image/svg+xml' in response.headers['Content-Type']
         
-        # Test static favicon.ico
-        response = client.get('/static/favicon.ico')
-        assert response.status_code == 200
-        assert 'image/x-icon' in response.headers['Content-Type'] or 'image/svg+xml' in response.headers['Content-Type']
-        
         # Test static favicon.svg
         response = client.get('/static/favicon.svg')
         assert response.status_code == 200

@@ -199,3 +199,181 @@ def test_index_renders_tags_and_filters(tmp_path, monkeypatch):
     assert "llm" in html4 and "agents" in html4
 
 
+def test_tag_cloud_built_from_all_entries(tmp_path, monkeypatch):
+    """Test that tag clouds are built from all entries, not filtered ones (bug fix)."""
+    import app.main as sp
+
+    setup_app_dirs(sp, tmp_path)
+    sp.app.config.update(TESTING=True)
+    client = sp.app.test_client()
+
+    # Create multiple summaries with different tags
+    summaries = [
+        {
+            "id": "2506.11111",
+            "top": ["llm"],
+            "tags": ["machine learning", "nlp"]
+        },
+        {
+            "id": "2506.22222", 
+            "top": ["cv"],
+            "tags": ["computer vision", "image processing"]
+        },
+        {
+            "id": "2506.33333",
+            "top": ["agents"],
+            "tags": ["reinforcement learning", "robotics"]
+        }
+    ]
+
+    for summary in summaries:
+        s_data = {
+            "service_data": {
+                "source_type": "system",
+                "user_id": None,
+                "original_url": None
+            },
+            "summary_data": {
+                "arxiv_id": summary["id"],
+                "content": f"# {summary['id']}\ncontent",
+                "tags": {
+                    "top": summary["top"],
+                    "tags": summary["tags"]
+                }
+            }
+        }
+        (sp.SUMMARY_DIR / f"{summary['id']}.json").write_text(json.dumps(s_data), encoding="utf-8")
+
+    # Test that all tags are shown in tag cloud when no filter is applied
+    res = client.get("/")
+    assert res.status_code == 200
+    html = res.data.decode("utf-8")
+    
+    # Should show all top tags
+    assert "llm" in html
+    assert "cv" in html  
+    assert "agents" in html
+    
+    # Should show all detail tags
+    assert "machine learning" in html
+    assert "computer vision" in html
+    assert "reinforcement learning" in html
+
+    # Test that all tags are still shown when filtering by one tag
+    res2 = client.get("/?tag=machine learning")
+    assert res2.status_code == 200
+    html2 = res2.data.decode("utf-8")
+    
+    # Should still show all top tags in the filter section
+    assert "llm" in html2
+    assert "cv" in html2
+    assert "agents" in html2
+    
+    # Should still show all detail tags in the filter section
+    assert "computer vision" in html2
+    assert "reinforcement learning" in html2
+    
+    # But only the filtered paper should be in the results
+    assert "2506.11111" in html2
+    assert "2506.22222" not in html2
+    assert "2506.33333" not in html2
+
+
+def test_nested_tag_structure_handling(tmp_path, monkeypatch):
+    """Test handling of nested tag structure (bug case)."""
+    import app.main as sp
+
+    setup_app_dirs(sp, tmp_path)
+    sp.app.config.update(TESTING=True)
+    client = sp.app.test_client()
+
+    # Create summary with nested tag structure (the bug case)
+    s_data = {
+        "service_data": {
+            "source_type": "system",
+            "user_id": None,
+            "original_url": None
+        },
+        "summary_data": {
+            "arxiv_id": "2506.12345",
+            "content": "# Test\ncontent",
+            "tags": {
+                "tags": {
+                    "top": ["llm", "nlp"],
+                    "tags": ["machine learning", "natural language processing"]
+                }
+            }
+        }
+    }
+    (sp.SUMMARY_DIR / "2506.12345.json").write_text(json.dumps(s_data), encoding="utf-8")
+
+    # Test that the page loads correctly
+    res = client.get("/")
+    assert res.status_code == 200
+    html = res.data.decode("utf-8")
+    
+    # Should show the tags correctly
+    assert "llm" in html
+    assert "nlp" in html
+    assert "machine learning" in html
+    assert "natural language processing" in html
+
+    # Test detail page
+    res2 = client.get("/summary/2506.12345")
+    assert res2.status_code == 200
+    html2 = res2.data.decode("utf-8")
+    
+    # Should show tags on detail page
+    assert "llm" in html2
+    assert "nlp" in html2
+    assert "machine learning" in html2
+    assert "natural language processing" in html2
+
+
+def test_detail_page_separate_tag_display(tmp_path, monkeypatch):
+    """Test that detail page shows top tags and detail tags separately."""
+    import app.main as sp
+
+    setup_app_dirs(sp, tmp_path)
+    sp.app.config.update(TESTING=True)
+    client = sp.app.test_client()
+
+    # Create summary with both top and detail tags
+    s_data = {
+        "service_data": {
+            "source_type": "system",
+            "user_id": None,
+            "original_url": None
+        },
+        "summary_data": {
+            "arxiv_id": "2506.12345",
+            "content": "# Test\ncontent",
+            "tags": {
+                "top": ["llm", "nlp"],
+                "tags": ["machine learning", "natural language processing"]
+            }
+        }
+    }
+    (sp.SUMMARY_DIR / "2506.12345.json").write_text(json.dumps(s_data), encoding="utf-8")
+
+    # Test detail page
+    res = client.get("/summary/2506.12345")
+    assert res.status_code == 200
+    html = res.data.decode("utf-8")
+    
+    # Should show top tags and detail tags separately
+    # Look for the specific structure we implemented
+    assert "顶级标签:" in html  # Top tags label
+    assert "详细标签:" in html  # Detail tags label
+    
+    # Should show top tags with top-chip styling
+    assert 'class="top-chip pill"' in html
+    
+    # Should show detail tags with tag-chip styling
+    assert 'class="tag-chip"' in html
+    
+    # Should have correct links (note: template uses single quotes)
+    assert "href='/?top=llm'" in html
+    assert "href='/?tag=machine learning'" in html
+
+

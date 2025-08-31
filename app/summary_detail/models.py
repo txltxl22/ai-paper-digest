@@ -12,16 +12,32 @@ class SummaryData:
         self.content = content
         self.tags = tags
     
-    def get_all_tags(self) -> List[str]:
-        """Extract all tags from the summary data."""
+
+    
+    def get_top_tags(self) -> List[str]:
+        """Extract top tags from the summary data."""
         tags: List[str] = []
         if isinstance(self.tags, dict):
-            raw = []
-            if isinstance(self.tags.get("top"), list):
-                raw.extend(self.tags.get("top") or [])
-            if isinstance(self.tags.get("tags"), list):
-                raw.extend(self.tags.get("tags") or [])
-            tags = [str(t).strip().lower() for t in raw if str(t).strip()]
+            # Handle nested structure: {"tags": {"top": [...], "tags": [...]}}
+            container = self.tags
+            if isinstance(self.tags.get("tags"), dict):
+                container = self.tags.get("tags") or {}
+            
+            if isinstance(container.get("top"), list):
+                tags = [str(t).strip().lower() for t in container.get("top") if str(t).strip()]
+        return tags
+    
+    def get_detail_tags(self) -> List[str]:
+        """Extract detail tags from the summary data."""
+        tags: List[str] = []
+        if isinstance(self.tags, dict):
+            # Handle nested structure: {"tags": {"top": [...], "tags": [...]}}
+            container = self.tags
+            if isinstance(self.tags.get("tags"), dict):
+                container = self.tags.get("tags") or {}
+            
+            if isinstance(container.get("tags"), list):
+                tags = [str(t).strip().lower() for t in container.get("tags") if str(t).strip()]
         return tags
 
 

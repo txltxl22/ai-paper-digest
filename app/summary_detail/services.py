@@ -61,7 +61,8 @@ class SummaryRenderer:
         
         return {
             "html_content": html_content,
-            "tags": summary.get_all_tags(),
+            "top_tags": summary.get_top_tags(),
+            "detail_tags": summary.get_detail_tags(),
             "source_type": service.source_type,
             "user_id": service.user_id,
             "original_url": service.original_url

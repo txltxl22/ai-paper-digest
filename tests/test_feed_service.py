@@ -299,4 +299,39 @@ def test_tags_only_run(monkeypatch, tmp_path: Path):
     total, updated = svc._tags_only_run()  # type: ignore[attr-defined]
     assert total == 2 and updated == 1
     data = __import__('json').loads((tmp_path / "2507.22222.tags.json").read_text(encoding="utf-8"))
-    assert data.get("tags") == ["t1", "t2"]
+    # After our fix, tags are saved directly as a list, not wrapped in {"tags": [...]}
+    assert data == ["t1", "t2"]
+
+
+def test_tags_only_run_correct_structure(monkeypatch, tmp_path: Path):
+    """Test that tags are saved with correct structure (not nested)."""
+    class DummyPS:
+        SUMMARY_DIR = tmp_path
+
+        @staticmethod
+        def generate_tags_from_summary(summary, api_key=None, base_url=None, provider=None, model=None, max_tags=8):
+            return {
+                "top": ["llm", "nlp"],
+                "tags": ["machine learning", "natural language processing"]
+            }
+
+    monkeypatch.setattr(svc, "ps", DummyPS)
+
+    # Prepare summary without tags
+    s1 = tmp_path / "2507.11111.md"
+    s1.write_text("S1", encoding="utf-8")
+
+    total, updated = svc._tags_only_run()  # type: ignore[attr-defined]
+    assert total == 1 and updated == 1
+    
+    # Check that tags are saved with correct structure (not nested)
+    data = __import__('json').loads((tmp_path / "2507.11111.tags.json").read_text(encoding="utf-8"))
+    
+    # Should have the correct structure, not nested
+    assert "top" in data
+    assert "tags" in data
+    assert data["top"] == ["llm", "nlp"]
+    assert data["tags"] == ["machine learning", "natural language processing"]
+    
+    # Should NOT have the nested structure that was causing the bug
+    assert "tags" not in data.get("tags", {})  # No nested "tags" field

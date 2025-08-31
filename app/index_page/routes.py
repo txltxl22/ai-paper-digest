@@ -57,13 +57,15 @@ def create_index_routes(
         filters: Dict[str, Any],
         pagination: Pagination,
         show_read: bool = False,
-        user_stats: Optional[Dict] = None
+        user_stats: Optional[Dict] = None,
+        all_entries: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """Build the template context with all necessary data."""
-        # Build tag clouds
+        # Build tag clouds from all entries (not just filtered ones)
         tag_cloud = TagCloud()
         top_cloud = TagCloud()
-        for e in entries:
+        entries_for_cloud = all_entries if all_entries is not None else entries
+        for e in entries_for_cloud:
             tag_cloud.add_entry(e)
             top_cloud.add_entry(e)
         
@@ -113,7 +115,7 @@ def create_index_routes(
     def index():
         """Main index page."""
         uid = user_service.get_current_user_id()
-        entries_meta = entry_scanner.scan_entries_meta()
+        all_entries_meta = entry_scanner.scan_entries_meta()
         filters = _get_filter_params()
         pagination_params = _get_pagination_params()
         
@@ -125,29 +127,31 @@ def create_index_routes(
             read_ids = set(read_map.keys())
             
             # Filter out read entries
-            entries_meta = EntryFilter.filter_by_read_status(entries_meta, read_ids, show_read=False)
+            entries_meta = EntryFilter.filter_by_read_status(all_entries_meta, read_ids, show_read=False)
             
             # Calculate stats
-            unread_count = len([e for e in entry_scanner.scan_entries_meta() if e["id"] not in read_ids])
+            unread_count = len([e for e in all_entries_meta if e["id"] not in read_ids])
             stats = user_data.get_read_stats()
             user_stats = {
                 'unread_count': unread_count,
                 'read_total': stats["read_total"],
                 'read_today': stats["read_today"]
             }
+        else:
+            entries_meta = all_entries_meta
         
         # Apply filters
-        entries_meta = _apply_filters(entries_meta, filters)
+        filtered_entries_meta = _apply_filters(entries_meta, filters)
         
         # Pagination
-        pagination = Pagination(len(entries_meta), pagination_params['page'], pagination_params['per_page'])
-        page_entries = pagination.get_page_items(entries_meta)
+        pagination = Pagination(len(filtered_entries_meta), pagination_params['page'], pagination_params['per_page'])
+        page_entries = pagination.get_page_items(filtered_entries_meta)
         
         # Render entries
         entries = entry_renderer.render_page_entries(page_entries)
         
-        # Build context and render
-        context = _build_template_context(entries, uid, filters, pagination, user_stats=user_stats)
+        # Build context and render - use all_entries_meta for tag cloud, filtered_entries_meta for display
+        context = _build_template_context(entries, uid, filters, pagination, user_stats=user_stats, all_entries=all_entries_meta)
         return make_response(render_template_string(index_template, **context))
     
     @bp.route("/read")
@@ -160,24 +164,24 @@ def create_index_routes(
         # Get read entries
         user_data = user_service.get_user_data(uid)
         read_map = user_data.load_read_map()
-        entries_meta = entry_scanner.scan_entries_meta()
-        read_entries_meta = [e for e in entries_meta if e["id"] in set(read_map.keys())]
+        all_entries_meta = entry_scanner.scan_entries_meta()
+        read_entries_meta = [e for e in all_entries_meta if e["id"] in set(read_map.keys())]
         
         # Apply filters
         filters = _get_filter_params()
-        read_entries_meta = _apply_filters(read_entries_meta, filters)
+        filtered_read_entries_meta = _apply_filters(read_entries_meta, filters)
         
         # Pagination (allow more items per page for read list)
         pagination_params = _get_pagination_params()
         pagination_params['per_page'] = max(1, min(pagination_params['per_page'], 100))
-        pagination = Pagination(len(read_entries_meta), pagination_params['page'], pagination_params['per_page'])
-        page_entries = pagination.get_page_items(read_entries_meta)
+        pagination = Pagination(len(filtered_read_entries_meta), pagination_params['page'], pagination_params['per_page'])
+        page_entries = pagination.get_page_items(filtered_read_entries_meta)
         
         # Render entries
         entries = entry_renderer.render_page_entries(page_entries)
         
-        # Build context and render
-        context = _build_template_context(entries, uid, filters, pagination, show_read=True)
+        # Build context and render - use all_entries_meta for tag cloud
+        context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=all_entries_meta)
         return render_template_string(index_template, **context)
     
     return bp

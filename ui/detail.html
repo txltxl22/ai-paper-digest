@@ -29,9 +29,18 @@
           </div>
         </div>
         
-        {% if tags and tags|length %}
+        {% if top_tags and top_tags|length %}
+        <div class="tag-row" style="margin: .2rem 0 .5rem;">
+          <span class="muted" style="margin-right: .5rem;">顶级标签:</span>
+          {% for tg in top_tags %}
+            <a class="top-chip pill" href='{{ url_for("index_page.index") }}?top={{ tg }}'>{{ tg }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if detail_tags and detail_tags|length %}
         <form class="tag-row" method="GET" action="{{ url_for('index_page.index') }}" style="margin: .2rem 0 1rem; align-items:center; gap:.35rem;">
-          {% for tg in tags %}
+          <span class="muted" style="margin-right: .5rem;">详细标签:</span>
+          {% for tg in detail_tags %}
             <a class="tag-chip" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>{{ tg }}</a>
           {% endfor %}
           <span class="muted" style="margin:0 .25rem 0 .5rem;">或 搜索:</span>

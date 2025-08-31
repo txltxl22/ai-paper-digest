@@ -73,10 +73,15 @@ class EntryScanner:
                 
                 tags_dict = summary_data.get("tags", {})
                 if isinstance(tags_dict, dict):
-                    if isinstance(tags_dict.get("top"), list):
-                        top_tags = [str(t).strip().lower() for t in tags_dict.get("top") if str(t).strip()]
-                    if isinstance(tags_dict.get("tags"), list):
-                        detail_tags = [str(t).strip().lower() for t in tags_dict.get("tags") if str(t).strip()]
+                    # Handle nested structure: {"tags": {"top": [...], "tags": [...]}}
+                    container = tags_dict
+                    if isinstance(tags_dict.get("tags"), dict):
+                        container = tags_dict.get("tags") or {}
+                    
+                    if isinstance(container.get("top"), list):
+                        top_tags = [str(t).strip().lower() for t in container.get("top") if str(t).strip()]
+                    if isinstance(container.get("tags"), list):
+                        detail_tags = [str(t).strip().lower() for t in container.get("tags") if str(t).strip()]
                 tags = (top_tags or []) + (detail_tags or [])
                 
                 # Parse updated time

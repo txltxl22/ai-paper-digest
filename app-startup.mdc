@@ -1,0 +1,10 @@
+---
+description: how to start flask app properly
+globs: 
+alwaysApply: true
+---
+:1. for development, use `uv run python run_app.py` (foreground mode in a separate terminal), don't use '&', which will hang up the app.
+description:
+globs:
+alwaysApply: true
+---

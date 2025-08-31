@@ -4,7 +4,8 @@ globs:
 alwaysApply: true
 ---
 
-1. for paper summary whole process and related functions, read paper_summarizer.py
-2. for the service using the functions to handle rss input, read feed_paper_summarizer_service.py
-3. for the web application for the whole project, which is a website for users, read app/main.py
-4. user data saving in user_data/
+1. for single paper summary whole process and related functions, read paper_summarizer.py
+2. for RSS feed processing and batch orchestration, read feed_paper_summarizer_service.py
+3. for modular processing components (PDF, text, LLM), read summary_service/
+4. for the web application for the whole project, which is a website for users, read app/main.py
+5. user data saving in user_data/

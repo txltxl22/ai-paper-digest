@@ -1,11 +1,23 @@
 """
-paper_summarizer.py – A small CLI tool that reads an academic paper from a URL
-and produces a concise summary with DeepSeek-v3 (or any OpenAI-compatible) LLM.
+paper_summarizer.py – Core module for single paper summarization pipeline
 
-This revision:
-- Caches intermediate files (PDF, markdown, chunk summaries)
-- Graceful error handling
-- Uses structured JSON schema for summaries
+This module provides both a CLI interface and a programmatic API for processing
+individual academic papers from URLs to structured summaries.
+
+FEATURES:
+- PDF download and validation with caching
+- Text extraction and markdown conversion
+- Progressive summarization with LLM providers (DeepSeek, OpenAI, Ollama)
+- Tag generation and service record management
+- Extract-only mode for text extraction without LLM processing
+- Local mode for processing cached files
+- Comprehensive error handling and logging
+
+ARCHITECTURE:
+- URL resolution → PDF download → text extraction → chunking → LLM summarization → tag generation
+- Modular design using summary_service components
+- Caching at multiple levels (PDF, markdown, summaries, tags)
+- Service record format for metadata and backward compatibility
 """
 
 from __future__ import annotations
@@ -72,15 +84,176 @@ SESSION = build_session()
 
 
 # ---------------------------------------------------------------------------
-# Tag generation from summary
+# Core summarization function
 # ---------------------------------------------------------------------------
+
+def summarize_paper_url(
+    url: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    provider: str = "deepseek",
+    model: str = "deepseek-chat",
+    max_input_char: int = 50000,
+    extract_only: bool = False,
+    local: bool = False,
+    max_workers: int = 1,
+    session: Optional[object] = None,
+) -> tuple[Optional[Path], Optional[str], Optional[str]]:
+    """Run the full summarization pipeline for a single paper URL.
+    
+    Args:
+        url: Paper URL (PDF or landing page)
+        api_key: API key for the LLM provider
+        base_url: Base URL for OpenAI-compatible APIs
+        provider: LLM provider (deepseek, ollama, openai)
+        model: Model name for the provider
+        max_input_char: Maximum input characters for summarization
+        extract_only: Only extract text, skip LLM processing
+        local: Use local cached files if available
+        max_workers: Number of concurrent workers for chunk processing
+        session: Requests session to use (optional)
+        
+    Returns:
+        Tuple of (summary_path, pdf_url, paper_subject) or (None, None, None) on failure
+    """
+    import re
+    from summary_service.record_manager import save_summary_with_service_record
+    from summary_service.models import summary_to_markdown
+    
+    if extract_only:
+        _LOG.info("📄  Extracting text from %s", url)
+    else:
+        _LOG.info("📝  Summarizing %s", url)
+
+    try:
+        # Use provided session or default
+        current_session = session or SESSION
+        
+        # Step 1: Process PDF and extract text
+        pdf_url = resolve_pdf_url(url, current_session)
+        
+        if local:
+            pdf_path = download_pdf(pdf_url, output_dir=PDF_DIR, session=current_session, skip_download=True)
+        else:
+            pdf_path = download_pdf(pdf_url, output_dir=PDF_DIR, session=current_session)
+        
+        md_path = extract_markdown(pdf_path, md_dir=MD_DIR)
+        text = md_path.read_text(encoding="utf-8")
+        paper_subject = extract_first_header(text)
+        
+        # Step 2: If extract_only mode, return immediately
+        if extract_only:
+            _LOG.info("✅  Extracted text saved to %s", md_path)
+            return md_path, pdf_url, paper_subject
+
+        # Step 3: Prepare text for summarization
+        text = re.sub(r'\^\[\d+\](.*\n)+', '', text)  # remove references
+        if max_input_char > 0:
+            text = text[:max_input_char]
+        chunks = chunk_text(text)
+
+        # Step 4: Check if summary already exists
+        f_name = pdf_path.stem + ".md"
+        summary_path = SUMMARY_DIR / f_name
+        
+        if summary_path.exists():
+            # Handle existing summary - generate tags if missing
+            try:
+                _LOG.info("🏷️  Generating tags for existing summary %s", pdf_path.stem)
+                summary_text = summary_path.read_text(encoding="utf-8")
+                tag_raw = generate_tags_from_summary(
+                    summary_text, 
+                    api_key=api_key, 
+                    base_url=base_url, 
+                    provider=provider, 
+                    model=model
+                )
+                tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
+                
+                # Save using service record format
+                save_summary_with_service_record(
+                    arxiv_id=pdf_path.stem,
+                    summary_content=summary_text,
+                    tags=tag_obj,
+                    summary_dir=SUMMARY_DIR,
+                    source_type="system",
+                    original_url=pdf_url
+                )
+                _LOG.info("✅  Updated tags for existing summary %s", pdf_path.stem)
+            except Exception as exc:
+                _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
+            
+            return summary_path, pdf_url, paper_subject
+        else:
+            # Generate new summary
+            summary_json_path = SUMMARY_DIR / (pdf_path.stem + ".json")
+            chunk_summary_path = CHUNKS_SUMMARY_DIR / (pdf_path.stem + ".json")
+            
+            summary, chunks_summary = progressive_summary(
+                chunks,
+                summary_path=summary_json_path,
+                chunk_summary_path=chunk_summary_path,
+                api_key=api_key,
+                base_url=base_url,
+                provider=provider,
+                model=model,
+                max_workers=max_workers,
+            )
+
+            # Generate and persist tags alongside the summary
+            try:
+                _LOG.info("🏷️  Generating tags for %s", pdf_path.stem)
+                
+                # Convert structured summary to markdown for tag generation
+                summary_text = summary_to_markdown(summary) if summary else "Paper summary"
+                
+                tag_raw = generate_tags_from_summary(
+                    summary_text, 
+                    api_key=api_key, 
+                    base_url=base_url, 
+                    provider=provider, 
+                    model=model
+                )
+                tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
+                
+                # Save using the new service record format
+                save_summary_with_service_record(
+                    arxiv_id=pdf_path.stem,
+                    summary_content=summary,  # Now a StructuredSummary object
+                    tags=tag_obj,
+                    summary_dir=SUMMARY_DIR,
+                    source_type="system",
+                    original_url=pdf_url
+                )
+                _LOG.info("✅  Saved summary with service record for %s", pdf_path.stem)
+                    
+            except Exception as exc:
+                _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
+                # Still save the summary even if tag generation fails
+                summary_markdown = summary_to_markdown(summary) if summary else "Paper summary"
+                summary_path.write_text(summary_markdown, encoding="utf-8")
+
+            _LOG.info("✅  Done – summary saved to %s", summary_path)
+            return summary_path, pdf_url, paper_subject
+
+    except Exception as exc:  # pylint: disable=broad-except
+        _LOG.error("❌  %s – %s", url, exc)
+        _LOG.exception(exc)
+        return None, None, None
+
+
+def extract_first_header(markdown_text: str) -> str:
+    """Extract the first header from markdown text."""
+    import re
+    match = re.search(r'^##\s+(.+)$', markdown_text, re.MULTILINE)
+    if match:
+        return match.group(1).replace("**", '').strip()
+    return ""
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Summarize an academic paper via LLM (DeepSeek or Ollama)"
@@ -121,40 +294,21 @@ def main() -> None:
     )
 
     try:
-        _LOG.info("Resolving PDF URL for %s", args.url)
-        pdf_url = resolve_pdf_url(args.url)
-        _LOG.info("PDF URL: %s", pdf_url)
-
-        pdf_path = download_pdf(pdf_url)
-        _LOG.info("PDF cached at %s", pdf_path)
-
-        md_path = extract_markdown(pdf_path)
-        _LOG.info("Markdown at %s", md_path)
-
-        text = md_path.read_text(encoding="utf-8")
-        chunks = chunk_text(text)
-        _LOG.info("Split into %d chunks", len(chunks))
-
-        summary_path = SUMMARY_DIR / (pdf_path.stem + ".json")
-        chunk_summary_path = CHUNKS_SUMMARY_DIR / (pdf_path.stem + ".json")
-
-        summary, chunk_summaries = progressive_summary(
-            chunks,
-            summary_path=summary_path,
-            chunk_summary_path=chunk_summary_path,
+        summary_path, pdf_url, paper_subject = summarize_paper_url(
+            url=args.url,
             api_key=args.api_key,
             base_url=args.base_url,
             provider=args.provider,
-            ollama_base_url=args.ollama_base_url,
-            ollama_model=args.ollama_model,
+            model=args.ollama_model if args.provider == "ollama" else "deepseek-chat",
+            session=SESSION,
         )
-
-        if summary:
+        
+        if summary_path:
             print("\n" + "=" * 80 + "\nFINAL SUMMARY saved to:\n" + str(summary_path))
-            print(f"Paper: {summary.paper_info.title_zh}")
-            print(f"Summary: {summary.one_sentence_summary}")
+            if paper_subject:
+                print(f"Paper: {paper_subject}")
         else:
-            print("\n" + "=" * 80 + "\nERROR: Failed to generate structured summary")
+            print("\n" + "=" * 80 + "\nERROR: Failed to generate summary")
 
     except Exception as e:
         _LOG.error("Error: %s", e)

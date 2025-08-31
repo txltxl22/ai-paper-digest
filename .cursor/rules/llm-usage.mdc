@@ -3,4 +3,5 @@ description: how to use llm in this project
 globs: 
 alwaysApply: true
 ---
-:1. llm usage in the project is in @paper_summarizer.py , you should use the llm the same way like in it, we manage prompts and use same llm client. 2. for how a url become summary and tags, you should totally reference @feed_paper_summarizer_service.py , we reuse the logics. 
+1. llm usage in the project is in @paper_summarizer.py , you should use the llm the same way like in it, we manage prompts and use same llm client. 
+2. llm_utils.py in summary_service will be the only tool to call LLM.

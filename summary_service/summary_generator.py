@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import datetime
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
@@ -354,3 +355,25 @@ class SummaryGenerator:
             use_summary_cache=use_summary_cache,
             use_chunk_summary_cache=use_chunk_summary_cache,
         )
+
+
+def aggregate_summaries(paths: List[Path], out_file: Path, feed_url: str) -> None:
+    """Concatenate individual summaries to *out_file* with a brief header.
+    
+    Args:
+        paths: List of summary file paths to aggregate
+        out_file: Output file path for the aggregated summary
+        feed_url: URL of the RSS feed for the header
+    """
+    header = (
+        f"# Batch Summary – {feed_url}\n"
+        f"_Generated: {datetime.datetime.now().isoformat(timespec='seconds')}_\n\n"
+    )
+
+    with out_file.open("w", encoding="utf-8") as fh:
+        fh.write(header)
+        for path in paths:
+            fh.write(f"\n---\n\n## {path.stem}\n\n")
+            fh.write(path.read_text(encoding="utf-8"))
+            fh.write("\n")
+    _LOG.info("📄  Aggregated summaries written to %s", out_file)

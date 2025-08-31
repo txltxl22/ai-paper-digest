@@ -114,7 +114,7 @@ class PaperSubmissionService:
             # Step 1: Resolve PDF URL
             self._update_progress(task_id, "resolving", 10, "正在解析PDF链接...")
             try:
-                pdf_url = ps.resolve_pdf_url(paper_url)
+                pdf_url = ps.resolve_pdf_url(paper_url, ps.SESSION)
             except Exception as e:
                 # Save failed upload attempt
                 self.user_data_manager.save_uploaded_url(uid, paper_url, (False, 0.0, []), {
@@ -143,7 +143,7 @@ class PaperSubmissionService:
                 self._update_progress(task_id, "downloading", overall_progress, details)
             
             try:
-                pdf_path = ps.download_pdf(pdf_url, max_size_mb=self.max_pdf_size_mb, progress_callback=download_progress_callback)
+                pdf_path = ps.download_pdf(pdf_url, output_dir=ps.PDF_DIR, session=ps.SESSION, max_size_mb=self.max_pdf_size_mb, progress_callback=download_progress_callback)
                 self._update_progress(task_id, "downloading", 40, "PDF下载完成")
             except Exception as e:
                 # Save failed upload attempt
@@ -163,7 +163,7 @@ class PaperSubmissionService:
             # Step 3: Extract text
             self._update_progress(task_id, "extracting", 50, "正在提取文本...")
             try:
-                md_path = ps.extract_markdown(pdf_path)
+                md_path = ps.extract_markdown(pdf_path, md_dir=ps.MD_DIR)
                 text_content = md_path.read_text(encoding="utf-8")
                 self._update_progress(task_id, "extracting", 60, "文本提取完成")
             except Exception as e:

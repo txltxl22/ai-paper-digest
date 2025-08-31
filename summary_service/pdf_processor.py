@@ -272,3 +272,36 @@ class PDFProcessor:
     def verify(self, pdf_path: Path) -> bool:
         """Verify PDF integrity."""
         return verify_pdf_integrity(pdf_path)
+
+    def cleanup_corrupted(self, papers_dir: Path) -> int:
+        """Clean up corrupted PDF files in the given directory."""
+        return cleanup_corrupted_pdfs(papers_dir)
+
+
+def cleanup_corrupted_pdfs(papers_dir: Path) -> int:
+    """Clean up any corrupted PDF files that might exist.
+    
+    Args:
+        papers_dir: Directory containing PDF files to check
+        
+    Returns:
+        Number of corrupted PDF files that were removed
+    """
+    if not papers_dir.exists():
+        return 0
+    
+    corrupted_count = 0
+    for pdf_file in papers_dir.glob("*.pdf"):
+        try:
+            # Try to validate the PDF
+            if not verify_pdf_integrity(pdf_file):
+                _LOG.warning("Removing corrupted PDF: %s", pdf_file)
+                pdf_file.unlink()
+                corrupted_count += 1
+        except Exception as e:
+            _LOG.warning("Error checking PDF %s: %s", pdf_file, e)
+    
+    if corrupted_count > 0:
+        _LOG.info("Cleaned up %d corrupted PDF files", corrupted_count)
+    
+    return corrupted_count

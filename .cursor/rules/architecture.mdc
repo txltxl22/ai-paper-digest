@@ -11,35 +11,49 @@ AI-powered research paper summarization system: RSS feeds → PDF download → t
 
 ## Core Components
 
-### 1. Paper Processing (`paper_summarizer.py`)
-**Core engine**: PDF download, text extraction, LLM summarization
-**Key functions**: `resolve_pdf_url()`, `download_pdf()`, `extract_markdown()`, `chunk_text()`, `progressive_summary()`, `generate_tags_from_summary()`
+### 1. Single Paper Processing (`paper_summarizer.py`)
+**Core engine**: Individual paper processing pipeline
+**Key functions**: `summarize_paper_url()`, `resolve_pdf_url()`, `download_pdf()`, `extract_markdown()`, `chunk_text()`, `progressive_summary()`, `generate_tags_from_summary()`
 **LLM Support**: DeepSeek (default), Ollama, OpenAI-compatible APIs
 **Cache**: PDFs (`papers/`), markdown (`markdown/`), summaries (`summary/`)
+**Modes**: Regular, extract-only, local processing
 
 ### 2. RSS Service (`feed_paper_summarizer_service.py`)
-**Orchestrator**: RSS feed processing pipeline
-**Key functions**: `_summarize_url()`, `main()` (CLI entry)
+**Orchestrator**: RSS feed processing and batch summarization
+**Key functions**: `_summarize_url()` (delegates to paper_summarizer), `main()` (CLI entry), `_collect_local_links()`, `_tags_only_run()`, `_aggregate_summaries()`
 **Modes**: Regular, extract-only, tags-only, local processing
+**Delegates**: Single URL processing to `paper_summarizer.py`
 
-### 3. Web App (`app/main.py`)
+### 3. Summary Service (`summary_service/`)
+**Modular components**: PDF processing, text extraction, LLM integration, record management
+**Key modules**: `pdf_processor.py`, `markdown_processor.py`, `text_processor.py`, `llm_utils.py`, `summary_generator.py`, `record_manager.py`
+**Shared utilities**: Used by both `paper_summarizer.py` and `feed_paper_summarizer_service.py`
+
+### 4. Web App (`app/main.py`)
 **Flask server**: User interface and API endpoints
 **Subsystems**: `fetch/`, `paper_submission/`, `summary_detail/`, `user_management/`, `event_tracking/`, `index_page/`
 
-### 4. Config (`config_manager.py`)
+### 5. Config (`config_manager.py`)
 **Centralized settings**: `LLMConfig`, `AppConfig`, `PaperProcessingConfig`, `PathsConfig`
 
 ## Data Flow
 ```
-RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → LLM → Summary + Tags
+RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → summary_service/ → LLM → Summary + Tags
                                                       ↓
                                               Web App (Flask) → User Interface
 ```
 
 ## Directory Structure
 ```
-├── paper_summarizer.py              # Core processing engine
+├── paper_summarizer.py              # Single paper processing engine
 ├── feed_paper_summarizer_service.py # RSS service orchestrator
+├── summary_service/                 # Modular processing components
+│   ├── pdf_processor.py            # PDF download and validation
+│   ├── markdown_processor.py       # Text extraction
+│   ├── text_processor.py           # Text chunking
+│   ├── llm_utils.py                # LLM provider integration
+│   ├── summary_generator.py        # Progressive summarization
+│   └── record_manager.py           # Service record management
 ├── config_manager.py                # Configuration management
 ├── app/                             # Web application
 │   ├── main.py                      # Flask app entry point
@@ -61,33 +75,38 @@ RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → LLM �
 ## Development Guidelines
 
 ### Where to Read
-1. **Start**: `paper_summarizer.py` (core processing)
-2. **Service**: `feed_paper_summarizer_service.py` (RSS handling)
-3. **Web**: `app/main.py` (Flask app)
-4. **Config**: `config_manager.py` (settings)
+1. **Start**: `paper_summarizer.py` (single paper processing)
+2. **Service**: `feed_paper_summarizer_service.py` (RSS orchestration)
+3. **Components**: `summary_service/` (modular utilities)
+4. **Web**: `app/main.py` (Flask app)
+5. **Config**: `config_manager.py` (settings)
 
 ### Where to Modify
-1. **LLM Integration**: `paper_summarizer.py` functions
-2. **Processing Logic**: `feed_paper_summarizer_service.py` pipeline
-3. **Web Features**: `app/main.py` routes + subsystem modules
-4. **UI**: `ui/` directory templates
-5. **Config**: `config_manager.py` settings
+1. **Single Paper Processing**: `paper_summarizer.py` functions
+2. **RSS Processing Logic**: `feed_paper_summarizer_service.py` pipeline
+3. **Shared Components**: `summary_service/` modules
+4. **Web Features**: `app/main.py` routes + subsystem modules
+5. **UI**: `ui/` directory templates
+6. **Config**: `config_manager.py` settings
 
 ### Where to Test
 1. **Unit Tests**: `tests/` directory
 2. **Integration**: `feed_paper_summarizer_service.py` pipeline
-3. **Web Tests**: Flask app endpoints
+3. **Component Tests**: `summary_service/` modules
+4. **Web Tests**: Flask app endpoints
 
 ### Key Patterns
 1. **LLM Usage**: Follow `paper_summarizer.py` patterns
-2. **Error Handling**: Use service layer patterns
+2. **Error Handling**: Use service layer patterns with proper delegation
 3. **Caching**: Leverage existing PDF/markdown/summary cache
 4. **Configuration**: Use `ConfigManager` consistently
 5. **Logging**: Use thread-safe patterns
+6. **Delegation**: Feed service delegates to paper summarizer for single URL processing
 
 ### Running
 - **Dev**: `uv run python run_app.py` (foreground)
-- **Processing**: `uv run python feed_paper_summarizer_service.py <rss_url>`
+- **Single Paper**: `uv run python paper_summarizer.py <url>`
+- **RSS Processing**: `uv run python feed_paper_summarizer_service.py <rss_url>`
 - **Testing**: `uv run python -m pytest tests/`
 
 ### Data Storage

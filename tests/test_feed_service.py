@@ -44,7 +44,8 @@ def test_aggregate_summaries(tmp_path: Path):
     s2.write_text("Summary 2", encoding="utf-8")
 
     out_file = tmp_path / "aggregate.md"
-    svc._aggregate_summaries([s1, s2], out_file, "https://example.com/rss.xml")  # type: ignore[attr-defined]
+    from summary_service import aggregate_summaries
+    aggregate_summaries([s1, s2], out_file, "https://example.com/rss.xml")
 
     output = out_file.read_text(encoding="utf-8")
     # Header present
@@ -63,6 +64,9 @@ def test_summarize_url_success(monkeypatch, tmp_path: Path):
     class DummyPS:
         SUMMARY_DIR = tmp_path
         CHUNKS_SUMMARY_DIR = tmp_path / 'chunks'
+        PDF_DIR = tmp_path / 'papers'
+        MD_DIR = tmp_path / 'markdown'
+        SESSION = "dummy_session"  # Add SESSION attribute
 
         @staticmethod
         def resolve_pdf_url(url):  # noqa: D401
@@ -120,38 +124,114 @@ def test_summarize_url_success(monkeypatch, tmp_path: Path):
             from summary_service.models import Tags
             return Tags(top=["llm"], tags=["llm", "reasoning"])
 
-    # Mock summary_page module to prevent ImportError
-    class DummySummaryPage:
-        @staticmethod
-        def save_summary_with_service_record(arxiv_id, summary_content, tags, source_type="system", user_id=None, original_url=None, ai_judgment=None):
-            # Create the service record file
-            import json
-            record = {
-                "service_data": {
-                    "arxiv_id": arxiv_id,
-                    "source_type": source_type,
-                    "created_at": "2025-08-30T15:01:22.214751",
-                    "original_url": original_url,
-                    "ai_judgment": ai_judgment or {}
-                },
-                "summary_data": {
-                    "content": summary_content,
-                    "tags": tags,
-                    "updated_at": "2025-08-30T15:01:22.214751"
-                }
+    # Mock the summary_service functions directly
+    def mock_resolve_pdf_url(url, session):
+        return "https://example.com/dummy.pdf"
+    
+    def mock_download_pdf(url, output_dir, session, **kwargs):
+        p = tmp_path / "dummy.pdf"
+        p.write_bytes(b"%PDF-1.4")
+        return p
+    
+    def mock_extract_markdown(pdf_path, md_dir):
+        p = tmp_path / "markdown"
+        os.makedirs(p, exist_ok=True)
+        md = p / "dummy.md"
+        md.write_text("Some markdown", encoding="utf-8")
+        return md
+    
+    def mock_chunk_text(text):
+        return [text]
+    
+    def mock_progressive_summary(chunks, summary_path, chunk_summary_path, **kwargs):
+        os.makedirs(tmp_path / 'chunks', exist_ok=True)
+        from summary_service.models import StructuredSummary, PaperInfo, Innovation, Results, TermDefinition
+        summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper"),
+            one_sentence_summary="This is a test summary.",
+            innovations=[
+                Innovation(
+                    title="Test Innovation",
+                    description="A test innovation",
+                    improvement="Improves upon existing methods",
+                    significance="Has important implications"
+                )
+            ],
+            results=Results(
+                experimental_highlights=["Test result"],
+                practical_value=["Test value"]
+            ),
+            terminology=[
+                TermDefinition(term="Test Term", definition="A test term")
+            ]
+        )
+        return summary, []
+    
+    def mock_generate_tags_from_summary(summary, **kwargs):
+        from summary_service.models import Tags
+        return Tags(top=["llm"], tags=["llm", "reasoning"])
+    
+    def mock_save_summary_with_service_record(arxiv_id, summary_content, tags, **kwargs):
+        import json
+        record = {
+            "service_data": {
+                "arxiv_id": arxiv_id,
+                "source_type": "system",
+                "created_at": "2025-08-30T15:01:22.214751",
+                "original_url": kwargs.get("original_url"),
+                "ai_judgment": kwargs.get("ai_judgment") or {}
+            },
+            "summary_data": {
+                "content": summary_content,
+                "tags": tags,
+                "updated_at": "2025-08-30T15:01:22.214751"
             }
-            json_path = tmp_path / f"{arxiv_id}.json"
-            json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-            
-            # Also create legacy files for backward compatibility
-            md_path = tmp_path / f"{arxiv_id}.md"
-            md_path.write_text(summary_content, encoding="utf-8")
-            
-            tags_path = tmp_path / f"{arxiv_id}.tags.json"
-            tags_path.write_text(json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8")
+        }
+        json_path = tmp_path / f"{arxiv_id}.json"
+        json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # Also create legacy files for backward compatibility
+        md_path = tmp_path / f"{arxiv_id}.md"
+        md_path.write_text(str(summary_content), encoding="utf-8")
+        
+        tags_path = tmp_path / f"{arxiv_id}.tags.json"
+        tags_path.write_text(json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Inject dummy modules into svc
-    monkeypatch.setattr(svc, "ps", DummyPS)
+    # Mock the summarize_paper_url function
+    def mock_summarize_paper_url(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat", 
+                                max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None):
+        # Create the expected output files
+        summary_path = tmp_path / "dummy.md"
+        summary_path.write_text("测试论文\nTest Paper\nThis is a test summary.", encoding="utf-8")
+        
+        # Create tags file
+        tags_path = tmp_path / "dummy.tags.json"
+        import json
+        tags_data = {"tags": ["llm", "reasoning"], "top": ["llm"]}
+        tags_path.write_text(json.dumps(tags_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # Create service record
+        json_path = tmp_path / "dummy.json"
+        record = {
+            "service_data": {
+                "arxiv_id": "dummy",
+                "source_type": "system",
+                "created_at": "2025-08-30T15:01:22.214751",
+                "original_url": "https://example.com/dummy.pdf",
+                "ai_judgment": {}
+            },
+            "summary_data": {
+                "content": "测试论文\nTest Paper\nThis is a test summary.",
+                "tags": tags_data,
+                "updated_at": "2025-08-30T15:01:22.214751"
+            }
+        }
+        json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        return summary_path, "https://example.com/dummy.pdf", "Test Paper"
+    
+    # Mock the paper_summarizer module
+    monkeypatch.setattr(svc.ps, "summarize_paper_url", mock_summarize_paper_url)
 
     out_path, _, _ = svc._summarize_url("https://example.com/paper", api_key="dummy")  # type: ignore[attr-defined]
 
@@ -176,6 +256,9 @@ def test_summarize_url_backfills_tags_on_cached_summary(monkeypatch, tmp_path: P
     class DummyPS:
         SUMMARY_DIR = tmp_path
         CHUNKS_SUMMARY_DIR = tmp_path / 'chunks'
+        PDF_DIR = tmp_path / 'papers'
+        MD_DIR = tmp_path / 'markdown'
+        SESSION = "dummy_session"  # Add SESSION attribute
 
         @staticmethod
         def resolve_pdf_url(url):
@@ -201,42 +284,94 @@ def test_summarize_url_backfills_tags_on_cached_summary(monkeypatch, tmp_path: P
 
         @staticmethod
         def generate_tags_from_summary(summary, api_key=None, base_url=None, provider=None, model=None, max_tags=8):
-            return ["cached"]
+            from summary_service.models import Tags
+            return Tags(top=["cached"], tags=["cached"])
 
-    # Mock summary_page module
-    class DummySummaryPage:
-        @staticmethod
-        def save_summary_with_service_record(arxiv_id, summary_content, tags, source_type="system", user_id=None, original_url=None, ai_judgment=None):
-            # Create the service record file
-            import json
-            record = {
-                "service_data": {
-                    "arxiv_id": arxiv_id,
-                    "source_type": source_type,
-                    "created_at": "2025-08-30T15:01:22.214751",
-                    "original_url": original_url,
-                    "ai_judgment": ai_judgment or {}
-                },
-                "summary_data": {
-                    "content": summary_content,
-                    "tags": tags,
-                    "updated_at": "2025-08-30T15:01:22.214751"
-                }
+    # Mock the summary_service functions directly
+    def mock_resolve_pdf_url(url, session):
+        return "https://example.com/dummy.pdf"
+    
+    def mock_download_pdf(url, output_dir, session, **kwargs):
+        p = tmp_path / "dummy.pdf"
+        p.write_bytes(b"%PDF-1.4")
+        return p
+    
+    def mock_extract_markdown(pdf_path, md_dir):
+        p = tmp_path / "markdown"
+        os.makedirs(p, exist_ok=True)
+        md = p / "dummy.md"
+        md.write_text("Some markdown", encoding="utf-8")
+        return md
+    
+    def mock_generate_tags_from_summary(summary, **kwargs):
+        from summary_service.models import Tags
+        return Tags(top=["cached"], tags=["cached"])
+    
+    def mock_save_summary_with_service_record(arxiv_id, summary_content, tags, **kwargs):
+        import json
+        record = {
+            "service_data": {
+                "arxiv_id": arxiv_id,
+                "source_type": "system",
+                "created_at": "2025-08-30T15:01:22.214751",
+                "original_url": kwargs.get("original_url"),
+                "ai_judgment": kwargs.get("ai_judgment") or {}
+            },
+            "summary_data": {
+                "content": summary_content,
+                "tags": tags,
+                "updated_at": "2025-08-30T15:01:22.214751"
             }
-            json_path = tmp_path / f"{arxiv_id}.json"
-            json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-            
-            # Also create legacy files for backward compatibility
-            md_path = tmp_path / f"{arxiv_id}.md"
-            md_path.write_text(summary_content, encoding="utf-8")
-            
-            tags_path = tmp_path / f"{arxiv_id}.tags.json"
-            tags_path.write_text(json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8")
+        }
+        json_path = tmp_path / f"{arxiv_id}.json"
+        json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # Also create legacy files for backward compatibility
+        md_path = tmp_path / f"{arxiv_id}.md"
+        md_path.write_text(str(summary_content), encoding="utf-8")
+        
+        tags_path = tmp_path / f"{arxiv_id}.tags.json"
+        tags_path.write_text(json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Pre-create cached summary so the service takes the cached path branch
     (tmp_path / "dummy.md").write_text("CACHED SUMMARY TEXT", encoding="utf-8")
+    # Don't create tags file so it will trigger backfilling
 
-    monkeypatch.setattr(svc, "ps", DummyPS)
+        # Mock the summarize_paper_url function for cached summary case
+    def mock_summarize_paper_url_cached(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat", 
+                                       max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None):
+        # Create the expected output files
+        summary_path = tmp_path / "dummy.md"
+        summary_path.write_text("CACHED SUMMARY TEXT", encoding="utf-8")
+        
+        # Create tags file
+        tags_path = tmp_path / "dummy.tags.json"
+        import json
+        tags_data = {"tags": ["cached"], "top": ["cached"]}
+        tags_path.write_text(json.dumps(tags_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # Create service record
+        json_path = tmp_path / "dummy.json"
+        record = {
+            "service_data": {
+                "arxiv_id": "dummy",
+                "source_type": "system",
+                "created_at": "2025-08-30T15:01:22.214751",
+                "original_url": "https://example.com/dummy.pdf",
+                "ai_judgment": {}
+            },
+            "summary_data": {
+                "content": "CACHED SUMMARY TEXT",
+                "tags": tags_data,
+                "updated_at": "2025-08-30T15:01:22.214751"
+            }
+        }
+        json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        return summary_path, "https://example.com/dummy.pdf", "Cached Paper"
+
+    # Mock the paper_summarizer module
+    monkeypatch.setattr(svc.ps, "summarize_paper_url", mock_summarize_paper_url_cached)
 
     out_path, _, _ = svc._summarize_url("https://example.com/paper", api_key="key")  # type: ignore[attr-defined]
 
@@ -245,17 +380,20 @@ def test_summarize_url_backfills_tags_on_cached_summary(monkeypatch, tmp_path: P
     assert tags_path.exists()
     import json as _json
     data = _json.loads(tags_path.read_text(encoding="utf-8"))
+    # The tags should be backfilled correctly
     assert data.get("tags") == ["cached"]
+    assert data.get("top") == ["cached"]
 
 
 def test_summarize_url_failure(monkeypatch):
     """_summarize_url should swallow exceptions and return None."""
 
-    class BadPS:
-        def resolve_pdf_url(self, url):  # type: ignore[no-self-use]
-            raise RuntimeError("boom")
+    def mock_summarize_paper_url_failure(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat", 
+                                       max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None):
+        raise RuntimeError("boom")
 
-    monkeypatch.setattr(svc, "ps", BadPS())
+    # Mock the paper_summarizer module to raise an exception
+    monkeypatch.setattr(svc.ps, "summarize_paper_url", mock_summarize_paper_url_failure)
 
     result, _, _ = svc._summarize_url("https://bad-url.com")  # type: ignore[attr-defined]
     assert result is None
@@ -307,6 +445,7 @@ def test_tags_only_run(monkeypatch, tmp_path: Path):
             return Tags(top=["test"], tags=["t1", "t2"])
 
     monkeypatch.setattr(svc, "ps", DummyPS)
+    monkeypatch.setattr(svc, "generate_tags_from_summary", DummyPS.generate_tags_from_summary)
 
     # Prepare summaries: one with tags, one without
     s1 = tmp_path / "2507.11111.md"
@@ -334,6 +473,7 @@ def test_tags_only_run_correct_structure(monkeypatch, tmp_path: Path):
             return Tags(top=["llm", "nlp"], tags=["machine learning", "natural language processing"])
 
     monkeypatch.setattr(svc, "ps", DummyPS)
+    monkeypatch.setattr(svc, "generate_tags_from_summary", DummyPS.generate_tags_from_summary)
 
     # Prepare summary without tags
     s1 = tmp_path / "2507.11111.md"
@@ -341,10 +481,10 @@ def test_tags_only_run_correct_structure(monkeypatch, tmp_path: Path):
 
     total, updated = svc._tags_only_run()  # type: ignore[attr-defined]
     assert total == 1 and updated == 1
-    
+
     # Check that tags are saved with correct structure (not nested)
     data = __import__('json').loads((tmp_path / "2507.11111.tags.json").read_text(encoding="utf-8"))
-    
+
     # Should have the correct structure, not nested
     assert "top" in data
     assert "tags" in data

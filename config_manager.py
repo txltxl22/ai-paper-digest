@@ -261,3 +261,50 @@ def save_config() -> None:
     """Save configuration to file."""
     config_manager.save_config()
 
+
+def get_provider_defaults(provider: str) -> tuple[str, str]:
+    """
+    Get default base URL and model for the specified provider.
+    
+    Args:
+        provider: The LLM provider name
+        
+    Returns:
+        Tuple of (base_url, model) defaults for the provider
+    """
+    defaults = {
+        "deepseek": (None, None),  # using langchain_deepseek
+        "openai": ("https://api.openai.com/v1", "gpt-3.5-turbo"),
+        "ollama": ("http://localhost:11434", "qwen3:8b"),
+    }
+    return defaults.get(provider.lower(), defaults["deepseek"])
+
+
+def get_provider_config(provider: str, base_url: str = None, model: str = None, api_key: str = None) -> dict:
+    """
+    Get provider-specific configuration based on provider choice.
+    
+    Args:
+        provider: The LLM provider name
+        base_url: Optional base URL override
+        model: Optional model override
+        api_key: Optional API key
+        
+    Returns:
+        Dictionary with provider configuration
+    """
+    default_base_url, default_model = get_provider_defaults(provider)
+    
+    # Use provided values or defaults
+    final_base_url = base_url if base_url else default_base_url
+    final_model = model if model else default_model
+    
+    config = {
+        "provider": provider,
+        "base_url": final_base_url,
+        "model": final_model,
+        "api_key": api_key,
+    }
+    
+    return config
+

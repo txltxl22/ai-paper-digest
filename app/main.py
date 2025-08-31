@@ -74,7 +74,8 @@ from summary_service.record_manager import (
 
 def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: dict, 
                                    source_type: str = "system", user_id: str = None,
-                                   original_url: str = None, ai_judgment: dict = None):
+                                   original_url: str = None, ai_judgment: dict = None,
+                                   first_created_at: str = None):
     """Save a summary with its service record in JSON format.
     
     Args:
@@ -85,6 +86,7 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: 
         user_id: The user ID who uploaded the paper (if source_type is "user")
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
+        first_created_at: The original creation time (for resubmissions)
     """
     save_summary_with_service_record_base(
         arxiv_id=arxiv_id,
@@ -94,7 +96,8 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: 
         source_type=source_type,
         user_id=user_id,
         original_url=original_url,
-        ai_judgment=ai_judgment
+        ai_judgment=ai_judgment,
+        first_created_at=first_created_at
     )
 
 def load_summary_with_service_record(arxiv_id: str) -> dict:
@@ -163,7 +166,8 @@ paper_submission_module = create_paper_submission_module(
     llm_config=llm_config,
     paper_config=paper_config,
     daily_limit=paper_config.daily_submission_limit,
-    save_summary_func=save_summary_with_service_record
+    save_summary_func=save_summary_with_service_record,
+    index_page_module=index_page_module
 )
 
 # Register blueprints

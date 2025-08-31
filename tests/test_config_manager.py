@@ -229,7 +229,8 @@ class TestConfigManager:
                 "max_workers": 2,
                 "chunk_size": 1000,
                 "max_tags": 5,
-                "daily_submission_limit": 2
+                "daily_submission_limit": 2,
+                "max_pdf_size_mb": 20
             }
         }
         
@@ -245,6 +246,7 @@ class TestConfigManager:
             assert pp_config.chunk_size == 1000
             assert pp_config.max_tags == 5
             assert pp_config.daily_submission_limit == 2
+            assert pp_config.max_pdf_size_mb == 20
     
     def test_get_paths_config(self):
         """Test getting paths configuration."""
@@ -359,13 +361,15 @@ class TestConfigDataClasses:
             max_workers=2,
             chunk_size=1000,
             max_tags=5,
-            daily_submission_limit=2
+            daily_submission_limit=2,
+            max_pdf_size_mb=20
         )
         
         assert config.max_workers == 2
         assert config.chunk_size == 1000
         assert config.max_tags == 5
         assert config.daily_submission_limit == 2
+        assert config.max_pdf_size_mb == 20
     
     def test_paths_config(self):
         """Test PathsConfig data class."""
@@ -416,6 +420,7 @@ class TestGlobalFunctions:
         assert hasattr(config, 'chunk_size')
         assert hasattr(config, 'max_tags')
         assert hasattr(config, 'daily_submission_limit')
+        assert hasattr(config, 'max_pdf_size_mb')
     
     def test_get_paths_config_global(self):
         """Test global get_paths_config function."""

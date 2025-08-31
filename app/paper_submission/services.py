@@ -24,7 +24,8 @@ class PaperSubmissionService:
                  llm_config,
                  paper_config,
                  save_summary_func=None,
-                 max_pdf_size_mb: int = 20):
+                 max_pdf_size_mb: int = 20,
+                 index_page_module=None):
         self.user_data_manager = user_data_manager
         self.ai_cache_manager = ai_cache_manager
         self.ai_checker = ai_checker
@@ -35,6 +36,7 @@ class PaperSubmissionService:
         self.paper_config = paper_config
         self.save_summary_func = save_summary_func
         self.max_pdf_size_mb = max_pdf_size_mb
+        self.index_page_module = index_page_module
         self.progress_cache = {}  # Store progress for each task
         self.progress_cache_file = Path("data/progress_cache.json")
         self.progress_cache_file.parent.mkdir(exist_ok=True)
@@ -215,6 +217,41 @@ class PaperSubmissionService:
                 # Use the same summarization logic as in feed_paper_summarizer_service
                 import feed_paper_summarizer_service as fps
                 
+                # Extract arXiv ID from the paper URL first
+                arxiv_id = None
+                try:
+                    # Try to extract arXiv ID from URL
+                    if "arxiv.org" in paper_url:
+                        import re
+                        match = re.search(r'arxiv\.org/(?:abs|pdf)/(\d+\.\d+)', paper_url)
+                        if match:
+                            arxiv_id = match.group(1)
+                    elif "huggingface.co" in paper_url:
+                        # For HuggingFace papers, use a different extraction method
+                        import re
+                        match = re.search(r'papers/(\d+\.\d+)', paper_url)
+                        if match:
+                            arxiv_id = match.group(1)
+                except Exception:
+                    pass
+                
+                # If we couldn't extract arXiv ID, we'll use a fallback
+                if not arxiv_id:
+                    # Use a hash of the URL as fallback ID
+                    import hashlib
+                    arxiv_id = hashlib.md5(paper_url.encode()).hexdigest()[:8]
+                
+                # Check if this paper already exists to preserve first creation time
+                existing_summary_path = self.summary_dir / f"{arxiv_id}.json"
+                first_created_at = None
+                if existing_summary_path.exists():
+                    try:
+                        existing_data = json.loads(existing_summary_path.read_text(encoding="utf-8"))
+                        existing_service_data = existing_data.get("service_data", {})
+                        first_created_at = existing_service_data.get("first_created_at") or existing_service_data.get("created_at")
+                    except Exception:
+                        pass
+                
                 # Process the paper
                 summary_path, _, paper_subject = fps._summarize_url(
                     paper_url,
@@ -231,9 +268,6 @@ class PaperSubmissionService:
                 self._update_progress(task_id, "summarizing", 95, "摘要生成完成")
                 
                 if summary_path:
-                    # Extract arXiv ID from the summary path
-                    arxiv_id = summary_path.stem
-                    
                     # Read the generated summary content
                     summary_content = summary_path.read_text(encoding="utf-8")
                     
@@ -262,7 +296,8 @@ class PaperSubmissionService:
                             source_type="user",
                             user_id=uid,
                             original_url=paper_url,
-                            ai_judgment=ai_judgment
+                            ai_judgment=ai_judgment,
+                            first_created_at=first_created_at
                         )
                     else:
                         # Fallback: save directly
@@ -275,9 +310,12 @@ class PaperSubmissionService:
                         "paper_subject": paper_subject
                     })
                     
-                    # Clear cache to force refresh
-                    # Note: This would need to be injected from main.py as well
-                    # For now, we'll just return success
+                    # Clear index page cache to force refresh
+                    if self.index_page_module and hasattr(self.index_page_module.get("scanner"), "clear_cache"):
+                        try:
+                            self.index_page_module["scanner"].clear_cache()
+                        except Exception as e:
+                            print(f"Failed to clear index cache: {e}")
                     
                     self._update_progress(task_id, "completed", 100, "论文处理完成")
                     return PaperSubmissionResult(

@@ -252,3 +252,26 @@ class TestStaticFileAccessibility:
         # Check that both pages have favicon links
         assert "favicon.svg" in index_html, "Index page should have favicon"
         assert "favicon.svg" in detail_html, "Detail page should have favicon"
+
+    def test_favicon_routes(self, tmp_path, monkeypatch):
+        """Test that favicon routes are accessible."""
+        import app.main as sp
+        
+        setup_app_dirs(sp, tmp_path)
+        sp.app.config.update(TESTING=True)
+        client = sp.app.test_client()
+        
+        # Test root favicon.ico
+        response = client.get('/favicon.ico')
+        assert response.status_code == 200
+        assert 'image/x-icon' in response.headers['Content-Type'] or 'image/svg+xml' in response.headers['Content-Type']
+        
+        # Test static favicon.ico
+        response = client.get('/static/favicon.ico')
+        assert response.status_code == 200
+        assert 'image/x-icon' in response.headers['Content-Type'] or 'image/svg+xml' in response.headers['Content-Type']
+        
+        # Test static favicon.svg
+        response = client.get('/static/favicon.svg')
+        assert response.status_code == 200
+        assert 'image/svg+xml' in response.headers['Content-Type']

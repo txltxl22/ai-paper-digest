@@ -13,7 +13,8 @@ from typing import Dict, Optional, Any
 
 
 def create_service_record(arxiv_id: str, source_type: str = "system", user_id: str = None, 
-                         original_url: str = None, ai_judgment: dict = None) -> dict:
+                         original_url: str = None, ai_judgment: dict = None, 
+                         first_created_at: str = None) -> dict:
     """Create a service record for a paper summary.
     
     Args:
@@ -22,15 +23,19 @@ def create_service_record(arxiv_id: str, source_type: str = "system", user_id: s
         user_id: The user ID who uploaded the paper (if source_type is "user")
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
+        first_created_at: The original creation time (for resubmissions)
     
     Returns:
         Service record dictionary
     """
+    current_time = datetime.now().isoformat()
+    
     record = {
         "service_data": {
             "arxiv_id": arxiv_id,
             "source_type": source_type,  # "system" or "user"
-            "created_at": datetime.now().isoformat(),
+            "created_at": current_time,  # Current submission time
+            "first_created_at": first_created_at or current_time,  # Original creation time
             "original_url": original_url,
             "ai_judgment": ai_judgment or {}
         }
@@ -45,7 +50,7 @@ def create_service_record(arxiv_id: str, source_type: str = "system", user_id: s
 def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: dict, 
                                    summary_dir: Path, source_type: str = "system", 
                                    user_id: str = None, original_url: str = None, 
-                                   ai_judgment: dict = None):
+                                   ai_judgment: dict = None, first_created_at: str = None):
     """Save a summary with its service record in JSON format.
     
     Args:
@@ -57,9 +62,10 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: str, tags: 
         user_id: The user ID who uploaded the paper (if source_type is "user")
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
+        first_created_at: The original creation time (for resubmissions)
     """
     # Create the combined record
-    record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment)
+    record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment, first_created_at)
     record["summary_data"] = {
         "content": summary_content,
         "tags": tags,

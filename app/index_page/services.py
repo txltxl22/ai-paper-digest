@@ -89,9 +89,29 @@ class EntryScanner:
                 else:
                     updated = datetime.fromtimestamp(json_path.stat().st_mtime)
                 
+                # Parse submission/creation time
+                submission_time = updated  # Default to updated time
+                created_str = service_data.get("created_at")
+                if created_str:
+                    try:
+                        submission_time = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+                    except Exception:
+                        submission_time = updated
+                
+                # Parse first creation time (original processing time)
+                first_created_time = submission_time  # Default to submission time
+                first_created_str = service_data.get("first_created_at")
+                if first_created_str:
+                    try:
+                        first_created_time = datetime.fromisoformat(first_created_str.replace('Z', '+00:00'))
+                    except Exception:
+                        first_created_time = submission_time
+                
                 entries_meta.append({
                     "id": arxiv_id,
                     "updated": updated,
+                    "submission_time": submission_time,
+                    "first_created_time": first_created_time,
                     "tags": tags,
                     "top_tags": top_tags,
                     "detail_tags": detail_tags,
@@ -113,6 +133,8 @@ class EntryScanner:
                     
                 stat = md_path.stat()
                 updated = datetime.fromtimestamp(stat.st_mtime)
+                submission_time = updated  # For legacy files, use file mtime as submission time
+                first_created_time = updated  # For legacy files, use file mtime as first creation time
 
                 # Load tags from legacy .tags.json file
                 tags: List[str] = []
@@ -142,6 +164,8 @@ class EntryScanner:
                 entries_meta.append({
                     "id": arxiv_id,
                     "updated": updated,
+                    "submission_time": submission_time,
+                    "first_created_time": first_created_time,
                     "tags": tags,
                     "top_tags": top_tags,
                     "detail_tags": detail_tags,
@@ -154,11 +178,20 @@ class EntryScanner:
                 print(f"Error processing legacy MD file {md_path}: {e}")
                 continue
 
-        entries_meta.sort(key=lambda e: e["updated"], reverse=True)
+        # Sort by submission time (newest first), then by updated time as secondary sort
+        entries_meta.sort(key=lambda e: (e["submission_time"], e["updated"]), reverse=True)
         self._cache["meta"] = list(entries_meta)
         self._cache["count"] = count
         self._cache["latest_mtime"] = latest_mtime
         return entries_meta
+    
+    def clear_cache(self):
+        """Clear the internal cache to force re-scanning on next request."""
+        self._cache = {
+            "meta": None,
+            "count": 0,
+            "latest_mtime": 0.0,
+        }
 
 
 class EntryRenderer:

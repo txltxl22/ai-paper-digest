@@ -16,7 +16,8 @@ def create_paper_submission_module(
     llm_config,
     paper_config,
     daily_limit: int,
-    save_summary_func=None
+    save_summary_func=None,
+    index_page_module=None
 ) -> Dict[str, Any]:
     """Create and configure all paper submission components."""
     
@@ -36,7 +37,8 @@ def create_paper_submission_module(
         llm_config=llm_config,
         paper_config=paper_config,
         save_summary_func=save_summary_func,
-        max_pdf_size_mb=paper_config.max_pdf_size_mb
+        max_pdf_size_mb=paper_config.max_pdf_size_mb,
+        index_page_module=index_page_module
     )
     
     # Create routes

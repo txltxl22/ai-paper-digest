@@ -1,6 +1,8 @@
 import json
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
+from datetime import datetime
 
 from .models import PaperSubmissionResult
 from .utils import get_client_ip, check_daily_limit, increment_daily_limit
@@ -21,7 +23,8 @@ class PaperSubmissionService:
                  summary_dir: Path,
                  llm_config,
                  paper_config,
-                 save_summary_func=None):
+                 save_summary_func=None,
+                 max_pdf_size_mb: int = 20):
         self.user_data_manager = user_data_manager
         self.ai_cache_manager = ai_cache_manager
         self.ai_checker = ai_checker
@@ -31,16 +34,63 @@ class PaperSubmissionService:
         self.llm_config = llm_config
         self.paper_config = paper_config
         self.save_summary_func = save_summary_func
+        self.max_pdf_size_mb = max_pdf_size_mb
+        self.progress_cache = {}  # Store progress for each task
+        self.progress_cache_file = Path("data/progress_cache.json")
+        self.progress_cache_file.parent.mkdir(exist_ok=True)
+        self._load_progress_cache()
+    
+    def _load_progress_cache(self):
+        """Load progress cache from file."""
+        try:
+            if self.progress_cache_file.exists():
+                with open(self.progress_cache_file, 'r') as f:
+                    self.progress_cache = json.load(f)
+        except Exception as e:
+            print(f"Failed to load progress cache: {e}")
+            self.progress_cache = {}
+    
+    def _save_progress_cache(self):
+        """Save progress cache to file."""
+        try:
+            with open(self.progress_cache_file, 'w') as f:
+                json.dump(self.progress_cache, f, indent=2)
+        except Exception as e:
+            print(f"Failed to save progress cache: {e}")
+    
+    def _update_progress(self, task_id: str, step: str, progress: int, details: str = ""):
+        """Update progress for a specific task."""
+        self.progress_cache[task_id] = {
+            "step": step,
+            "progress": progress,
+            "details": details,
+            "timestamp": datetime.now().isoformat()
+        }
+        self._save_progress_cache()
+    
+    def get_progress(self, task_id: str) -> Dict[str, Any]:
+        """Get progress for a specific task."""
+        return self.progress_cache.get(task_id, {
+            "step": "unknown",
+            "progress": 0,
+            "details": "任务未找到",
+            "timestamp": datetime.now().isoformat()
+        })
     
     def submit_paper(self, paper_url: str, uid: str) -> PaperSubmissionResult:
         """Submit a paper URL for processing."""
+        task_id = str(uuid.uuid4())
+        self._update_progress(task_id, "starting", 0, "正在初始化...")
+        
         try:
             # Validate input
             if not paper_url or not paper_url.strip():
+                self._update_progress(task_id, "error", 0, "URL为空")
                 return PaperSubmissionResult(
                     success=False,
                     message="Empty URL",
-                    error="Empty URL"
+                    error="Empty URL",
+                    task_id=task_id
                 )
             
             paper_url = paper_url.strip()
@@ -48,16 +98,19 @@ class PaperSubmissionService:
             # Check daily limit
             client_ip = get_client_ip()
             if not check_daily_limit(client_ip, self.limit_file, self.daily_limit):
+                self._update_progress(task_id, "error", 0, "每日限额已用完")
                 return PaperSubmissionResult(
                     success=False,
                     message="您今天已经提交了3篇论文，请明天再试。",
-                    error="Daily limit exceeded"
+                    error="Daily limit exceeded",
+                    task_id=task_id
                 )
             
             # Import paper_summarizer module
             import paper_summarizer as ps
             
             # Step 1: Resolve PDF URL
+            self._update_progress(task_id, "resolving", 10, "正在解析PDF链接...")
             try:
                 pdf_url = ps.resolve_pdf_url(paper_url)
             except Exception as e:
@@ -67,15 +120,29 @@ class PaperSubmissionService:
                     "error": f"PDF resolution failed: {str(e)}"
                 })
                 
+                self._update_progress(task_id, "error", 0, f"PDF解析失败: {str(e)}")
                 return PaperSubmissionResult(
                     success=False,
                     message=f"无法解析PDF链接: {str(e)}",
-                    error=f"PDF resolution failed: {str(e)}"
+                    error=f"PDF resolution failed: {str(e)}",
+                    task_id=task_id
                 )
             
             # Step 2: Download PDF
+            self._update_progress(task_id, "downloading", 20, "正在下载PDF...")
+            
+            def download_progress_callback(percent, downloaded, total):
+                """Progress callback for download."""
+                # Map download progress from 20% to 40% of overall progress
+                overall_progress = 20 + int((percent / 100) * 20)
+                downloaded_mb = downloaded / (1024 * 1024)
+                total_mb = total / (1024 * 1024) if total > 0 else 0
+                details = f"正在下载PDF... {percent}% ({downloaded_mb:.1f}MB / {total_mb:.1f}MB)"
+                self._update_progress(task_id, "downloading", overall_progress, details)
+            
             try:
-                pdf_path = ps.download_pdf(pdf_url)
+                pdf_path = ps.download_pdf(pdf_url, max_size_mb=self.max_pdf_size_mb, progress_callback=download_progress_callback)
+                self._update_progress(task_id, "downloading", 40, "PDF下载完成")
             except Exception as e:
                 # Save failed upload attempt
                 self.user_data_manager.save_uploaded_url(uid, paper_url, (False, 0.0, []), {
@@ -83,16 +150,20 @@ class PaperSubmissionService:
                     "error": f"PDF download failed: {str(e)}"
                 })
                 
+                self._update_progress(task_id, "error", 0, f"PDF下载失败: {str(e)}")
                 return PaperSubmissionResult(
                     success=False,
                     message=f"PDF下载失败: {str(e)}",
-                    error=f"PDF download failed: {str(e)}"
+                    error=f"PDF download failed: {str(e)}",
+                    task_id=task_id
                 )
             
             # Step 3: Extract text
+            self._update_progress(task_id, "extracting", 50, "正在提取文本...")
             try:
                 md_path = ps.extract_markdown(pdf_path)
                 text_content = md_path.read_text(encoding="utf-8")
+                self._update_progress(task_id, "extracting", 60, "文本提取完成")
             except Exception as e:
                 # Save failed upload attempt
                 self.user_data_manager.save_uploaded_url(uid, paper_url, (False, 0.0, []), {
@@ -100,17 +171,25 @@ class PaperSubmissionService:
                     "error": f"Text extraction failed: {str(e)}"
                 })
                 
+                self._update_progress(task_id, "error", 0, f"文本提取失败: {str(e)}")
                 return PaperSubmissionResult(
                     success=False,
                     message=f"文本提取失败: {str(e)}",
-                    error=f"Text extraction failed: {str(e)}"
+                    error=f"Text extraction failed: {str(e)}",
+                    task_id=task_id
                 )
             
             # Step 4: Check if paper is AI-related (with caching)
+            self._update_progress(task_id, "checking", 70, "正在检查AI相关性...")
             is_ai, confidence, tags = self.ai_checker.check_paper_ai_relevance(text_content, paper_url)
+            self._update_progress(task_id, "checking", 80, f"AI检查完成 (置信度: {confidence:.2f})")
             
-            # Increment daily limit for any valid PDF upload (regardless of AI content)
-            increment_daily_limit(client_ip, self.limit_file)
+            # Check if paper has already been processed successfully
+            already_processed = self.user_data_manager.has_processed_paper(uid, paper_url)
+            
+            # Only increment daily limit if paper hasn't been processed before
+            if not already_processed:
+                increment_daily_limit(client_ip, self.limit_file)
             
             if not is_ai:
                 # Save failed upload attempt
@@ -121,14 +200,17 @@ class PaperSubmissionService:
 
                 print(f"Not AI paper: {paper_url}, confidence: {confidence}, tags: {tags}")
                 
+                self._update_progress(task_id, "error", 0, "论文不是AI相关")
                 return PaperSubmissionResult(
                     success=False,
                     message="抱歉，我们只接受AI相关的论文。根据分析，这篇论文不属于AI领域。",
                     error="Not AI paper",
-                    confidence=confidence
+                    confidence=confidence,
+                    task_id=task_id
                 )
             
             # Step 5: Process the paper using existing pipeline
+            self._update_progress(task_id, "summarizing", 85, "正在生成摘要...")
             try:
                 # Use the same summarization logic as in feed_paper_summarizer_service
                 import feed_paper_summarizer_service as fps
@@ -145,6 +227,8 @@ class PaperSubmissionService:
                     local=False,
                     max_workers=self.paper_config.max_workers
                 )
+                
+                self._update_progress(task_id, "summarizing", 95, "摘要生成完成")
                 
                 if summary_path:
                     # Extract arXiv ID from the summary path
@@ -195,11 +279,13 @@ class PaperSubmissionService:
                     # Note: This would need to be injected from main.py as well
                     # For now, we'll just return success
                     
+                    self._update_progress(task_id, "completed", 100, "论文处理完成")
                     return PaperSubmissionResult(
                         success=True,
                         message="论文提交成功！",
                         summary_path=str(summary_path),
-                        paper_subject=paper_subject
+                        paper_subject=paper_subject,
+                        task_id=task_id
                     )
                 else:
                     # Save failed upload attempt
@@ -208,10 +294,12 @@ class PaperSubmissionService:
                         "error": "Summary generation failed"
                     })
                     
+                    self._update_progress(task_id, "error", 0, "摘要生成失败")
                     return PaperSubmissionResult(
                         success=False,
                         message="论文处理失败，请稍后重试。",
-                        error="Summary generation failed"
+                        error="Summary generation failed",
+                        task_id=task_id
                     )
                     
             except Exception as e:
@@ -221,22 +309,68 @@ class PaperSubmissionService:
                     "error": f"Processing failed: {str(e)}"
                 })
                 
+                self._update_progress(task_id, "error", 0, f"Processing failed: {str(e)}")
                 return PaperSubmissionResult(
                     success=False,
                     message=f"论文处理失败: {str(e)}",
-                    error=f"Processing failed: {str(e)}"
+                    error=f"Processing failed: {str(e)}",
+                    task_id=task_id
                 )
                 
         except Exception as e:
+            self._update_progress(task_id, "error", 0, f"Server error: {str(e)}")
             return PaperSubmissionResult(
                 success=False,
                 message=f"服务器错误: {str(e)}",
-                error=f"Server error: {str(e)}"
+                error=f"Server error: {str(e)}",
+                task_id=task_id
             )
     
     def get_uploaded_urls(self, uid: str) -> list:
         """Get uploaded URLs for a user."""
         return self.user_data_manager.get_uploaded_urls(uid)
+    
+    def get_user_quota(self, uid: str) -> Dict[str, Any]:
+        """Get user's current quota information."""
+        from datetime import date, datetime, timedelta
+        
+        client_ip = get_client_ip()
+        today = date.today().isoformat()
+        
+        try:
+            if self.limit_file.exists():
+                with open(self.limit_file, 'r', encoding='utf-8') as f:
+                    limits = json.load(f)
+            else:
+                limits = {}
+            
+            # Clean up old entries
+            limits = {k: v for k, v in limits.items() if v['date'] == today}
+            
+            current_count = limits.get(client_ip, {}).get('count', 0)
+            remaining = max(0, self.daily_limit - current_count)
+            
+            # Calculate next reset time (tomorrow at midnight)
+            tomorrow = date.today() + timedelta(days=1)
+            next_reset = datetime.combine(tomorrow, datetime.min.time())
+            
+            return {
+                "daily_limit": self.daily_limit,
+                "used": current_count,
+                "remaining": remaining,
+                "next_reset": next_reset.isoformat(),
+                "next_reset_formatted": next_reset.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+        except Exception as e:
+            # Return default values on error
+            return {
+                "daily_limit": self.daily_limit,
+                "used": 0,
+                "remaining": self.daily_limit,
+                "next_reset": (datetime.now() + timedelta(days=1)).isoformat(),
+                "next_reset_formatted": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+            }
     
     def get_ai_cache_stats(self) -> Dict[str, Any]:
         """Get AI cache statistics for maintenance."""

@@ -35,7 +35,8 @@ def create_paper_submission_module(
         summary_dir=summary_dir,
         llm_config=llm_config,
         paper_config=paper_config,
-        save_summary_func=save_summary_func
+        save_summary_func=save_summary_func,
+        max_pdf_size_mb=paper_config.max_pdf_size_mb
     )
     
     # Create routes

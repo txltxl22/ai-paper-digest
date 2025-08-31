@@ -39,6 +39,7 @@ class PaperSubmissionResult:
     paper_subject: Optional[str] = None
     error: Optional[str] = None
     confidence: Optional[float] = None
+    task_id: Optional[str] = None
 
 
 @dataclass

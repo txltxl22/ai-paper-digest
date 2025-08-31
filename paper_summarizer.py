@@ -142,7 +142,7 @@ def resolve_pdf_url(url: str, session: requests.Session = SESSION) -> str:
         return pdf
     elif url.endswith(".pdf"):
         return url
-    elif "arxiv.org/pdf" in url:
+    elif "arxiv.org/" in url:
         return url + ".pdf"
 
     resp = session.get(url, timeout=30)
@@ -157,7 +157,7 @@ def resolve_pdf_url(url: str, session: requests.Session = SESSION) -> str:
 
 
 def download_pdf(
-    pdf_url: str, output_dir: Path = PDF_DIR, session: requests.Session = SESSION, max_retries: int = 3, skip_download: bool = False
+    pdf_url: str, output_dir: Path = PDF_DIR, session: requests.Session = SESSION, max_retries: int = 3, skip_download: bool = False, max_size_mb: int = None, progress_callback: callable = None
 ) -> Path:
     """Download the PDF or skip if already present. Ensures complete downloads only."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -186,7 +186,7 @@ def download_pdf(
             time.sleep(2)  # Brief delay between retries
         
         try:
-            return _download_pdf_single_attempt(pdf_url, output_dir, filename, session)
+            return _download_pdf_single_attempt(pdf_url, output_dir, filename, session, max_size_mb, progress_callback)
         except Exception as e:
             last_error = e
             _LOG.warning("Download attempt %d failed: %s", attempt + 1, e)
@@ -197,7 +197,7 @@ def download_pdf(
 
 
 def _download_pdf_single_attempt(
-    pdf_url: str, output_dir: Path, filename: str, session: requests.Session
+    pdf_url: str, output_dir: Path, filename: str, session: requests.Session, max_size_mb: int = None, progress_callback: callable = None
 ) -> Path:
     """Single attempt to download a PDF file."""
     outpath = output_dir / filename
@@ -210,6 +210,13 @@ def _download_pdf_single_attempt(
         resp.raise_for_status()
 
         total = int(resp.headers.get("content-length", 0))
+        
+        # Check file size limit before downloading
+        if max_size_mb and total > 0:
+            max_size_bytes = max_size_mb * 1024 * 1024
+            if total > max_size_bytes:
+                raise ValueError(f"PDF file too large: {total / (1024*1024):.1f}MB exceeds limit of {max_size_mb}MB")
+        
         downloaded_size = 0
         last_progress_time = time.time()
         
@@ -228,6 +235,13 @@ def _download_pdf_single_attempt(
                     f.write(chunk)
                     downloaded_size += len(chunk)
                     bar.update(len(chunk))
+                    
+                    # Call progress callback if provided
+                    if progress_callback and total > 0:
+                        progress_percent = int((downloaded_size / total) * 100)
+                        # Call callback more frequently (every 1% or every 50KB)
+                        if downloaded_size % 51200 == 0 or progress_percent % 5 == 0:
+                            progress_callback(progress_percent, downloaded_size, total)
                     
                     # Check for progress timeout (stalled download)
                     current_time = time.time()

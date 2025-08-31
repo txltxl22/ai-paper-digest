@@ -151,59 +151,97 @@
   background: var(--card-bg);
   box-shadow: var(--card-shadow);
   border-radius: 0.75rem;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
   border: 1px solid var(--btn-border);
 }
 
 .submission-header h3 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.75rem 0;
   color: var(--text);
-  font-size: 1.3rem;
+  font-size: 1.1rem;
 }
 
 .submission-desc {
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 1rem 0;
   color: var(--muted-text);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1.4;
 }
 
 .submission-form {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.quota-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: var(--action-bg);
+  border-radius: 6px;
+  border: 1px solid var(--btn-border);
+}
+
+.quota-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.quota-label {
+  color: var(--muted-text);
+  font-weight: 500;
+}
+
+.quota-value {
+  color: var(--text);
+  font-weight: 600;
+  padding: 0.15rem 0.4rem;
+  background: var(--bg);
+  border-radius: 3px;
+  border: 1px solid var(--btn-border);
+}
+
+.quota-value.quota-exhausted {
+  color: #ef4444;
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 .input-group {
   display: flex;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .url-input {
   flex: 1;
-  padding: 0.75rem 1rem;
-  border: 2px solid var(--btn-border);
-  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--btn-border);
+  border-radius: 6px;
   background: var(--bg);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   transition: border-color 0.2s ease;
 }
 
 .url-input:focus {
   outline: none;
   border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.1);
 }
 
 .submit-btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1rem;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -211,7 +249,7 @@
 
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .submit-btn:active:not(:disabled) {
@@ -227,8 +265,8 @@
 .submission-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.85rem;
+  gap: 0.75rem;
+  font-size: 0.8rem;
   color: var(--muted-text);
 }
 
@@ -262,21 +300,21 @@
 }
 
 .submission-status {
-  margin-top: 1rem;
-  padding: 1rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
   background: var(--code-bg);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--btn-border);
 }
 
 .status-content {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .status-icon {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   flex-shrink: 0;
 }
 
@@ -284,26 +322,111 @@
   flex: 1;
   font-weight: 500;
   color: var(--text);
+  font-size: 0.9rem;
 }
 
 .status-progress {
   flex-shrink: 0;
-  width: 120px;
+  width: 100px;
 }
 
 .progress-bar {
   width: 100%;
-  height: 6px;
+  height: 4px;
   background: var(--btn-border);
-  border-radius: 3px;
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981, #059669);
+  background: #10b981;
   width: 0%;
   transition: width 0.3s ease;
+}
+
+.progress-text {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted-text);
+  margin-top: 0.2rem;
+}
+
+.status-details {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--btn-border);
+}
+
+.detail-item {
+  font-size: 0.8rem;
+  color: var(--muted-text);
+  margin-bottom: 0.2rem;
+}
+
+/* Download Progress Section */
+.download-progress-section {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.download-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.download-icon {
+  font-size: 1rem;
+}
+
+.download-text {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.download-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+
+.download-progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.download-progress-text {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #3b82f6;
+  margin-bottom: 0.4rem;
+}
+
+.download-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--muted-text);
+}
+
+.download-speed {
+  font-weight: 500;
+}
+
+.download-size {
+  font-family: monospace;
 }
 
 /* Responsive design for mobile */

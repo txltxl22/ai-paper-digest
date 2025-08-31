@@ -37,6 +37,7 @@ class PaperProcessingConfig:
     chunk_size: int
     max_tags: int
     daily_submission_limit: int
+    max_pdf_size_mb: int
 
 
 @dataclass
@@ -96,7 +97,8 @@ class ConfigManager:
                 "max_workers": 4,
                 "chunk_size": 2000,
                 "max_tags": 8,
-                "daily_submission_limit": 3
+                "daily_submission_limit": 3,
+                "max_pdf_size_mb": 20
             },
             "paths": {
                 "summary_dir": "summary",
@@ -159,6 +161,9 @@ class ConfigManager:
         
         if os.getenv("DAILY_SUBMISSION_LIMIT"):
             self._config["paper_processing"]["daily_submission_limit"] = int(os.getenv("DAILY_SUBMISSION_LIMIT"))
+        
+        if os.getenv("MAX_PDF_SIZE_MB"):
+            self._config["paper_processing"]["max_pdf_size_mb"] = int(os.getenv("MAX_PDF_SIZE_MB"))
     
     def get_llm_config(self) -> LLMConfig:
         """Get LLM configuration."""
@@ -189,7 +194,8 @@ class ConfigManager:
             max_workers=pp_config["max_workers"],
             chunk_size=pp_config["chunk_size"],
             max_tags=pp_config["max_tags"],
-            daily_submission_limit=pp_config["daily_submission_limit"]
+            daily_submission_limit=pp_config["daily_submission_limit"],
+            max_pdf_size_mb=pp_config["max_pdf_size_mb"]
         )
     
     def get_paths_config(self) -> PathsConfig:

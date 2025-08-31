@@ -10,7 +10,8 @@ def create_index_page_module(
     summary_dir: Path,
     user_service,
     index_template: str,
-    detail_template: str = ""
+    detail_template: str = "",
+    paper_config=None
 ) -> dict:
     """Create index page module with services and routes.
     
@@ -27,7 +28,7 @@ def create_index_page_module(
     entry_renderer = EntryRenderer(summary_dir)
     
     # Create routes
-    blueprint = create_index_routes(entry_scanner, entry_renderer, user_service, index_template, detail_template)
+    blueprint = create_index_routes(entry_scanner, entry_renderer, user_service, index_template, detail_template, paper_config)
     
     return {
         "scanner": entry_scanner,

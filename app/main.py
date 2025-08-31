@@ -8,7 +8,7 @@ from datetime import datetime, date, timezone, timedelta
 # Import configuration management
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
-from config_manager import get_llm_config, get_app_config, get_paper_processing_config, get_paths_config
+from config_manager import ConfigManager
 
 
 
@@ -40,10 +40,11 @@ app.wsgi_app = ProxyFix(
 # -----------------------------------------------------------------------------
 
 # Load configuration
-paths_config = get_paths_config()
-app_config = get_app_config()
-llm_config = get_llm_config()
-paper_config = get_paper_processing_config()
+config_manager = ConfigManager()
+paths_config = config_manager.get_paths_config()
+app_config = config_manager.get_app_config()
+llm_config = config_manager.get_llm_config()
+paper_config = config_manager.get_paper_processing_config()
 
 # Set up directories
 SUMMARY_DIR = Path(__file__).parent.parent / paths_config.summary_dir
@@ -136,7 +137,8 @@ index_page_module = create_index_page_module(
     summary_dir=SUMMARY_DIR,
     user_service=user_management_module["service"],
     index_template=INDEX_TEMPLATE,
-    detail_template=DETAIL_TEMPLATE
+    detail_template=DETAIL_TEMPLATE,
+    paper_config=paper_config
 )
 
 summary_detail_module = create_summary_detail_module(
@@ -183,7 +185,7 @@ def append_event(uid: str, event_type: str, arxiv_id: str | None = None, meta: d
 
     This function is now a wrapper around the decoupled EventTracker.
     """
-    from .event_tracking.event_tracker import EventTracker
+    from app.event_tracking.event_tracker import EventTracker
     tracker = EventTracker(USER_DATA_DIR)
     tracker.track_event(uid, event_type, arxiv_id, meta, ts)
 
@@ -192,7 +194,7 @@ def append_event(uid: str, event_type: str, arxiv_id: str | None = None, meta: d
 # -----------------------------------------------------------------------------
 
 # Register event tracking blueprint
-from .event_tracking.routes import create_event_tracking_blueprint
+from app.event_tracking.routes import create_event_tracking_blueprint
 event_tracking_bp = create_event_tracking_blueprint(USER_DATA_DIR)
 app.register_blueprint(event_tracking_bp)
 

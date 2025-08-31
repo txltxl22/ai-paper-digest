@@ -28,6 +28,40 @@ def create_paper_submission_routes(paper_submission_service: PaperSubmissionServ
                 "message": str(e)
             }), 500
     
+    @paper_submission_bp.route("/quota", methods=["GET"])
+    def get_user_quota():
+        """Get user's current quota information."""
+        uid = request.cookies.get("uid")
+        if not uid:
+            return jsonify({"error": "Login required"}), 401
+        
+        try:
+            quota_info = paper_submission_service.get_user_quota(uid)
+            return jsonify({
+                "success": True,
+                "quota": quota_info
+            })
+        except Exception as e:
+            return jsonify({
+                "error": "Failed to get quota information",
+                "message": str(e)
+            }), 500
+    
+    @paper_submission_bp.route("/download_progress/<task_id>", methods=["GET"])
+    def get_download_progress(task_id):
+        """Get download progress for a specific task."""
+        try:
+            progress = paper_submission_service.get_progress(task_id)
+            return jsonify({
+                "success": True,
+                "progress": progress
+            })
+        except Exception as e:
+            return jsonify({
+                "error": "Failed to get progress",
+                "message": str(e)
+            }), 500
+    
     @paper_submission_bp.route("/submit_paper", methods=["POST"])
     def submit_paper():
         """Handle paper URL submission from users."""
@@ -56,7 +90,8 @@ def create_paper_submission_routes(paper_submission_service: PaperSubmissionServ
                     "success": True,
                     "message": result.message,
                     "summary_path": result.summary_path,
-                    "paper_subject": result.paper_subject
+                    "paper_subject": result.paper_subject,
+                    "task_id": result.task_id
                 })
             else:
                 # Determine appropriate HTTP status code
@@ -72,7 +107,8 @@ def create_paper_submission_routes(paper_submission_service: PaperSubmissionServ
                 return jsonify({
                     "error": result.error,
                     "message": result.message,
-                    "confidence": result.confidence
+                    "confidence": result.confidence,
+                    "task_id": result.task_id
                 }), status_code
                 
         except Exception as e:

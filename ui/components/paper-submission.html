@@ -1,27 +1,36 @@
 <!-- Paper Submission Component -->
 <div class="paper-submission-panel">
   <div class="submission-header">
-    <h3>📄 提交论文链接</h3>
-    <p class="submission-desc">输入论文URL，我们将自动下载、分析并生成摘要</p>
+    <h3>📄 提交论文</h3>
   </div>
   
   {% if uid %}
+    <div class="quota-info" id="quota-info">
+      <div class="quota-item">
+        <span class="quota-label">今日剩余:</span>
+        <span class="quota-value" id="remaining-uploads">加载中...</span>
+      </div>
+      <div class="quota-item">
+        <span class="quota-label">重置时间:</span>
+        <span class="quota-value" id="reset-time">加载中...</span>
+      </div>
+    </div>
+    
     <form id="paper-submission-form" class="submission-form">
       <div class="input-group">
         <input 
           type="url" 
           id="paper-url-input" 
           name="paper_url" 
-          placeholder="输入论文URL (支持arXiv、HuggingFace等)" 
+          placeholder="输入论文URL (arXiv、HuggingFace等)" 
           required
           class="url-input"
         />
-        <button type="submit" class="submit-btn">提交论文</button>
+        <button type="submit" class="submit-btn">提交</button>
       </div>
       <div class="submission-info">
-        <span class="info-item">📊 每日限制: 3篇论文</span>
-        <span class="info-item">🎯 仅限AI相关论文</span>
-        <span class="info-item">⏱️ 处理时间: 2-5分钟</span>
+        <span class="info-item">仅限AI相关论文</span>
+        <span class="info-item">文件大小限制: <span id="max-file-size">{{ max_pdf_size_mb or 20 }}</span>MB</span>
       </div>
     </form>
     
@@ -32,6 +41,27 @@
         <div class="status-progress">
           <div class="progress-bar">
             <div class="progress-fill"></div>
+          </div>
+          <div class="progress-text">0%</div>
+        </div>
+        <div class="status-details">
+          <div class="detail-item" id="current-step">准备下载...</div>
+          <div class="detail-item" id="file-size-info"></div>
+        </div>
+        
+        <!-- Separate download progress section -->
+        <div id="download-progress-section" class="download-progress-section" style="display: none;">
+          <div class="download-progress-header">
+            <span class="download-icon">📥</span>
+            <span class="download-text">正在下载PDF文件...</span>
+          </div>
+          <div class="download-progress-bar">
+            <div class="download-progress-fill"></div>
+          </div>
+          <div class="download-progress-text">0%</div>
+          <div class="download-details">
+            <div class="download-speed" id="download-speed">准备中...</div>
+            <div class="download-size" id="download-size">0 MB / 0 MB</div>
           </div>
         </div>
       </div>

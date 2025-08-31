@@ -76,3 +76,27 @@ class UserDataManager:
         except Exception as e:
             print(f"Error getting uploaded URLs: {e}")
             return []
+    
+    def has_processed_paper(self, uid: str, paper_url: str) -> bool:
+        """Check if a paper has already been processed successfully."""
+        try:
+            user_file = self._user_file(uid)
+            
+            if user_file.exists():
+                with open(user_file, 'r', encoding='utf-8') as f:
+                    user_data = json.load(f)
+                
+                uploaded_urls = user_data.get("uploaded_urls", [])
+                
+                # Check if this URL has been processed successfully
+                for record in uploaded_urls:
+                    if record.get("url") == paper_url:
+                        process_result = record.get("process_result", {})
+                        if process_result.get("success", False):
+                            return True
+                
+            return False
+                
+        except Exception as e:
+            print(f"Error checking processed paper: {e}")
+            return False

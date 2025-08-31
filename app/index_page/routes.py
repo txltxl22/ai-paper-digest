@@ -12,7 +12,8 @@ def create_index_routes(
     entry_renderer: EntryRenderer,
     user_service,
     index_template: str,
-    detail_template: str
+    detail_template: str,
+    paper_config=None
 ) -> Blueprint:
     """Create index page routes."""
     bp = Blueprint('index_page', __name__)
@@ -79,6 +80,9 @@ def create_index_routes(
             'tag_query': filters['tag_query'],
             'admin_users': admin_users,
             'show_read': show_read,
+            # Paper submission config
+            'daily_submission_limit': paper_config.daily_submission_limit if paper_config else 3,
+            'max_pdf_size_mb': paper_config.max_pdf_size_mb if paper_config else 20,
             # Admin URLs
             'admin_fetch_url': url_for("fetch.admin_fetch_latest"),
             'admin_stream_url': url_for("fetch.admin_fetch_latest_stream"),

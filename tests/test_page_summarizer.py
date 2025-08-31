@@ -7,16 +7,15 @@ from pathlib import Path
 
 from inter.utils import get_debug_log_path
 import paper_summarizer
+from summary_service.pdf_processor import build_session, resolve_pdf_url, download_pdf
+from summary_service.markdown_processor import extract_markdown
+from summary_service.llm_utils import llm_invoke
 from paper_summarizer import (
-    build_session,
-    resolve_pdf_url,
-    download_pdf,
-    extract_markdown,
-    chunk_text,
-    llm_invoke,
     progressive_summary,
+    generate_tags_from_summary,
 )
-from paper_summarizer import HumanMessage, AIMessage
+from summary_service.text_processor import chunk_text
+from langchain_core.messages import HumanMessage, AIMessage
 import pymupdf4llm
 
 
@@ -62,13 +61,15 @@ def test_build_session_with_proxy():
 
 def test_resolve_pdf_url_direct_pdf():
     url = 'http://example.com/doc.pdf'
-    assert resolve_pdf_url(url) == url
+    session = build_session()
+    assert resolve_pdf_url(url, session) == url
 
 
 def test_resolve_pdf_url_huggingface():
     hf = 'https://huggingface.co/papers/1234.5678'
     expected = 'https://arxiv.org/pdf/1234.5678.pdf'
-    assert resolve_pdf_url(hf) == expected
+    session = build_session()
+    assert resolve_pdf_url(hf, session) == expected
 
 
 def test_resolve_pdf_url_scrape(monkeypatch):
@@ -89,10 +90,10 @@ def test_download_pdf(tmp_path, monkeypatch):
     # Create a larger fake PDF content that will pass integrity check
     content = b'%PDF-1.4\n' + b'x' * 1024  # PDF header + 1KB of content
     fake_session = type('S', (), {'get': lambda self, url, stream, timeout: FakeResponse(content)})()
-    monkeypatch.setattr(paper_summarizer, 'tqdm', lambda *args, **kwargs: DummyBar())
+    monkeypatch.setattr('summary_service.pdf_processor.tqdm', lambda *args, **kwargs: DummyBar())
     
     # Mock the PDF integrity check to always return True
-    monkeypatch.setattr(paper_summarizer, '_verify_pdf_integrity', lambda x: True)
+    monkeypatch.setattr('summary_service.pdf_processor.verify_pdf_integrity', lambda x: True)
 
     out = download_pdf('http://example.com/x.pdf', output_dir=tmp_path, session=fake_session)
     assert out.exists()
@@ -124,12 +125,12 @@ def test_chunk_text():
 
 
 def test_llm_invoke(monkeypatch):
-    # stub ChatDeepSeek
-    class DummyLLM:
+    # Mock the LLM provider
+    class DummyLLMProvider:
         def __init__(self, **kwargs): pass
         def invoke(self, messages): return AIMessage(content='resp')
 
-    monkeypatch.setattr(paper_summarizer, 'ChatDeepSeek', DummyLLM)
+    monkeypatch.setattr('summary_service.llm_utils.LLMProvider', DummyLLMProvider)
     msg = HumanMessage(content='hi')
     resp = llm_invoke([msg], api_key='key', base_url=None)
     assert isinstance(resp, AIMessage)
@@ -181,7 +182,7 @@ def test_progressive_summary(monkeypatch, tmp_path):
             ]
         }))
 
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', fake_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', fake_llm)
     # ensure no existing cache
     debug_dir = Path(get_debug_log_path())
     if debug_dir.exists():
@@ -246,7 +247,7 @@ def test_progressive_summary_cache_logic(monkeypatch, tmp_path):
             ]
         }))
 
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', fake_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', fake_llm)
     
     summary_path = tmp_path / 'summary.json'
     chunk_summary_path = tmp_path / 'chunks.json'
@@ -394,7 +395,7 @@ def test_progressive_summary_cache_file_creation(monkeypatch, tmp_path):
             ]
         }))
 
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', fake_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', fake_llm)
     
     summary_path = tmp_path / 'summary.json'
     chunk_summary_path = tmp_path / 'chunks.json'
@@ -473,7 +474,7 @@ def test_progressive_summary_cache_corruption_handling(monkeypatch, tmp_path):
             ]
         }))
 
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', fake_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', fake_llm)
     
     summary_path = tmp_path / 'summary.json'
     chunk_summary_path = tmp_path / 'chunks.json'
@@ -489,7 +490,7 @@ def test_progressive_summary_cache_corruption_handling(monkeypatch, tmp_path):
         calls.append(messages)
         return fake_llm(messages, api_key, **kwargs)
     
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', counting_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', counting_llm)
     
     summary, chunks_summary = progressive_summary(
         chunks, 
@@ -551,7 +552,7 @@ def test_progressive_summary_cache_missing_chunk_file(monkeypatch, tmp_path):
             ]
         }))
 
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', fake_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', fake_llm)
     
     summary_path = tmp_path / 'summary.json'
     chunk_summary_path = tmp_path / 'chunks.json'
@@ -591,7 +592,7 @@ def test_progressive_summary_cache_missing_chunk_file(monkeypatch, tmp_path):
         calls.append(messages)
         return fake_llm(messages, api_key, **kwargs)
     
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', counting_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', counting_llm)
     
     summary, chunks_summary = progressive_summary(
         chunks, 
@@ -654,7 +655,7 @@ def test_progressive_summary_cache_default_values(monkeypatch, tmp_path):
             ]
         }))
 
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', fake_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', fake_llm)
     
     summary_path = tmp_path / 'summary.json'
     chunk_summary_path = tmp_path / 'chunks.json'
@@ -666,7 +667,7 @@ def test_progressive_summary_cache_default_values(monkeypatch, tmp_path):
         calls.append(messages)
         return fake_llm(messages, api_key, **kwargs)
     
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', counting_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', counting_llm)
     
     summary, chunks_summary = progressive_summary(
         chunks, 
@@ -743,7 +744,7 @@ def test_progressive_summary_cache_only_chunk_exists(monkeypatch, tmp_path):
             ]
         }))
 
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', fake_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', fake_llm)
     
     summary_path = tmp_path / 'summary.json'
     chunk_summary_path = tmp_path / 'chunks.json'
@@ -794,7 +795,7 @@ def test_progressive_summary_cache_only_chunk_exists(monkeypatch, tmp_path):
         calls.append(messages)
         return fake_llm(messages, api_key, **kwargs)
     
-    monkeypatch.setattr(paper_summarizer, 'llm_invoke', counting_llm)
+    monkeypatch.setattr('summary_service.summary_generator.llm_invoke', counting_llm)
     
     summary, chunks_summary = progressive_summary(
         chunks, 

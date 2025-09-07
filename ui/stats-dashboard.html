@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --background-color: #f8fafc;
+            --card-background: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .dashboard-header {
+            background: var(--card-background);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .dashboard-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .dashboard-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .time-selector {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .time-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--border-color);
+            background: var(--card-background);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .time-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .time-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .back-btn {
+            background: var(--secondary-color);
+            color: white;
+            margin-left: 1rem;
+        }
+
+        .back-btn:hover {
+            background: #475569;
+            border-color: #475569;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--card-background);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .metric-icon.primary { background: rgba(59, 130, 246, 0.1); color: var(--primary-color); }
+        .metric-icon.success { background: rgba(16, 185, 129, 0.1); color: var(--success-color); }
+        .metric-icon.warning { background: rgba(245, 158, 11, 0.1); color: var(--warning-color); }
+        .metric-icon.danger { background: rgba(239, 68, 68, 0.1); color: var(--danger-color); }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .chart-container {
+            background: var(--card-background);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .chart-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .daily-chart {
+            height: 300px;
+            display: flex;
+            align-items: end;
+            gap: 8px;
+            padding: 1rem 0;
+            overflow-x: auto;
+        }
+
+        .chart-bar {
+            min-width: 32px;
+            background: linear-gradient(180deg, var(--primary-color) 0%, #1d4ed8 100%);
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .chart-bar:hover {
+            background: linear-gradient(180deg, var(--success-color) 0%, #059669 100%);
+            transform: scaleY(1.05);
+        }
+
+        .chart-bar-label {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .chart-bar-value {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            background: var(--card-background);
+            padding: 2px 6px;
+            border-radius: 4px;
+            box-shadow: var(--shadow);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .chart-bar:hover .chart-bar-value {
+            opacity: 1;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stats-section {
+            background: var(--card-background);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stats-list {
+            list-style: none;
+        }
+
+        .stats-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .stats-item:last-child {
+            border-bottom: none;
+        }
+
+        .stats-item-label {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .stats-item-value {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .stats-item-percentage {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-left: 0.5rem;
+        }
+
+        .user-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .user-card {
+            background: var(--card-background);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .user-count {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .user-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .collapsible-section {
+            margin-top: 2rem;
+        }
+
+        .collapsible-header {
+            background: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .collapsible-header:hover {
+            background: var(--background-color);
+        }
+
+        .collapsible-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .collapsible-icon {
+            transition: transform 0.2s ease;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .collapsible-content.active {
+            max-height: 1000px;
+        }
+
+        .detailed-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: var(--card-background);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .detailed-table th,
+        .detailed-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .detailed-table th {
+            background: var(--background-color);
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .detailed-table td {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .detailed-table tbody tr:hover {
+            background: var(--background-color);
+        }
+
+        .user-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .user-badge.logged {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .user-badge.anonymous {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 1rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .time-selector {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .time-btn {
+                text-align: center;
+            }
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container fade-in">
+        <!-- Header -->
+        <div class="dashboard-header">
+            <h1 class="dashboard-title">📊 Analytics Dashboard</h1>
+            <p class="dashboard-subtitle">Insights for the last {{ days }} days</p>
+            <div class="time-selector">
+                <a href="/stats?days=7" class="time-btn {{ 'active' if days == 7 else '' }}">7 Days</a>
+                <a href="/stats?days=30" class="time-btn {{ 'active' if days == 30 else '' }}">30 Days</a>
+                <a href="/stats?days=90" class="time-btn {{ 'active' if days == 90 else '' }}">90 Days</a>
+                <a href="/" class="time-btn back-btn">← Back to Home</a>
+            </div>
+        </div>
+
+        <!-- Key Metrics -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon primary">👁️</div>
+                </div>
+                <div class="metric-value">{{ "{:,}".format(stats.total_pv) }}</div>
+                <div class="metric-label">Total Page Views</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon success">👥</div>
+                </div>
+                <div class="metric-value">{{ "{:,}".format(stats.total_uv) }}</div>
+                <div class="metric-label">Unique Visitors</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon warning">📈</div>
+                </div>
+                <div class="metric-value">{{ "%.1f"|format(stats.total_pv / max(stats.total_uv, 1)) }}</div>
+                <div class="metric-label">Avg Views per Visitor</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <div class="metric-icon danger">⚡</div>
+                </div>
+                <div class="metric-value">{{ "{:,}".format(stats.action_distribution.values() | sum) }}</div>
+                <div class="metric-label">Total Actions</div>
+            </div>
+        </div>
+
+        <!-- Daily Activity Chart -->
+        <div class="chart-container">
+            <h2 class="chart-title">📅 Daily Page Views</h2>
+            <div class="daily-chart">
+                {% for date, data in stats.daily_stats.items() %}
+                <div class="chart-bar" 
+                     style="height: {{ (data.pv / max_pv) * 250 }}px;"
+                     title="{{ date }}: {{ data.pv }} views">
+                    <div class="chart-bar-label">{{ date[5:] }}</div>
+                    <div class="chart-bar-value">{{ data.pv }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <!-- Top Actions -->
+            <div class="stats-section">
+                <h3 class="section-title">🎯 Popular Actions</h3>
+                <ul class="stats-list">
+                    {% for action, count in stats.action_distribution.items() %}
+                    <li class="stats-item">
+                        <span class="stats-item-label">{{ action.replace('_', ' ').title() }}</span>
+                        <span>
+                            <span class="stats-item-value">{{ count }}</span>
+                            <span class="stats-item-percentage">{{ "%.1f"|format(count / max(stats.action_distribution.values() | sum, 1) * 100) }}%</span>
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Top Pages -->
+            <div class="stats-section">
+                <h3 class="section-title">📄 Popular Pages</h3>
+                <ul class="stats-list">
+                    {% for page in stats.top_pages[:8] %}
+                    <li class="stats-item">
+                        <span class="stats-item-label">{{ page.page if page.page != '/' else 'Home' }}</span>
+                        <span>
+                            <span class="stats-item-value">{{ page.views }}</span>
+                            <span class="stats-item-percentage">{{ "%.1f"|format(page.views / max(stats.total_pv, 1) * 100) }}%</span>
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Device Stats -->
+            <div class="stats-section">
+                <h3 class="section-title">📱 Devices</h3>
+                <ul class="stats-list">
+                    {% for device, count in device_stats.devices.items() %}
+                    <li class="stats-item">
+                        <span class="stats-item-label">{{ device }}</span>
+                        <span class="stats-item-value">{{ count }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Browser Stats -->
+            <div class="stats-section">
+                <h3 class="section-title">🌐 Browsers</h3>
+                <ul class="stats-list">
+                    {% for browser, count in device_stats.browsers.items() %}
+                    <li class="stats-item">
+                        <span class="stats-item-label">{{ browser }}</span>
+                        <span class="stats-item-value">{{ count }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- User Summary -->
+        <div class="user-summary">
+            <div class="user-card">
+                <div class="user-count">{{ logged_users | length }}</div>
+                <div class="user-label">Logged Users</div>
+            </div>
+            <div class="user-card">
+                <div class="user-count">{{ anonymous_visitors | length }}</div>
+                <div class="user-label">Anonymous Visitors</div>
+            </div>
+        </div>
+
+        <!-- Collapsible Detailed Sections -->
+        <div class="collapsible-section">
+            <div class="collapsible-header" onclick="toggleSection('logged-users')">
+                <span class="collapsible-title">👤 Logged Users Details</span>
+                <span class="collapsible-icon" id="logged-users-icon">▼</span>
+            </div>
+            <div class="collapsible-content" id="logged-users-content">
+                <table class="detailed-table">
+                    <thead>
+                        <tr>
+                            <th>User ID</th>
+                            <th>Device</th>
+                            <th>Page Views</th>
+                            <th>Papers Read</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in logged_users[:20] %}
+                        <tr>
+                            <td><span class="user-badge logged">{{ user.user_id }}</span></td>
+                            <td>{{ user.device }} / {{ user.browser }}</td>
+                            <td>{{ user.page_views }}</td>
+                            <td>{{ user.papers_read }}</td>
+                            <td>{{ user.last_seen[:16] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="collapsible-section">
+            <div class="collapsible-header" onclick="toggleSection('anonymous-visitors')">
+                <span class="collapsible-title">🕶️ Anonymous Visitors</span>
+                <span class="collapsible-icon" id="anonymous-visitors-icon">▼</span>
+            </div>
+            <div class="collapsible-content" id="anonymous-visitors-content">
+                <table class="detailed-table">
+                    <thead>
+                        <tr>
+                            <th>IP Address</th>
+                            <th>Device</th>
+                            <th>Page Views</th>
+                            <th>Last Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for visitor in anonymous_visitors[:20] %}
+                        <tr>
+                            <td><span class="user-badge anonymous">{{ visitor.ip_address }}</span></td>
+                            <td>{{ visitor.device }} / {{ visitor.browser }}</td>
+                            <td>{{ visitor.page_views }}</td>
+                            <td>{{ visitor.last_seen[:16] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="collapsible-section">
+            <div class="collapsible-header" onclick="toggleSection('recent-activity')">
+                <span class="collapsible-title">🕒 Recent Activity</span>
+                <span class="collapsible-icon" id="recent-activity-icon">▼</span>
+            </div>
+            <div class="collapsible-content" id="recent-activity-content">
+                <table class="detailed-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Page</th>
+                            <th>Device</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pv in stats.page_views[-30:] | reverse %}
+                        <tr>
+                            <td>{{ pv.timestamp[:16] }}</td>
+                            <td>
+                                {% if pv.user_id.startswith('anon_') %}
+                                <span class="user-badge anonymous">Anonymous</span>
+                                {% else %}
+                                <span class="user-badge logged">{{ pv.user_id }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ pv.page if pv.page != '/' else 'Home' }}</td>
+                            <td>{{ pv.device or 'Unknown' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSection(sectionId) {
+            const content = document.getElementById(sectionId + '-content');
+            const icon = document.getElementById(sectionId + '-icon');
+            
+            if (content.classList.contains('active')) {
+                content.classList.remove('active');
+                icon.textContent = '▼';
+            } else {
+                content.classList.add('active');
+                icon.textContent = '▲';
+            }
+        }
+
+        // Add smooth scrolling and loading states
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add hover effects to chart bars
+            const chartBars = document.querySelectorAll('.chart-bar');
+            chartBars.forEach(bar => {
+                bar.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scaleY(1.05)';
+                });
+                bar.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scaleY(1)';
+                });
+            });
+
+            // Add loading state to time selector buttons
+            const timeButtons = document.querySelectorAll('.time-btn:not(.back-btn)');
+            timeButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    if (!this.classList.contains('active')) {
+                        document.querySelector('.dashboard-container').classList.add('loading');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

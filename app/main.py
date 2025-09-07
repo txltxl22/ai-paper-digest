@@ -197,10 +197,24 @@ def append_event(uid: str, event_type: str, arxiv_id: str | None = None, meta: d
 # Event Tracking System
 # -----------------------------------------------------------------------------
 
+# Initialize event tracking module
+from app.event_tracking.factory import create_event_tracking_module
+
+event_tracking_module = create_event_tracking_module(USER_DATA_DIR)
+
 # Register event tracking blueprint
-from app.event_tracking.routes import create_event_tracking_blueprint
-event_tracking_bp = create_event_tracking_blueprint(USER_DATA_DIR)
-app.register_blueprint(event_tracking_bp)
+app.register_blueprint(event_tracking_module["blueprint"])
+
+# Initialize visitor stats module
+from app.visitor_stats.factory import create_visitor_stats_module
+
+visitor_stats_module = create_visitor_stats_module(
+    user_data_dir=USER_DATA_DIR,
+    user_service=user_management_module["service"]
+)
+
+# Register visitor stats blueprint
+app.register_blueprint(visitor_stats_module["blueprint"])
 
 # -----------------------------------------------------------------------------
 # Templates (plain strings — no Python f-strings)                               

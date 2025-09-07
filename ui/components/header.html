@@ -12,6 +12,7 @@
       <a href="{{ url_for('index_page.read_papers') }}" class="topbar-btn">📖 已读论文</a>
       {% if uid in admin_users %}
       <button id='admin-fetch-btn' class="topbar-btn admin-btn" title="获取最新论文摘要">🔄 获取最新</button>
+      <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="topbar-btn" title="访问统计">📊 访问统计</a>
       {% endif %}
       <button id='logout-btn' class="topbar-btn">退出登录</button>
       <span class="topbar-divider"></span>

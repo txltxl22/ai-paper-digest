@@ -33,7 +33,7 @@
   {% if e.top_tags and e.top_tags|length %}
   <div class="tag-row top-tags">
     {% for tg in e.top_tags %}
-      <label class="top-chip"><span>{{ tg }}</span></label>
+      <a class="top-chip" href='{{ url_for("index_page.index") }}?top={{ tg }}'>{{ tg }}</a>
     {% endfor %}
   </div>
   {% endif %}

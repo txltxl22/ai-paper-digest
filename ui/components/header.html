@@ -1,4 +1,4 @@
-<!-- Clean Single-Row Header -->
+<!-- Mobile-Responsive Header -->
 <header>
   <div class="header-left">
     <h1>
@@ -10,7 +10,8 @@
     </h1>
   </div>
   
-  <div class="page-header-right">
+  <!-- Desktop Navigation -->
+  <div class="page-header-right desktop-nav">
     {% if uid and not show_back_link %}
       <a href="{{ url_for('index_page.read_papers') }}" class="nav-btn">已读论文</a>
       <a href="{{ url_for('index_page.favorite_papers') }}" class="nav-btn">收藏论文</a>
@@ -29,4 +30,70 @@
     
     <button id="theme-toggle" class="theme-btn" type="button" aria-label="切换主题" title="切换主题" data-icon-light="🌙" data-icon-dark="☀️">🌙</button>
   </div>
+
+  <!-- Mobile Menu Button -->
+  <button id="mobile-menu-toggle" class="mobile-menu-btn" aria-label="打开菜单" title="打开菜单">
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+  </button>
 </header>
+
+<!-- Mobile Navigation Overlay -->
+<div id="mobile-nav-overlay" class="mobile-nav-overlay">
+  <div class="mobile-nav-content">
+    <div class="mobile-nav-header">
+      <h2>菜单</h2>
+      <button id="mobile-nav-close" class="mobile-nav-close" aria-label="关闭菜单">×</button>
+    </div>
+    
+    <div class="mobile-nav-body">
+      {% if uid and not show_back_link %}
+        <a href="{{ url_for('index_page.read_papers') }}" class="mobile-nav-item">
+          <span class="nav-icon">📖</span>
+          <span class="nav-text">已读论文</span>
+        </a>
+        <a href="{{ url_for('index_page.favorite_papers') }}" class="mobile-nav-item">
+          <span class="nav-icon">⭐</span>
+          <span class="nav-text">收藏论文</span>
+        </a>
+        {% if uid in admin_users %}
+        <button id='mobile-admin-fetch-btn' class="mobile-nav-item mobile-nav-btn">
+          <span class="nav-icon">🔄</span>
+          <span class="nav-text">获取最新</span>
+        </button>
+        <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="mobile-nav-item">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">访问统计</span>
+        </a>
+        {% endif %}
+        <div class="mobile-nav-divider"></div>
+        <div class="mobile-nav-item mobile-user-info">
+          <span class="nav-icon">👤</span>
+          <span class="nav-text">{{ uid }}</span>
+        </div>
+        <button id='mobile-logout-btn' class="mobile-nav-item mobile-nav-btn mobile-logout-btn">
+          <span class="nav-icon">🚪</span>
+          <span class="nav-text">退出</span>
+        </button>
+      {% elif not show_back_link %}
+        <form id='mobile-user-form' method='POST' action='{{ url_for("user_management.set_user") }}' class="mobile-login-form">
+          <div class="mobile-nav-item mobile-login-item">
+            <span class="nav-icon">👤</span>
+            <input name='uid' placeholder='输入用户名' required class="mobile-login-input">
+          </div>
+          <button type='submit' class="mobile-nav-item mobile-nav-btn mobile-login-btn">
+            <span class="nav-icon">🚀</span>
+            <span class="nav-text">进入</span>
+          </button>
+        </form>
+      {% endif %}
+      
+      <div class="mobile-nav-divider"></div>
+      <button id="mobile-theme-toggle" class="mobile-nav-item mobile-nav-btn">
+        <span class="nav-icon">🌙</span>
+        <span class="nav-text">切换主题</span>
+      </button>
+    </div>
+  </div>
+</div>

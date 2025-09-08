@@ -69,9 +69,10 @@ class ArticleActions {
     let markReadElement = ev.target.closest('.mark-read-link');
     if (markReadElement) {
       ev.preventDefault();
+      ev.stopPropagation();
       
       if (markReadElement.classList.contains('disabled')) {
-        showToast('需要登录，\n登录只需输入任意用户名😄');
+        this.guideToLogin('标记为已读');
       } else {
         this.markRead(markReadElement);
       }
@@ -86,10 +87,12 @@ class ArticleActions {
     // Handle favorite-link clicks
     let favoriteElement = ev.target.closest('.favorite-link');
     if (favoriteElement) {
+      console.log('Favorite clicked, preventing default');
       ev.preventDefault();
+      ev.stopPropagation();
       
       if (favoriteElement.classList.contains('disabled')) {
-        showToast('需要登录，\n登录只需输入任意用户名😄');
+        this.guideToLogin('收藏');
       } else {
         this.toggleFavorite(favoriteElement);
       }
@@ -108,6 +111,14 @@ class ArticleActions {
       ev.preventDefault();
       this.removeFromFavorites(ev.target);
     }
+  }
+
+  guideToLogin(action) {
+    // Show informative toast message
+    showToast(`需要登录才能${action}，\n请在页面顶部输入任意用户名登陆`);
+    
+    // Just show toast, no focus behavior to avoid scrolling
+    // User can manually click the login form if they want
   }
 
   togglePreview(link) {

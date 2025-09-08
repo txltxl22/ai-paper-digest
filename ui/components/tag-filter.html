@@ -2,8 +2,8 @@
 <form id="tag-filter" method="GET" action="{{ url_for('index_page.index') }}" class="filters-panel">
   <div class="filter-header">
     <div class="filter-title">
-      <span class="filter-icon">🏷️</span>
-      <span class="filter-text">标签筛选</span>
+      <span class="filter-icon">🔍</span>
+      <span class="filter-text">搜索与筛选</span>
     </div>
     <div class="filter-actions">
       <a href="{{ url_for('index_page.index') }}" class="filter-btn clear-btn">清除筛选</a>
@@ -11,15 +11,27 @@
   </div>
 
   <div class="filter-content">
-    <!-- Search Input -->
+    <!-- Unified Search Input -->
     <div class="search-section">
+      <!-- Search Scope Selector -->
+      <div class="search-scope">
+        <label class="scope-label">搜索范围：</label>
+        <select name="search_type" class="scope-select" id="search-type-select">
+          <option value="all" {% if search_type == 'all' or not search_type %}selected{% endif %}>全部内容（标题、内容、标签）</option>
+          <option value="content" {% if search_type == 'content' %}selected{% endif %}>标题和内容</option>
+          <option value="tags" {% if search_type == 'tags' %}selected{% endif %}>仅标签</option>
+        </select>
+      </div>
+      
       <div class="search-group">
-        <input type="text" name="q" placeholder="搜索标签..." value="{{ tag_query or '' }}" class="search-input" />
+        <input type="text" name="search" placeholder="搜索论文..." value="{{ search_query or '' }}" class="search-input" id="search-input" />
         <button type="submit" class="search-btn">
           <span class="search-icon">🔍</span>
           <span class="search-text">搜索</span>
         </button>
       </div>
+      
+      <div class="search-suggestions" id="search-suggestions" style="display: none;"></div>
     </div>
 
     <!-- Top Tags -->

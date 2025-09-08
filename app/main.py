@@ -136,12 +136,18 @@ with open(Path(__file__).parent.parent / "ui" / "index.html", "r", encoding="utf
 with open(Path(__file__).parent.parent / "ui" / "detail.html", "r", encoding="utf-8") as f:
     DETAIL_TEMPLATE = f.read()
 
+# Initialize search module first
+from app.search.factory import create_search_module
+
+search_module = create_search_module(summary_dir=SUMMARY_DIR)
+
 index_page_module = create_index_page_module(
     summary_dir=SUMMARY_DIR,
     user_service=user_management_module["service"],
     index_template=INDEX_TEMPLATE,
     detail_template=DETAIL_TEMPLATE,
-    paper_config=paper_config
+    paper_config=paper_config,
+    search_service=search_module["service"]
 )
 
 summary_detail_module = create_summary_detail_module(
@@ -215,6 +221,9 @@ visitor_stats_module = create_visitor_stats_module(
 
 # Register visitor stats blueprint
 app.register_blueprint(visitor_stats_module["blueprint"])
+
+# Register search blueprint
+app.register_blueprint(search_module["blueprint"])
 
 # -----------------------------------------------------------------------------
 # Templates (plain strings — no Python f-strings)                               

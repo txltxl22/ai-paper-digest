@@ -13,16 +13,23 @@ def create_index_routes(
     user_service,
     index_template: str,
     detail_template: str,
-    paper_config=None
+    paper_config=None,
+    search_service=None
 ) -> Blueprint:
     """Create index page routes."""
     bp = Blueprint('index_page', __name__)
     
     def _get_filter_params() -> Dict[str, Any]:
         """Extract and validate filter parameters from request."""
+        search_type = request.args.get("search_type", "all").strip()
+        if search_type not in ["all", "content", "tags"]:
+            search_type = "all"
+            
         return {
             'active_tag': (request.args.get("tag") or "").strip().lower() or None,
             'tag_query': (request.args.get("q") or "").strip().lower(),
+            'search_query': (request.args.get("search") or "").strip(),
+            'search_type': search_type,
             'active_tops': [t.strip().lower() for t in request.args.getlist("top") if t.strip()]
         }
     
@@ -49,6 +56,23 @@ def create_index_routes(
             entries = EntryFilter.filter_by_tag_query(entries, filters['tag_query'])
         if filters['active_tops']:
             entries = EntryFilter.filter_by_top_tags(entries, filters['active_tops'])
+        
+        # Apply search filter if search service is available
+        if filters['search_query'] and search_service:
+            # Determine search fields based on search type
+            search_fields = []
+            if filters['search_type'] == 'all':
+                search_fields = ['title', 'content', 'tags']
+            elif filters['search_type'] == 'content':
+                search_fields = ['title', 'content']
+            elif filters['search_type'] == 'tags':
+                search_fields = ['tags']
+            
+            if search_fields:
+                search_results = search_service.search(filters['search_query'], search_fields)
+                search_ids = {result['id'] for result in search_results}
+                entries = [e for e in entries if e['id'] in search_ids]
+        
         return entries
     
     def _build_template_context(
@@ -81,6 +105,8 @@ def create_index_routes(
             'active_tag': filters['active_tag'],
             'active_tops': filters['active_tops'],
             'tag_query': filters['tag_query'],
+            'search_query': filters['search_query'],
+            'search_type': filters['search_type'],
             'admin_users': admin_users,
             'show_read': show_read,
             'show_favorites': show_favorites,

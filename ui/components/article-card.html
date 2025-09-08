@@ -32,17 +32,20 @@
   <!-- Tags Section -->
   {% if e.top_tags and e.top_tags|length %}
   <div class="tag-row top-tags">
+    {% set search_q = search_query or '' %}
+    {% set tag_q = tag_query or '' %}
     {% for tg in e.top_tags %}
-      <a class="top-chip" href='{{ url_for("index_page.index") }}?top={{ tg }}'>{{ tg }}</a>
+      <a class="top-chip {% if search_q and (search_q.lower() in tg.lower()) %}search-hit{% elif tag_q and (tag_q in tg) %}query-hit{% endif %}" href='{{ url_for("index_page.index") }}?top={{ tg }}'>{{ tg }}</a>
     {% endfor %}
   </div>
   {% endif %}
   
   {% if e.detail_tags and e.detail_tags|length %}
   <div class="tag-row detail-tags">
-    {% set q = tag_query or '' %}
+    {% set search_q = search_query or '' %}
+    {% set tag_q = tag_query or '' %}
     {% for tg in e.detail_tags[:18] %}
-      <a class="tag-chip {% if q and (q in tg) %}query-hit{% endif %}" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>{{ tg }}</a>
+      <a class="tag-chip {% if search_q and (search_q.lower() in tg.lower()) %}search-hit{% elif tag_q and (tag_q in tg) %}query-hit{% endif %}" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>{{ tg }}</a>
     {% endfor %}
     {% if e.detail_tags|length > 18 %}
       <span class="muted">+{{ e.detail_tags|length - 18 }}</span>

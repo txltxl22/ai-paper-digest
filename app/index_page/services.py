@@ -219,9 +219,17 @@ class EntryRenderer:
             ],
         )
     
-    def render_page_entries(self, entries_meta: List[Dict]) -> List[Dict]:
+    def render_page_entries(self, entries_meta: List[Dict], user_data=None, show_read_time=False, show_favorite_time=False) -> List[Dict]:
         """Given a slice of entries meta, materialize preview_html for each."""
         rendered: List[Dict] = []
+        
+        # Get favorites map and read map if user data is provided
+        favorites_map = {}
+        read_map = {}
+        if user_data:
+            favorites_map = user_data.load_favorites_map()
+            read_map = user_data.load_read_map()
+        
         for meta in entries_meta:
             try:
                 # Try to load from new JSON format first
@@ -266,6 +274,14 @@ class EntryRenderer:
                 preview_html = ""
             item = dict(meta)
             item["preview_html"] = preview_html
+            item["is_favorited"] = meta["id"] in favorites_map
+            
+            # Add timestamp information if requested
+            if show_read_time and meta["id"] in read_map:
+                item["read_time"] = read_map[meta["id"]]
+            if show_favorite_time and meta["id"] in favorites_map:
+                item["favorite_time"] = favorites_map[meta["id"]]
+                
             rendered.append(item)
         return rendered
 

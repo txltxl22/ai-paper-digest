@@ -39,6 +39,14 @@ class EventTracker {
       }
     }, true);
 
+    // Track favorites list clicks
+    document.addEventListener('click', (ev) => {
+      const link = ev.target.closest('a[href*="/favorites"]');
+      if (link) {
+        this.track('favorites_list');
+      }
+    }, true);
+
     // Track PDF opens
     document.addEventListener('click', (ev) => {
       const link = ev.target.closest('a.action-btn[href^="https://arxiv.org/pdf/"]');
@@ -143,6 +151,28 @@ class EventTracker {
    */
   trackReset() {
     this.trackSessionEvent('reset');
+  }
+
+  /**
+   * Track favorite/unfavorite
+   */
+  trackFavorite(articleElement, isFavorited) {
+    const eventType = isFavorited ? 'mark_favorite' : 'unmark_favorite';
+    this.trackArticleEvent(eventType, articleElement);
+  }
+
+  /**
+   * Track unmark favorite from favorites page
+   */
+  trackUnmarkFavorite(articleElement) {
+    this.trackArticleEvent('unmark_favorite', articleElement);
+  }
+
+  /**
+   * Track favorites list view
+   */
+  trackFavoritesList() {
+    this.trackSessionEvent('favorites_list');
   }
 }
 

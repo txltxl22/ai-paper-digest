@@ -36,7 +36,10 @@ class UserService:
     
     def get_user_data(self, uid: str) -> UserData:
         """Get user data object for the given user ID."""
-        return UserData(uid, self.user_data_dir)
+        user_data = UserData(uid, self.user_data_dir)
+        # Automatically migrate legacy records on first access
+        user_data.migrate_legacy_records()
+        return user_data
     
     def require_auth(self, redirect_url: str = None) -> Optional[str]:
         """Require authentication, redirect if not authenticated."""

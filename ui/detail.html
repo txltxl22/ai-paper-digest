@@ -19,12 +19,12 @@
         <div class="summary-header">
           <div class="source-info">
             {% if source_type == "user" %}
-              <span class="badge user-badge" title="用户上传">👤 {{ user_id or "用户" }}</span>
+              <span class="user-chip" title="用户上传">👤 {{ user_id or "用户" }}</span>
               {% if original_url %}
                 <span class="muted">来源: <a href="{{ original_url }}" target="_blank" class="source-link">{{ original_url }}</a></span>
               {% endif %}
             {% else %}
-              <span class="badge system-badge" title="系统自动处理">🤖 系统自动处理</span>
+              <span class="user-chip" title="系统自动处理">🤖 系统</span>
             {% endif %}
           </div>
         </div>

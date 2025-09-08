@@ -1,74 +1,112 @@
-<!-- Paper Submission Component -->
+<!-- Modern Paper Submission Component -->
 <div class="paper-submission-panel">
   <div class="submission-header">
-    <h3>📄 提交论文</h3>
+    <div class="header-left">
+      <span class="header-icon">📄</span>
+      <h3 class="header-title">提交论文</h3>
+    </div>
+    <div class="header-right">
+      <span class="submission-badge">AI论文处理</span>
+    </div>
   </div>
   
   {% if uid %}
-    <div class="quota-info" id="quota-info">
-      <div class="quota-item">
-        <span class="quota-label">今日剩余:</span>
-        <span class="quota-value" id="remaining-uploads">加载中...</span>
+    <!-- Quota Information -->
+    <div class="quota-section">
+      <div class="quota-header">
+        <span class="quota-icon">📊</span>
+        <span class="quota-title">使用情况</span>
       </div>
-      <div class="quota-item">
-        <span class="quota-label">重置时间:</span>
-        <span class="quota-value" id="reset-time">加载中...</span>
+      <div class="quota-grid">
+        <div class="quota-item">
+          <div class="quota-label">今日剩余</div>
+          <div class="quota-value" id="remaining-uploads">加载中...</div>
+        </div>
+        <div class="quota-item">
+          <div class="quota-label">重置时间</div>
+          <div class="quota-value" id="reset-time">加载中...</div>
+        </div>
       </div>
     </div>
     
+    <!-- Submission Form -->
     <form id="paper-submission-form" class="submission-form">
-      <div class="input-group">
-        <input 
-          type="url" 
-          id="paper-url-input" 
-          name="paper_url" 
-          placeholder="输入论文URL (arXiv、HuggingFace等)" 
-          required
-          class="url-input"
-        />
-        <button type="submit" class="submit-btn">提交</button>
+      <div class="form-group">
+        <label class="form-label">
+          <span class="label-icon">🔗</span>
+          <span class="label-text">论文URL</span>
+        </label>
+        <div class="input-group">
+          <input 
+            type="url" 
+            id="paper-url-input" 
+            name="paper_url" 
+            placeholder="输入论文URL (arXiv、HuggingFace等)" 
+            required
+            class="url-input"
+          />
+          <button type="submit" class="submit-btn">
+            <span class="btn-icon">🚀</span>
+            <span class="btn-text">提交处理</span>
+          </button>
+        </div>
       </div>
-      <div class="submission-info">
-        <span class="info-item">仅限AI相关论文</span>
-        <span class="info-item">文件大小限制: <span id="max-file-size">{{ max_pdf_size_mb or 20 }}</span>MB</span>
+      
+      <div class="form-info">
+        <div class="info-item">
+          <span class="info-icon">ℹ️</span>
+          <span class="info-text">仅限AI相关论文</span>
+        </div>
+        <div class="info-item">
+          <span class="info-icon">📏</span>
+          <span class="info-text">文件大小限制: <span id="max-file-size">{{ max_pdf_size_mb or 20 }}</span>MB</span>
+        </div>
       </div>
     </form>
     
+    <!-- Processing Status -->
     <div id="submission-status" class="submission-status" style="display: none;">
-      <div class="status-content">
+      <div class="status-header">
         <div class="status-icon">⏳</div>
-        <div class="status-text">正在处理论文...</div>
-        <div class="status-progress">
-          <div class="progress-bar">
-            <div class="progress-fill"></div>
-          </div>
-          <div class="progress-text">0%</div>
+        <div class="status-title">正在处理论文...</div>
+      </div>
+      
+      <div class="progress-section">
+        <div class="progress-bar">
+          <div class="progress-fill"></div>
         </div>
-        <div class="status-details">
-          <div class="detail-item" id="current-step">准备下载...</div>
-          <div class="detail-item" id="file-size-info"></div>
+        <div class="progress-text">0%</div>
+      </div>
+      
+      <div class="status-details">
+        <div class="detail-item" id="current-step">准备下载...</div>
+        <div class="detail-item" id="file-size-info"></div>
+      </div>
+      
+      <!-- Download Progress Section -->
+      <div id="download-progress-section" class="download-progress-section" style="display: none;">
+        <div class="download-header">
+          <span class="download-icon">📥</span>
+          <span class="download-text">正在下载PDF文件...</span>
         </div>
-        
-        <!-- Separate download progress section -->
-        <div id="download-progress-section" class="download-progress-section" style="display: none;">
-          <div class="download-progress-header">
-            <span class="download-icon">📥</span>
-            <span class="download-text">正在下载PDF文件...</span>
-          </div>
-          <div class="download-progress-bar">
-            <div class="download-progress-fill"></div>
-          </div>
-          <div class="download-progress-text">0%</div>
-          <div class="download-details">
-            <div class="download-speed" id="download-speed">准备中...</div>
-            <div class="download-size" id="download-size">0 MB / 0 MB</div>
-          </div>
+        <div class="download-progress-bar">
+          <div class="download-progress-fill"></div>
+        </div>
+        <div class="download-progress-text">0%</div>
+        <div class="download-details">
+          <div class="download-speed" id="download-speed">准备中...</div>
+          <div class="download-size" id="download-size">0 MB / 0 MB</div>
         </div>
       </div>
     </div>
   {% else %}
+    <!-- Login Required -->
     <div class="login-required">
-      <p>请先 <a href="#" onclick="document.getElementById('user-form').querySelector('input[name=uid]').focus(); return false;">登录</a> 后再提交论文</p>
+      <div class="login-icon">🔐</div>
+      <div class="login-content">
+        <h4 class="login-title">需要登录</h4>
+        <p class="login-text">请先 <a href="#" onclick="document.getElementById('user-form').querySelector('input[name=uid]').focus(); return false;">登录</a> 后再提交论文</p>
+      </div>
     </div>
   {% endif %}
 </div>

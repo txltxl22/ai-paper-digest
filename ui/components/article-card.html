@@ -1,24 +1,45 @@
-<!-- Article Card Component -->
+<!-- Modern Article Card Component -->
 <article data-id='{{ e.id }}'>
+  <!-- Header Section -->
   <div class="article-header">
-    <h2><a href='{{ url_for("summary_detail.view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a></h2>
-    <div class="source-badge">
-      {% if e.source_type == "user" %}
-        <span class="badge user-badge" title="用户上传">👤 {{ e.user_id or "用户" }}</span>
-      {% else %}
-        <span class="badge system-badge" title="系统自动处理">🤖 系统</span>
-      {% endif %}
+    <div class="header-left">
+      <div class="document-icon">📄</div>
+      <h2>
+        <a href='{{ url_for("summary_detail.view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a>
+        {% if uid and e.is_favorited %}
+          <span class="favorite-star" title="已收藏">⭐</span>
+        {% elif uid %}
+          <button class="favorite-star-btn" title="收藏这篇论文" data-id="{{ e.id }}" data-favorited="{{ e.is_favorited }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26 12,2"/>
+            </svg>
+          </button>
+        {% endif %}
+      </h2>
+    </div>
+    <div class="header-right">
+      <div class="source-badge">
+        {% if e.source_type == "user" %}
+          <span class="user-chip" title="用户上传">👤 {{ e.user_id or "用户" }}</span>
+        {% else %}
+          <span class="user-chip" title="系统自动处理">🤖 系统</span>
+        {% endif %}
+      </div>
+      <div class="update-time">{{ e.updated.strftime('%m-%d %H:%M') }}</div>
     </div>
   </div>
+  
+  <!-- Tags Section -->
   {% if e.top_tags and e.top_tags|length %}
-  <div class="tag-row">
+  <div class="tag-row top-tags">
     {% for tg in e.top_tags %}
-      <a class="top-chip pill" href='{{ url_for("index_page.index") }}?top={{ tg }}'>{{ tg }}</a>
+      <label class="top-chip"><span>{{ tg }}</span></label>
     {% endfor %}
   </div>
   {% endif %}
+  
   {% if e.detail_tags and e.detail_tags|length %}
-  <div class="tag-row">
+  <div class="tag-row detail-tags">
     {% set q = tag_query or '' %}
     {% for tg in e.detail_tags[:18] %}
       <a class="tag-chip {% if q and (q in tg) %}query-hit{% endif %}" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>{{ tg }}</a>
@@ -28,15 +49,68 @@
     {% endif %}
   </div>
   {% endif %}
-  <div class='preview-html collapsed'>{{ e.preview_html | safe }}</div>
-  <div class='card-actions'>
-    <a class='toggle-link action-btn'>展开</a>
-    {% if show_read %}
-      <a class='remove-read-link action-btn'>从已读列表移除</a>
-    {% else %}
-      {% if uid %}<a class='mark-read-link action-btn'>标记为已读</a>{% else %}<a class='mark-read-link action-btn disabled'>标记为已读</a>{% endif %}
-    {% endif %}
-    <a target='_blank' href='https://arxiv.org/pdf/{{ e.id }}.pdf' class='action-btn'>打开原文 PDF</a>
+  
+  <!-- Content Section -->
+  <div class="content-section">
+    <div class="summary-section">
+      <div class='preview-html collapsed'>{{ e.preview_html | safe }}</div>
+    </div>
   </div>
-  <p class='muted'>更新时间：{{ e.updated.strftime('%Y-%m-%d %H:%M') }}</p>
+  
+  <!-- Footer Section -->
+  <div class='card-actions'>
+    <div class="primary-actions">
+      {% if show_read %}
+        <a class='remove-read-link action-btn secondary-btn'>从已读列表移除</a>
+      {% elif show_favorites %}
+        <a class='remove-favorite-link action-btn secondary-btn'>从收藏列表移除</a>
+      {% else %}
+        {% if uid %}
+          <a class='mark-read-link action-btn secondary-btn'>✓ 标记为已读</a>
+        {% else %}
+          <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为已读</a>
+        {% endif %}
+      {% endif %}
+      {% if uid and (not show_favorites) %}
+        <a class='favorite-link action-btn secondary-btn' data-favorited='{{ e.is_favorited }}'>
+          {% if e.is_favorited %}⭐ 取消收藏{% else %}☆ 收藏{% endif %}
+        </a>
+      {% elif not uid and (not show_favorites) %}
+        <a class='favorite-link action-btn secondary-btn disabled'>☆ 收藏</a>
+      {% endif %}
+      <a class='toggle-link action-btn secondary-btn'>展开</a>
+    </div>
+    <div class="secondary-actions">
+      <a target='_blank' href='https://arxiv.org/pdf/{{ e.id }}.pdf' class='action-btn'>
+        📄 打开原文 PDF
+      </a>
+    </div>
+    
+  </div>
+  
+  <!-- Metadata Section -->
+  {% if e.read_time or e.favorite_time %}
+  <div class='paper-metadata'>
+    <div class='metadata-row'>
+      {% if e.read_time %}
+      <div class='metadata-item read'>
+        <span class='metadata-icon'>📖</span>
+        <div class='metadata-content'>
+          <span class='metadata-label'>已读</span>
+          <span class='metadata-value'>{{ e.read_time[5:10] }} {{ e.read_time[11:16] }}</span>
+        </div>
+      </div>
+      {% endif %}
+      {% if e.favorite_time %}
+      <div class='metadata-item favorite'>
+        <span class='metadata-icon'>⭐</span>
+        <div class='metadata-content'>
+          <span class='metadata-label'>收藏</span>
+          <span class='metadata-value'>{{ e.favorite_time[5:10] }} {{ e.favorite_time[11:16] }}</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </article>

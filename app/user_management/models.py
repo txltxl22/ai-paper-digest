@@ -21,6 +21,7 @@ class UserData:
         Shape:
         {
           "read": {arxiv_id: "YYYY-MM-DD" | null, ...},
+          "favorites": {arxiv_id: "YYYY-MM-DD" | null, ...},
           "events": [ {"ts": ISO8601, "type": str, "arxiv_id": str|None, "meta": dict|None, "path": str|None, "ua": str|None}, ... ]
         }
         """
@@ -38,11 +39,18 @@ class UserData:
         else:
             read_map = {}
 
+        # handle favorites
+        raw_favorites = data.get("favorites", {})
+        if isinstance(raw_favorites, dict):
+            favorites_map = {str(k): v for k, v in raw_favorites.items()}
+        else:
+            favorites_map = {}
+
         events = data.get("events")
         if not isinstance(events, list):
             events = []
 
-        return {"read": read_map, "events": events}
+        return {"read": read_map, "favorites": favorites_map, "events": events}
     
     def save(self, data: Dict[str, Any]) -> None:
         """Save user data to file."""
@@ -101,3 +109,78 @@ class UserData:
         read_map = self.load_read_map()
         read_ids = set(read_map.keys())
         return total_entries - len(read_ids)
+    
+    def load_favorites_map(self) -> Dict[str, Optional[str]]:
+        """Load favorites map for the user."""
+        data = self.load()
+        return data.get("favorites", {})
+    
+    def save_favorites_map(self, favorites_map: Dict[str, Optional[str]]) -> None:
+        """Persist favorites map, preserving other fields."""
+        data = self.load()
+        data["favorites"] = favorites_map
+        self.save(data)
+    
+    def mark_as_favorite(self, arxiv_id: str) -> None:
+        """Mark a paper as favorite with current timestamp."""
+        favorites_map = self.load_favorites_map()
+        favorites_map[str(arxiv_id)] = datetime.now().astimezone().isoformat(timespec="seconds")
+        self.save_favorites_map(favorites_map)
+    
+    def unmark_as_favorite(self, arxiv_id: str) -> None:
+        """Remove a paper from favorites."""
+        favorites_map = self.load_favorites_map()
+        favorites_map.pop(str(arxiv_id), None)
+        self.save_favorites_map(favorites_map)
+    
+    def get_favorites_stats(self) -> Dict[str, int]:
+        """Get favorites statistics for the user."""
+        favorites_map = self.load_favorites_map()
+        favorites_ids = set(favorites_map.keys())
+        
+        # Count how many favorited today
+        today_iso = date.today().isoformat()
+        favorited_today = 0
+        for d in favorites_map.values():
+            if not d:
+                continue
+            try:
+                # match date prefix for both date-only and datetime strings
+                if str(d).split('T', 1)[0] == today_iso:
+                    favorited_today += 1
+            except Exception:
+                continue
+        
+        return {
+            "favorites_total": len(favorites_ids),
+            "favorites_today": favorited_today
+        }
+    
+    def migrate_legacy_records(self) -> None:
+        """Migrate legacy records without timestamps to include current timestamp."""
+        data = self.load()
+        current_time = datetime.now().astimezone().isoformat(timespec="seconds")
+        
+        # Migrate read records
+        read_map = data.get("read", {})
+        updated_read = False
+        for arxiv_id, timestamp in read_map.items():
+            if timestamp is None:
+                read_map[arxiv_id] = current_time
+                updated_read = True
+        
+        # Migrate favorite records
+        favorites_map = data.get("favorites", {})
+        updated_favorites = False
+        for arxiv_id, timestamp in favorites_map.items():
+            if timestamp is None:
+                favorites_map[arxiv_id] = current_time
+                updated_favorites = True
+        
+        # Save if any updates were made
+        if updated_read or updated_favorites:
+            if updated_read:
+                data["read"] = read_map
+            if updated_favorites:
+                data["favorites"] = favorites_map
+            self.save(data)

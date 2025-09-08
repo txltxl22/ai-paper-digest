@@ -23,3 +23,4 @@ data/
 web_app_config.json
 example_chunks_summary.json
 example_summary.json
+output/

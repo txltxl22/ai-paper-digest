@@ -82,6 +82,32 @@ class ArticleActions {
       ev.preventDefault();
       this.removeFromRead(ev.target);
     }
+    
+    // Handle favorite-link clicks
+    let favoriteElement = ev.target.closest('.favorite-link');
+    if (favoriteElement) {
+      ev.preventDefault();
+      
+      if (favoriteElement.classList.contains('disabled')) {
+        showToast('需要登录，\n登录只需输入任意用户名😄');
+      } else {
+        this.toggleFavorite(favoriteElement);
+      }
+      return;
+    }
+    
+    // Handle favorite star button clicks
+    let starButton = ev.target.closest('.favorite-star-btn');
+    if (starButton) {
+      ev.preventDefault();
+      this.toggleFavoriteStar(starButton);
+      return;
+    }
+    
+    if (ev.target.matches('.remove-favorite-link')) {
+      ev.preventDefault();
+      this.removeFromFavorites(ev.target);
+    }
   }
 
   togglePreview(link) {
@@ -150,6 +176,122 @@ class ArticleActions {
         
         // Track event using centralized tracker
         window.eventTracker.trackUnmarkRead(art);
+      }
+    });
+  }
+
+  toggleFavorite(link) {
+    const art = link.closest('article');
+    const id = art.getAttribute('data-id');
+    const isFavorited = link.getAttribute('data-favorited') === 'true';
+    
+    // Add loading state
+    const originalText = link.textContent;
+    link.textContent = isFavorited ? '取消中...' : '收藏中...';
+    link.style.opacity = '0.6';
+    link.style.pointerEvents = 'none';
+    
+    const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
+    
+    fetch(url + id, { method: 'POST' }).then(r => {
+      if (r.ok) {
+        const newFavorited = !isFavorited;
+        
+        // Update button state (no removal from page)
+        link.setAttribute('data-favorited', newFavorited);
+        link.textContent = newFavorited ? '取消收藏' : '收藏';
+        link.style.opacity = '';
+        link.style.pointerEvents = '';
+        
+        // Show success toast
+        showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');
+        
+        // Track event
+        window.eventTracker.trackFavorite(art, newFavorited);
+      } else {
+        // Restore original state on error
+        link.textContent = originalText;
+        link.style.opacity = '';
+        link.style.pointerEvents = '';
+        showToast('操作失败，请重试');
+      }
+    }).catch(() => {
+      // Restore original state on error
+      link.textContent = originalText;
+      link.style.opacity = '';
+      link.style.pointerEvents = '';
+      showToast('网络错误，请重试');
+    });
+  }
+
+  toggleFavoriteStar(button) {
+    const art = button.closest('article');
+    const id = button.getAttribute('data-id') || art.getAttribute('data-id');
+    const isFavorited = button.getAttribute('data-favorited') === 'true';
+    
+    // Add loading state with animation
+    button.style.opacity = '0.5';
+    button.style.pointerEvents = 'none';
+    button.style.transform = 'scale(0.9)';
+    
+    const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
+    
+    fetch(url + id, { method: 'POST' }).then(r => {
+      if (r.ok) {
+        const newFavorited = !isFavorited;
+        
+        // Update button state (no removal from page)
+        button.setAttribute('data-favorited', newFavorited);
+        const svg = button.querySelector('svg');
+        if (svg) {
+          svg.style.fill = newFavorited ? '#fbbf24' : 'none';
+        }
+        button.style.opacity = newFavorited ? '1' : '0.6';
+        button.style.pointerEvents = '';
+        button.style.transform = '';
+        
+        // Show success toast
+        showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');
+        
+        // Track event
+        window.eventTracker.trackFavorite(art, newFavorited);
+      } else {
+        // Restore original state on error
+        button.style.opacity = '';
+        button.style.pointerEvents = '';
+        button.style.transform = '';
+        showToast('操作失败，请重试');
+      }
+    }).catch(() => {
+      // Restore original state on error
+      button.style.opacity = '';
+      button.style.pointerEvents = '';
+      button.style.transform = '';
+      showToast('网络错误，请重试');
+    });
+  }
+
+  removeFromFavorites(link) {
+    const art = link.closest('article');
+    const id = art.getAttribute('data-id');
+    
+    // Save scroll position before removal
+    this.saveScrollPosition(art);
+    
+    // Capture next card reference before removal
+    const nextCard = art.nextElementSibling;
+    
+    fetch(window.appUrls.unmark_favorite + id, { method: 'POST' }).then(r => {
+      if (r.ok) {
+        art.remove();
+        
+        // Scroll to next card after removal
+        setTimeout(() => {
+          this.scrollToNextCard(nextCard);
+        }, 0);
+        
+        // Track event using centralized tracker
+        window.eventTracker.trackUnmarkFavorite(art);
       }
     });
   }

@@ -1,29 +1,32 @@
-<!-- Header Component -->
-<header style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-  <h1 style="margin:0;">
-    {% if show_back_link %}
-      <a href='{{ url_for("index_page.index") }}'>← 返回列表</a>
-    {% else %}
-      <a href='{{ url_for("index_page.index") }}'>📚 arXiv最新AI论文速览速学</a>
-    {% endif %}
-  </h1>
-  <div class="topbar-group">
-    {% if uid and not show_back_link %}
-      <a href="{{ url_for('index_page.read_papers') }}" class="topbar-btn">📖 已读论文</a>
-      {% if uid in admin_users %}
-      <button id='admin-fetch-btn' class="topbar-btn admin-btn" title="获取最新论文摘要">🔄 获取最新</button>
-      <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="topbar-btn" title="访问统计">📊 访问统计</a>
+<!-- Clean Single-Row Header -->
+<header>
+  <div class="header-left">
+    <h1>
+      {% if show_back_link %}
+        <a href='{{ url_for("index_page.index") }}'>← 返回列表</a>
+      {% else %}
+        <a href='{{ url_for("index_page.index") }}'>📚 arXiv最新AI论文速览速学</a>
       {% endif %}
-      <button id='logout-btn' class="topbar-btn">退出登录</button>
-      <span class="topbar-divider"></span>
-      <span class="user-chip">👤 <strong>{{ uid }}</strong></span>
+    </h1>
+  </div>
+  
+  <div class="page-header-right">
+    {% if uid and not show_back_link %}
+      <a href="{{ url_for('index_page.read_papers') }}" class="nav-btn">已读论文</a>
+      <a href="{{ url_for('index_page.favorite_papers') }}" class="nav-btn">收藏论文</a>
+      {% if uid in admin_users %}
+      <button id='admin-fetch-btn' class="nav-btn admin-btn" title="获取最新论文摘要">获取最新</button>
+      <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="nav-btn" title="访问统计">访问统计</a>
+      {% endif %}
+      <span class="user-chip">{{ uid }}</span>
+      <button id='logout-btn' class="nav-btn logout-btn">退出</button>
     {% elif not show_back_link %}
-              <form id='user-form' method='POST' action='{{ url_for("user_management.set_user") }}' style="display:flex;align-items:center;gap:0.5rem;">
-        <input name='uid' placeholder='输入ID/用户名' required style="padding:0.25rem 0.5rem;border-radius:4px;border:none;font-size:0.85rem;">
-        <button type='submit' class="topbar-btn">进入</button>
+      <form id='user-form' method='POST' action='{{ url_for("user_management.set_user") }}' class="login-form">
+        <input name='uid' placeholder='输入用户名' required class="login-input">
+        <button type='submit' class="nav-btn login-btn">进入</button>
       </form>
     {% endif %}
-    <span class="topbar-divider"></span>
-    <button id="theme-toggle" class="topbar-btn icon-btn" type="button" aria-label="切换主题" title="切换到夜间模式" data-icon-light="🌙" data-icon-dark="☀️">🌙</button>
+    
+    <button id="theme-toggle" class="theme-btn" type="button" aria-label="切换主题" title="切换主题" data-icon-light="🌙" data-icon-dark="☀️">🌙</button>
   </div>
 </header>

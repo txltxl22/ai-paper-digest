@@ -15,25 +15,39 @@
 <body>
   {% include 'components/header.html' %}
   <main>
-    {% include 'components/paper-submission.html' %}
-    {% include 'components/tag-filter.html' %}
+    {% if not show_favorites and not show_read %}
+      {% include 'components/paper-submission.html' %}
+    {% endif %}
     {% if show_read %}
     <div style="margin-bottom:0.7rem;text-align:center;">
       <span style="font-size:1.1rem;">📖 我的已读论文</span>
       <a href="{{ url_for('index_page.index') }}" style="margin-left:1.5rem;font-size:0.95rem;">← 返回首页</a>
     </div>
     {% endif %}
+    {% if show_favorites %}
+    <div style="margin-bottom:0.7rem;text-align:center;">
+      <span style="font-size:1.1rem;">⭐ 我的收藏论文</span>
+      <a href="{{ url_for('index_page.index') }}" style="margin-left:1.5rem;font-size:0.95rem;">← 返回首页</a>
+    </div>
+    {% endif %}
+    {% include 'components/tag-filter.html' %}
     {% if uid and read_total is not none and read_today is not none and unread_count is not none and not show_read %}
     <div id="info-bar" style="margin-bottom:1.2rem;padding:0.6rem 1.2rem;background:var(--code-bg);border-radius:6px;font-size:1.08rem;display:flex;align-items:center;gap:1.5rem;justify-content:center;">
-      <span>已读 <strong>{{ read_total }}</strong></span>
-      <span>今日 <strong>{{ read_today }}</strong></span>
-      <span>未读 <strong>{{ unread_count }}</strong></span>
+      <span>总计已读 <strong>{{ read_total }}</strong></span>
+      <span>今日已读 <strong>{{ read_today }}</strong></span>
+      <span>未读论文 <strong>{{ unread_count }}</strong></span>
     </div>
     {% endif %}
     {% for e in entries %}
       {% include 'components/article-card.html' %}
     {% else %}
-      <p>没有未读论文摘要。</p>
+      {% if show_read %}
+        <p>没有已读论文。</p>
+      {% endif %}
+      {% if show_favorites %}
+        <p>没有收藏论文。</p>
+      {% endif %}
+
     {% endfor %}
     {% include 'components/pagination.html' %}
   </main>
@@ -54,6 +68,8 @@
     window.appUrls = {
       mark_read: '{{ mark_read_url }}',
       unmark_read: '{{ unmark_read_url }}',
+      mark_favorite: '{{ mark_favorite_url }}',
+      unmark_favorite: '{{ unmark_favorite_url }}',
       reset: '{{ reset_url }}',
       admin_stream: '{{ admin_stream_url }}',
       admin_fetch: '{{ admin_fetch_url }}'

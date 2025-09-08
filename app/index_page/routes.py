@@ -57,6 +57,7 @@ def create_index_routes(
         filters: Dict[str, Any],
         pagination: Pagination,
         show_read: bool = False,
+        show_favorites: bool = False,
         user_stats: Optional[Dict] = None,
         all_entries: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
@@ -82,6 +83,7 @@ def create_index_routes(
             'tag_query': filters['tag_query'],
             'admin_users': admin_users,
             'show_read': show_read,
+            'show_favorites': show_favorites,
             # Paper submission config
             'daily_submission_limit': paper_config.daily_submission_limit if paper_config else 3,
             'max_pdf_size_mb': paper_config.max_pdf_size_mb if paper_config else 20,
@@ -91,6 +93,8 @@ def create_index_routes(
             # User management URLs
             'mark_read_url': url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
             'unmark_read_url': url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
+            'mark_favorite_url': url_for("user_management.mark_favorite", arxiv_id="__ID__").replace("__ID__", ""),
+            'unmark_favorite_url': url_for("user_management.unmark_favorite", arxiv_id="__ID__").replace("__ID__", ""),
             'reset_url': url_for("user_management.reset_read"),
             **pagination.to_dict()
         }
@@ -124,14 +128,18 @@ def create_index_routes(
         if uid:
             user_data = user_service.get_user_data(uid)
             read_map = user_data.load_read_map()
+            favorites_map = user_data.load_favorites_map()
+            
+            # For index page: only filter out explicitly read papers (not favorites)
             read_ids = set(read_map.keys())
             
-            # Filter out read entries
+            # Filter out only read entries (favorites can still appear on index)
             entries_meta = EntryFilter.filter_by_read_status(all_entries_meta, read_ids, show_read=False)
             
-            # Calculate stats
+            # Calculate stats - separate read and favorite counts
             unread_count = len([e for e in all_entries_meta if e["id"] not in read_ids])
             stats = user_data.get_read_stats()
+            
             user_stats = {
                 'unread_count': unread_count,
                 'read_total': stats["read_total"],
@@ -148,7 +156,8 @@ def create_index_routes(
         page_entries = pagination.get_page_items(filtered_entries_meta)
         
         # Render entries
-        entries = entry_renderer.render_page_entries(page_entries)
+        user_data = user_service.get_user_data(uid) if uid else None
+        entries = entry_renderer.render_page_entries(page_entries, user_data)
         
         # Build context and render - use all_entries_meta for tag cloud, filtered_entries_meta for display
         context = _build_template_context(entries, uid, filters, pagination, user_stats=user_stats, all_entries=all_entries_meta)
@@ -161,11 +170,18 @@ def create_index_routes(
         if not isinstance(uid, str):
             return uid  # This will be a redirect response
         
-        # Get read entries
+        # Get read entries (include both explicitly read and favorited papers)
         user_data = user_service.get_user_data(uid)
         read_map = user_data.load_read_map()
+        favorites_map = user_data.load_favorites_map()
+        
+        # Combine read and favorite IDs (favorites are considered read)
+        read_ids = set(read_map.keys())
+        favorite_ids = set(favorites_map.keys())
+        all_read_ids = read_ids.union(favorite_ids)
+        
         all_entries_meta = entry_scanner.scan_entries_meta()
-        read_entries_meta = [e for e in all_entries_meta if e["id"] in set(read_map.keys())]
+        read_entries_meta = [e for e in all_entries_meta if e["id"] in all_read_ids]
         
         # Apply filters
         filters = _get_filter_params()
@@ -177,11 +193,43 @@ def create_index_routes(
         pagination = Pagination(len(filtered_read_entries_meta), pagination_params['page'], pagination_params['per_page'])
         page_entries = pagination.get_page_items(filtered_read_entries_meta)
         
-        # Render entries
-        entries = entry_renderer.render_page_entries(page_entries)
+        # Render entries (show both read and favorite timestamps in read list)
+        user_data = user_service.get_user_data(uid)
+        entries = entry_renderer.render_page_entries(page_entries, user_data, show_read_time=True, show_favorite_time=True)
         
         # Build context and render - use all_entries_meta for tag cloud
         context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=all_entries_meta)
+        return render_template_string(index_template, **context)
+    
+    @bp.route("/favorites")
+    def favorite_papers():
+        """Favorite papers page."""
+        uid = user_service.require_auth()
+        if not isinstance(uid, str):
+            return uid  # This will be a redirect response
+        
+        # Get favorite entries
+        user_data = user_service.get_user_data(uid)
+        favorites_map = user_data.load_favorites_map()
+        all_entries_meta = entry_scanner.scan_entries_meta()
+        favorite_entries_meta = [e for e in all_entries_meta if e["id"] in set(favorites_map.keys())]
+        
+        # Apply filters
+        filters = _get_filter_params()
+        filtered_favorite_entries_meta = _apply_filters(favorite_entries_meta, filters)
+        
+        # Pagination (allow more items per page for favorites list)
+        pagination_params = _get_pagination_params()
+        pagination_params['per_page'] = max(1, min(pagination_params['per_page'], 100))
+        pagination = Pagination(len(filtered_favorite_entries_meta), pagination_params['page'], pagination_params['per_page'])
+        page_entries = pagination.get_page_items(filtered_favorite_entries_meta)
+        
+        # Render entries
+        user_data = user_service.get_user_data(uid)
+        entries = entry_renderer.render_page_entries(page_entries, user_data, show_favorite_time=True)
+        
+        # Build context and render - use all_entries_meta for tag cloud
+        context = _build_template_context(entries, uid, filters, pagination, show_favorites=True, all_entries=all_entries_meta)
         return render_template_string(index_template, **context)
     
     return bp

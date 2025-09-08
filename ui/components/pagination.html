@@ -1,4 +1,4 @@
-<!-- Pagination Component -->
+<!-- Modern Pagination Component -->
 {% if total_pages and total_pages > 1 %}
 <nav class="pagination" aria-label="分页导航">
   {% set base_endpoint = 'index_page.read_papers' if show_read else 'index_page.index' %}
@@ -12,14 +12,35 @@
   {% set common = '&'.join(qs) %}
   {% if common %}{% set common = common ~ '&' %}{% endif %}
 
-  <a class="page-btn {% if page <= 1 %}disabled{% endif %}"
-     href="{{ url_for(base_endpoint) }}?{{ common }}page={{ 1 }}">« 首页</a>
-  <a class="page-btn {% if page <= 1 %}disabled{% endif %}"
-     href="{{ url_for(base_endpoint) }}?{{ common }}page={{ page - 1 if page > 1 else 1 }}">‹ 上一页</a>
-  <span class="page-info">第 <strong>{{ page }}</strong> / {{ total_pages }} 页（共 {{ total_items }} 篇）</span>
-  <a class="page-btn {% if page >= total_pages %}disabled{% endif %}"
-     href="{{ url_for(base_endpoint) }}?{{ common }}page={{ page + 1 if page < total_pages else total_pages }}">下一页 ›</a>
-  <a class="page-btn {% if page >= total_pages %}disabled{% endif %}"
-     href="{{ url_for(base_endpoint) }}?{{ common }}page={{ total_pages }}">末页 »</a>
+  <div class="pagination-content">
+    <div class="pagination-info">
+      <span class="page-icon">📄</span>
+      <span class="page-text">第 <strong>{{ page }}</strong> / {{ total_pages }} 页</span>
+      <span class="page-count">（共 {{ total_items }} 篇）</span>
+    </div>
+    
+    <div class="pagination-controls">
+      <a class="page-btn first-btn {% if page <= 1 %}disabled{% endif %}"
+         href="{{ url_for(base_endpoint) }}?{{ common }}page={{ 1 }}">
+        <span class="btn-icon">«</span>
+        <span class="btn-text">首页</span>
+      </a>
+      <a class="page-btn prev-btn {% if page <= 1 %}disabled{% endif %}"
+         href="{{ url_for(base_endpoint) }}?{{ common }}page={{ page - 1 if page > 1 else 1 }}">
+        <span class="btn-icon">‹</span>
+        <span class="btn-text">上一页</span>
+      </a>
+      <a class="page-btn next-btn {% if page >= total_pages %}disabled{% endif %}"
+         href="{{ url_for(base_endpoint) }}?{{ common }}page={{ page + 1 if page < total_pages else total_pages }}">
+        <span class="btn-text">下一页</span>
+        <span class="btn-icon">›</span>
+      </a>
+      <a class="page-btn last-btn {% if page >= total_pages %}disabled{% endif %}"
+         href="{{ url_for(base_endpoint) }}?{{ common }}page={{ total_pages }}">
+        <span class="btn-text">末页</span>
+        <span class="btn-icon">»</span>
+      </a>
+    </div>
+  </div>
 </nav>
 {% endif %}

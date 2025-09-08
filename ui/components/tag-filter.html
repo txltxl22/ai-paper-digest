@@ -1,33 +1,62 @@
-<!-- Tag Filter Component -->
+<!-- Modern Tag Filter Component -->
 <form id="tag-filter" method="GET" action="{{ url_for('index_page.index') }}" class="filters-panel">
-  <div class="filter-row head">
-    <span class="muted">标签筛选:</span>
-    <a href="{{ url_for('index_page.index') }}" class="tag-chip {% if not active_tag and not tag_query and (not active_tops or active_tops|length == 0) %}active{% endif %}">全部</a>
-    <a href="{{ url_for('index_page.index') }}" class="topbar-btn ghost-btn">清除筛选</a>
-    <span class="spacer"></span>
-    <span class="muted">或 搜索:</span>
-    <input type="text" name="q" placeholder="模糊搜索标签" value="{{ tag_query or '' }}" class="tag-input" />
-    <button type="submit" class="topbar-btn">筛选</button>
-  </div>
-
-  {% if top_cloud and top_cloud|length %}
-  <div class="filter-row tops">
-    <span class="muted row-title">顶级:</span>
-    <div class="top-chips">
-      {% for t in top_cloud %}
-        <label class="top-chip"><input type="checkbox" name="top" value="{{ t.name }}" {% if active_tops and (t.name in active_tops) %}checked{% endif %}><span>{{ t.name }}</span><span class="tag-count">{{ t.count }}</span></label>
-      {% endfor %}
+  <div class="filter-header">
+    <div class="filter-title">
+      <span class="filter-icon">🏷️</span>
+      <span class="filter-text">标签筛选</span>
+    </div>
+    <div class="filter-actions">
+      <a href="{{ url_for('index_page.index') }}" class="filter-btn clear-btn">清除筛选</a>
     </div>
   </div>
-  {% endif %}
 
-  <div class="filter-row details">
-    <span class="muted row-title">细分:</span>
-    <div class="detail-chips" id="detail-chips" data-query="{{ tag_query or '' }}">
-      {% for t in tag_cloud %}
-        <a href="{{ url_for('index_page.index') }}?tag={{ t.name }}" class="tag-chip {% if active_tag == t.name %}active{% endif %} {% if tag_query and (tag_query in t.name) %}query-hit{% endif %}">{{ t.name }} <span class="tag-count">{{ t.count }}</span></a>
-      {% endfor %}
+  <div class="filter-content">
+    <!-- Search Input -->
+    <div class="search-section">
+      <div class="search-group">
+        <input type="text" name="q" placeholder="搜索标签..." value="{{ tag_query or '' }}" class="search-input" />
+        <button type="submit" class="search-btn">
+          <span class="search-icon">🔍</span>
+          <span class="search-text">搜索</span>
+        </button>
+      </div>
     </div>
-    <button type="button" id="toggle-detail-chips" class="topbar-btn ghost-btn" style="display:none;">展开全部标签</button>
+
+    <!-- Top Tags -->
+    {% if top_cloud and top_cloud|length %}
+    <div class="filter-section top-tags-section">
+      <div class="section-header">
+        <span class="section-title">大类标签</span>
+      </div>
+      <div class="top-chips">
+        {% for t in top_cloud %}
+          <label class="top-chip {% if active_tops and (t.name in active_tops) %}checked{% endif %}">
+            <input type="checkbox" name="top" value="{{ t.name }}" {% if active_tops and (t.name in active_tops) %}checked{% endif %}>
+            <span class="chip-text">{{ t.name }}</span>
+            <span class="chip-count">{{ t.count }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Detail Tags -->
+    <div class="filter-section detail-tags-section">
+      <div class="section-header">
+        <span class="section-title">所有标签</span>
+        <button type="button" id="toggle-detail-chips" class="toggle-btn" style="display:none;">
+          <span class="toggle-text">展开全部</span>
+          <span class="toggle-icon">▾</span>
+        </button>
+      </div>
+      <div class="detail-chips" id="detail-chips" data-query="{{ tag_query or '' }}">
+        {% for t in tag_cloud %}
+          <a href="{{ url_for('index_page.index') }}?tag={{ t.name }}" class="tag-chip {% if active_tag == t.name %}active{% endif %} {% if tag_query and (tag_query in t.name) %}query-hit{% endif %}">
+            <span class="chip-text">{{ t.name }}</span>
+            <span class="chip-count">{{ t.count }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
   </div>
 </form>

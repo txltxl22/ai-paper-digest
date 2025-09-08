@@ -48,7 +48,7 @@ class PaperSubmission {
     const paperForm = document.getElementById('paper-submission-form');
     const submissionStatus = document.getElementById('submission-status');
     const statusIcon = submissionStatus?.querySelector('.status-icon');
-    const statusText = submissionStatus?.querySelector('.status-text');
+    const statusText = submissionStatus?.querySelector('.status-title');
     const progressFill = submissionStatus?.querySelector('.progress-fill');
     const progressText = submissionStatus?.querySelector('.progress-text');
     const currentStep = submissionStatus?.querySelector('#current-step');
@@ -78,9 +78,9 @@ class PaperSubmission {
         // Show submission status
         if (submissionStatus) {
           submissionStatus.style.display = 'block';
-          statusIcon.textContent = '⏳';
-          statusText.textContent = '正在处理论文...';
-          progressFill.style.width = '0%';
+          if (statusIcon) statusIcon.textContent = '⏳';
+          if (statusText) statusText.textContent = '正在处理论文...';
+          if (progressFill) progressFill.style.width = '0%';
           if (progressText) progressText.textContent = '0%';
           if (currentStep) currentStep.textContent = '论文下载中...';
           if (fileSizeInfo) fileSizeInfo.textContent = '';
@@ -97,6 +97,7 @@ class PaperSubmission {
         submitBtn.disabled = true;
         submitBtn.textContent = '处理中...';
         
+        let result = null;
         try {
           // Submit paper URL
           const response = await fetch('/submit_paper', {
@@ -108,6 +109,9 @@ class PaperSubmission {
           });
           
           const result = await response.json();
+          
+          // Store the result for later use in redirect
+          this.lastSubmissionResult = result;
           
           // Start progress tracking if we have a task_id
           if (result.task_id) {
@@ -128,9 +132,9 @@ class PaperSubmission {
             this.stopProgressTracking();
             
             if (submissionStatus) {
-              statusIcon.textContent = '❌';
-              statusText.textContent = result.message || '处理失败';
-              progressFill.style.width = '0%';
+              if (statusIcon) statusIcon.textContent = '❌';
+              if (statusText) statusText.textContent = result.message || '处理失败';
+              if (progressFill) progressFill.style.width = '0%';
               if (progressText) progressText.textContent = '0%';
               if (currentStep) currentStep.textContent = '处理失败';
             }
@@ -152,9 +156,9 @@ class PaperSubmission {
           this.stopProgressTracking();
           
           if (submissionStatus) {
-            statusIcon.textContent = '❌';
-            statusText.textContent = '网络错误，请重试';
-            progressFill.style.width = '0%';
+            if (statusIcon) statusIcon.textContent = '❌';
+            if (statusText) statusText.textContent = '网络错误，请重试';
+            if (progressFill) progressFill.style.width = '0%';
             if (progressText) progressText.textContent = '0%';
             if (currentStep) currentStep.textContent = '网络错误';
           }
@@ -177,7 +181,6 @@ class PaperSubmission {
   }
 
   startProgressTracking(taskId, statusIcon, statusText, progressFill, progressText, currentStep, fileSizeInfo) {
-    console.log('Starting progress tracking for task:', taskId);
     
     // Get download progress elements
     const downloadProgressSection = document.getElementById('download-progress-section');
@@ -186,13 +189,6 @@ class PaperSubmission {
     const downloadSpeed = downloadProgressSection?.querySelector('#download-speed');
     const downloadSize = downloadProgressSection?.querySelector('#download-size');
     
-    console.log('Download progress elements:', {
-      section: !!downloadProgressSection,
-      fill: !!downloadProgressFill,
-      text: !!downloadProgressText,
-      speed: !!downloadSpeed,
-      size: !!downloadSize
-    });
     
     let isDownloading = false;
     let pollInterval = 200; // Start with fast polling
@@ -203,8 +199,6 @@ class PaperSubmission {
         if (response.ok) {
           const data = await response.json();
           const progress = data.progress;
-          
-          console.log('Progress update:', progress); // Debug log
           
           // Update UI elements
           if (progressFill) {
@@ -218,9 +212,7 @@ class PaperSubmission {
           }
           
           // Handle download progress separately
-          console.log('Checking download progress:', progress.step, progress.details);
           if (progress.step === 'downloading' && progress.details.includes('正在下载PDF')) {
-            console.log('Showing download progress section');
             // Show download progress section
             if (downloadProgressSection) {
               downloadProgressSection.style.display = 'block';
@@ -258,12 +250,10 @@ class PaperSubmission {
           // Adjust polling interval based on phase
           if (isDownloading && !wasDownloading) {
             // Just entered download phase, slow down polling
-            console.log('Entering download phase, slowing down polling to 3 seconds');
             clearInterval(this.progressInterval);
             this.progressInterval = setInterval(pollProgress, 3000);
           } else if (!isDownloading && wasDownloading) {
             // Just left download phase, speed up polling
-            console.log('Leaving download phase, speeding up polling to 200ms');
             clearInterval(this.progressInterval);
             this.progressInterval = setInterval(pollProgress, 200);
           }
@@ -278,10 +268,25 @@ class PaperSubmission {
             }
             this.stopProgressTracking();
             
-            // Refresh page after delay
+            // Show completion toast with details
+            if (progress.details.includes('论文已存在') || progress.details.includes('已经被处理过了')) {
+              showToast('✅ 论文已存在，处理完成！');
+            } else {
+              showToast('✅ 论文处理成功！');
+            }
+            
+            // Redirect to paper detail page after delay
             setTimeout(() => {
-              location.reload();
-            }, 3000);
+              // Use summary_url from the API response if available
+              if (this.lastSubmissionResult && this.lastSubmissionResult.summary_url) {
+                window.location.href = this.lastSubmissionResult.summary_url;
+              } else {
+                // Fallback: refresh the page if no summary_url available
+                const url = new URL(window.location);
+                url.searchParams.set('_t', Date.now());
+                window.location.href = url.toString();
+              }
+            }, 1500);
           } else if (progress.step === 'error') {
             if (statusIcon) statusIcon.textContent = '❌';
             if (statusText) statusText.textContent = '处理失败';
@@ -290,6 +295,9 @@ class PaperSubmission {
               downloadProgressSection.style.display = 'none';
             }
             this.stopProgressTracking();
+            
+            // Show error toast with details
+            showToast(`❌ 处理失败: ${progress.details}`);
             
             // Hide status after delay
             setTimeout(() => {
@@ -312,6 +320,16 @@ class PaperSubmission {
             if (statusText) {
               statusText.textContent = stepMessages[progress.step] || '正在处理...';
             }
+            
+            // Show toast for key processing steps
+            if (progress.step === 'checking' && progress.details.includes('AI检查完成')) {
+              const confidence = progress.details.match(/置信度: ([\d.]+)/);
+              if (confidence) {
+                showToast(`🔍 AI检查完成 (置信度: ${confidence[1]})`);
+              }
+            } else if (progress.step === 'summarizing' && progress.details.includes('摘要生成完成')) {
+              showToast('📝 摘要生成完成！');
+            }
           }
         }
       } catch (error) {
@@ -327,10 +345,32 @@ class PaperSubmission {
     if (this.progressInterval) {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
-      console.log('Progress tracking stopped');
     }
   }
 }
 
 // Initialize paper submission
 new PaperSubmission();
+
+// Global function for toggling paper submission panel
+function togglePaperSubmission() {
+  const content = document.getElementById('submission-content');
+  const toggleIcon = document.querySelector('.toggle-icon');
+  const toggleBtn = document.getElementById('submission-toggle-btn');
+  
+  if (!content || !toggleIcon || !toggleBtn) return;
+  
+  const isExpanded = content.classList.contains('expanded');
+  
+  if (isExpanded) {
+    // Collapse
+    content.classList.remove('expanded');
+    toggleIcon.classList.remove('expanded');
+    toggleBtn.setAttribute('aria-label', '展开提交表单');
+  } else {
+    // Expand
+    content.classList.add('expanded');
+    toggleIcon.classList.add('expanded');
+    toggleBtn.setAttribute('aria-label', '收起提交表单');
+  }
+}

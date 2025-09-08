@@ -91,7 +91,8 @@ def create_paper_submission_routes(paper_submission_service: PaperSubmissionServ
                     "message": result.message,
                     "summary_path": result.summary_path,
                     "paper_subject": result.paper_subject,
-                    "task_id": result.task_id
+                    "task_id": result.task_id,
+                    "summary_url": result.summary_url
                 })
             else:
                 # Determine appropriate HTTP status code

@@ -1,14 +1,19 @@
 <!-- Modern Paper Submission Component -->
 <div class="paper-submission-panel">
-  <div class="submission-header">
+  <div class="submission-header" onclick="togglePaperSubmission()">
     <div class="header-left">
       <span class="header-icon">📄</span>
-      <h3 class="header-title">提交论文</h3>
+      <h3 class="submission-header-title">提交新论文</h3>
+      <button class="toggle-btn" id="submission-toggle-btn" aria-label="展开/收起提交表单">
+        <span class="toggle-icon">▼</span>
+      </button>
     </div>
     <div class="header-right">
-      <span class="submission-badge">AI论文处理</span>
+      <span class="submission-badge">AI论文阅读</span>
     </div>
   </div>
+  
+  <div class="submission-content" id="submission-content">
   
   {% if uid %}
     <!-- Quota Information -->
@@ -109,4 +114,5 @@
       </div>
     </div>
   {% endif %}
+  </div>
 </div>

@@ -191,7 +191,8 @@ class PaperSubmissionService:
                     return PaperSubmissionResult(
                         success=True,
                         message="这篇论文已经被处理过了，您可以在搜索结果中找到它。",
-                        task_id=task_id
+                        task_id=task_id,
+                        summary_url=f"/summary/{arxiv_id}"
                     )
                 
                 # Save failed upload attempt
@@ -231,21 +232,44 @@ class PaperSubmissionService:
                     except Exception:
                         pass
                     
-                    # If paper already exists globally, save user's attempt and return success
-                    if already_processed:
-                        # Save user's upload attempt as successful (already processed)
-                        self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
-                            "success": True,
-                            "message": "Paper already processed globally",
-                            "arxiv_id": arxiv_id
-                        })
-                        
-                        self._update_progress(task_id, "completed", 100, "论文已存在，处理完成")
-                        return PaperSubmissionResult(
-                            success=True,
-                            message="这篇论文已经被处理过了，您可以在搜索结果中找到它。",
-                            task_id=task_id
-                        )
+                # If paper already exists globally, update timestamp and save user's attempt
+                if already_processed:
+                    # Update the updated_at timestamp for the existing paper
+                    try:
+                        from summary_service.record_manager import load_summary_with_service_record, save_summary_with_service_record
+                        existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
+                        if existing_record:
+                            # Update the updated_at timestamp
+                            existing_record["summary_data"]["updated_at"] = datetime.now().isoformat()
+                            
+                            # Save the updated record
+                            json_path = self.summary_dir / f"{arxiv_id}.json"
+                            with open(json_path, 'w', encoding='utf-8') as f:
+                                json.dump(existing_record, f, ensure_ascii=False, indent=2)
+                            
+                            # Clear index page cache to force refresh
+                            if self.index_page_module and hasattr(self.index_page_module.get("scanner"), "clear_cache"):
+                                try:
+                                    self.index_page_module["scanner"].clear_cache()
+                                except Exception as e:
+                                    print(f"Failed to clear index cache: {e}")
+                    except Exception as e:
+                        print(f"Failed to update timestamp for existing paper {arxiv_id}: {e}")
+                    
+                    # Save user's upload attempt as successful (already processed)
+                    self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
+                        "success": True,
+                        "message": "Paper already processed globally",
+                        "arxiv_id": arxiv_id
+                    })
+                    
+                    self._update_progress(task_id, "completed", 100, "论文已存在，处理完成")
+                    return PaperSubmissionResult(
+                        success=True,
+                        message="这篇论文已经被处理过了，您可以在搜索结果中找到它。",
+                        task_id=task_id,
+                        summary_url=f"/summary/{arxiv_id}"
+                    )
                 
                 # Process the paper
                 summary_path, _, paper_subject = fps._summarize_url(
@@ -352,7 +376,8 @@ class PaperSubmissionService:
                         message="论文提交成功！",
                         summary_path=str(summary_path),
                         paper_subject=paper_subject,
-                        task_id=task_id
+                        task_id=task_id,
+                        summary_url=f"/summary/{arxiv_id}"
                     )
                 else:
                     # Save failed upload attempt

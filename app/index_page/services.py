@@ -184,8 +184,8 @@ class EntryScanner:
                 print(f"Error processing legacy MD file {md_path}: {e}")
                 continue
 
-        # Sort by submission time (newest first), then by updated time as secondary sort
-        entries_meta.sort(key=lambda e: (e["submission_time"], e["updated"]), reverse=True)
+        # Sort by updated time (newest first), then by submission time as secondary sort
+        entries_meta.sort(key=lambda e: (e["updated"], e["submission_time"]), reverse=True)
         self._cache["meta"] = list(entries_meta)
         self._cache["count"] = count
         self._cache["latest_mtime"] = latest_mtime

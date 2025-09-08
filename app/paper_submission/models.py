@@ -40,6 +40,7 @@ class PaperSubmissionResult:
     error: Optional[str] = None
     confidence: Optional[float] = None
     task_id: Optional[str] = None
+    summary_url: Optional[str] = None
 
 
 @dataclass

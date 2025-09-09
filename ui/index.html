@@ -64,6 +64,7 @@
   <script src="{{ url_for('static_js', filename='visitor-stats-tracker.js') }}"></script>
   <script src="{{ url_for('static_js', filename='mobile-nav.js') }}"></script>
   <script src="{{ url_for('static_js', filename='search.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='password-manager.js') }}"></script>
   
   <script>
     // URL configuration for Flask templates
@@ -76,6 +77,9 @@
       admin_stream: '{{ admin_stream_url }}',
       admin_fetch: '{{ admin_fetch_url }}'
     };
+    
+    // Admin users configuration
+    window.adminUsers = {{ admin_users | tojson }};
   </script>
 </body>
 

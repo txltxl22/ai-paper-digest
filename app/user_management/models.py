@@ -5,6 +5,7 @@ from datetime import datetime, date
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 import json
+import bcrypt
 
 
 class UserData:
@@ -50,7 +51,15 @@ class UserData:
         if not isinstance(events, list):
             events = []
 
-        return {"read": read_map, "favorites": favorites_map, "events": events}
+        # Preserve all other fields (like password_hash)
+        result = {"read": read_map, "favorites": favorites_map, "events": events}
+        
+        # Add any other fields that exist in the data
+        for key, value in data.items():
+            if key not in result:
+                result[key] = value
+        
+        return result
     
     def save(self, data: Dict[str, Any]) -> None:
         """Save user data to file."""
@@ -184,3 +193,39 @@ class UserData:
             if updated_favorites:
                 data["favorites"] = favorites_map
             self.save(data)
+    
+    def set_password(self, password: str) -> None:
+        """Set password for the user."""
+        if not password:
+            raise ValueError("Password cannot be empty")
+        
+        # Hash the password using bcrypt
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        
+        data = self.load()
+        data["password_hash"] = password_hash.decode('utf-8')
+        self.save(data)
+    
+    def check_password(self, password: str) -> bool:
+        """Check if the provided password matches the stored hash."""
+        data = self.load()
+        password_hash = data.get("password_hash")
+        
+        if not password_hash:
+            return False
+        
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+        except Exception:
+            return False
+    
+    def has_password(self) -> bool:
+        """Check if the user has a password set."""
+        data = self.load()
+        return bool(data.get("password_hash"))
+    
+    def remove_password(self) -> None:
+        """Remove the password for the user."""
+        data = self.load()
+        data.pop("password_hash", None)
+        self.save(data)

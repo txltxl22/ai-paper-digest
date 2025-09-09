@@ -19,11 +19,12 @@
       <button id='admin-fetch-btn' class="nav-btn admin-btn" title="获取最新论文摘要">获取最新</button>
       <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="nav-btn" title="访问统计">访问统计</a>
       {% endif %}
-      <span class="user-chip">{{ uid }}</span>
+      <span class="user-chip" id="user-name" style="cursor: pointer;" title="点击设置密码">{{ uid }}</span>
       <button id='logout-btn' class="nav-btn logout-btn">退出</button>
     {% elif not show_back_link %}
       <form id='user-form' method='POST' action='{{ url_for("user_management.set_user") }}' class="login-form">
         <input name='uid' placeholder='输入用户名' required class="login-input">
+        <input name='password' type='password' placeholder='密码（管理员必填）' class="login-input" id="password-input" style="display: none;">
         <button type='submit' class="nav-btn login-btn">进入</button>
       </form>
     {% endif %}
@@ -38,6 +39,71 @@
     <span class="hamburger-line"></span>
   </button>
 </header>
+
+<!-- Password Management Modal -->
+<div id="password-modal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>密码管理</h3>
+      <span class="close" id="close-password-modal">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div id="password-status" class="password-status"></div>
+      
+      <!-- Set Password Form -->
+      <div id="set-password-form" style="display: none;">
+        <h4>设置密码</h4>
+        <form id="set-password-form-element">
+          <div class="form-group">
+            <label for="new-password">新密码:</label>
+            <input type="password" id="new-password" name="password" required minlength="6" placeholder="至少6个字符">
+          </div>
+          <div class="form-group">
+            <label for="confirm-password">确认密码:</label>
+            <input type="password" id="confirm-password" name="confirm_password" required minlength="6" placeholder="再次输入密码">
+          </div>
+          <button type="submit" class="btn btn-primary">设置密码</button>
+        </form>
+      </div>
+      
+      <!-- Change Password Form -->
+      <div id="change-password-form" style="display: none;">
+        <h4>修改密码</h4>
+        <form id="change-password-form-element">
+          <div class="form-group">
+            <label for="old-password">当前密码:</label>
+            <input type="password" id="old-password" name="old_password" required placeholder="输入当前密码">
+          </div>
+          <div class="form-group">
+            <label for="change-new-password">新密码:</label>
+            <input type="password" id="change-new-password" name="new_password" required minlength="6" placeholder="至少6个字符">
+          </div>
+          <div class="form-group">
+            <label for="change-confirm-password">确认新密码:</label>
+            <input type="password" id="change-confirm-password" name="confirm_password" required minlength="6" placeholder="再次输入新密码">
+          </div>
+          <button type="submit" class="btn btn-primary">修改密码</button>
+        </form>
+      </div>
+      
+      <!-- Remove Password Form -->
+      <div id="remove-password-form" style="display: none;">
+        <h4>移除密码</h4>
+        <form id="remove-password-form-element">
+          <div class="form-group">
+            <label for="remove-password">当前密码:</label>
+            <input type="password" id="remove-password" name="password" required placeholder="输入当前密码以确认">
+          </div>
+          <button type="submit" class="btn btn-danger">移除密码</button>
+        </form>
+      </div>
+      
+      <div class="modal-actions" id="modal-actions" style="display: none;">
+        <button id="toggle-password-form" class="btn btn-secondary">切换操作</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Mobile Navigation Overlay -->
 <div id="mobile-nav-overlay" class="mobile-nav-overlay">

@@ -4,6 +4,8 @@
 
 `ai-paper-digest` 是一个专为AI研究者、工程师和学习者设计的智能论文摘要系统。它能够自动从RSS源获取最新AI论文，使用先进的AI模型（如DeepSeek、OpenAI兼容API、Ollama等）生成高质量的中文摘要，并提供现代化的Web界面帮助用户快速浏览和学习。
 
+访问体验：[http://aipapers.wawuyu.cn/](http://aipapers.wawuyu.cn/)
+
 ## ✨ 核心特性
 
 ### 🚀 智能论文处理

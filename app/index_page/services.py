@@ -246,9 +246,9 @@ class EntryRenderer:
                             if structured_content and isinstance(structured_content, dict):
                                 if "paper_info" in structured_content:
                                     # Use the structured content directly - it should already be in the right format
-                                    from summary_service.models import summary_to_markdown, parse_summary
+                                    from summary_service.models import parse_summary
                                     structured_summary = parse_summary(json.dumps(structured_content))
-                                    md_text = summary_to_markdown(structured_summary)
+                                    md_text = structured_summary.to_markdown()
                                 elif "content" in structured_content:
                                     # This should not happen anymore with the fix above
                                     logging.warning(f"Found legacy content in structured_content for {meta['id']}")

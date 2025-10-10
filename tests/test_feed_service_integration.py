@@ -66,7 +66,6 @@ class TestFeedServiceIntegration:
     def test_feed_service_structured_summary_to_markdown(self, tmp_path):
         """Test that feed service correctly converts StructuredSummary to markdown."""
         from summary_service.models import StructuredSummary, PaperInfo, Results, Tags
-        from summary_service.models import summary_to_markdown
         
         summary_dir = tmp_path / "summary"
         summary_dir.mkdir(parents=True, exist_ok=True)
@@ -80,8 +79,8 @@ class TestFeedServiceIntegration:
             terminology=[]
         )
         
-        # Test that summary_to_markdown works correctly
-        markdown_content = summary_to_markdown(summary)
+        # Test that to_markdown method works correctly
+        markdown_content = summary.to_markdown()
         assert isinstance(markdown_content, str), "Should return string"
         assert len(markdown_content) > 0, "Should not be empty"
         assert "测试论文" in markdown_content, "Should contain Chinese title"

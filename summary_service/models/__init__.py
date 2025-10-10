@@ -34,7 +34,6 @@ from .utils import (
     parse_tags,
     summary_to_dict,
     tags_to_dict,
-    summary_to_markdown,
     get_schema_version,
     export_schema_definitions,
     clean_json_response
@@ -68,7 +67,6 @@ __all__ = [
     "parse_tags",
     "summary_to_dict",
     "tags_to_dict",
-    "summary_to_markdown",
     "get_schema_version",
     "export_schema_definitions",
     "clean_json_response"

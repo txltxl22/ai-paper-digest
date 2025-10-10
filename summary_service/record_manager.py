@@ -14,7 +14,6 @@ from typing import Dict, Optional, Any, Union
 from .models import (
     StructuredSummary, Tags, ServiceRecord, SummaryRecord,
     parse_summary, parse_tags, summary_to_dict, tags_to_dict,
-    summary_to_markdown
 )
 
 
@@ -77,7 +76,7 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, 
     # Handle different input types
     if isinstance(summary_content, StructuredSummary):
         summary_dict = summary_to_dict(summary_content)
-        markdown_content = summary_to_markdown(summary_content)
+        markdown_content = summary_content.to_markdown()
     else:
         # Assume it's a markdown string - try to parse as structured JSON first
         try:

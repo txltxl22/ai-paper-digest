@@ -146,9 +146,9 @@ class SearchService:
                     structured_content = summary_data.get("structured_content", {})
                     if structured_content and isinstance(structured_content, dict):
                         if "paper_info" in structured_content:
-                            from summary_service.models import summary_to_markdown, parse_summary
+                            from summary_service.models import parse_summary
                             structured_summary = parse_summary(json.dumps(structured_content))
-                            content = summary_to_markdown(structured_summary)
+                            content = structured_summary.to_markdown()
                         elif "content" in structured_content:
                             content = structured_content.get("content", "")
                 except Exception as e:

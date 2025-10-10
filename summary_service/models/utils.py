@@ -172,66 +172,6 @@ def tags_to_dict(tags: Tags) -> Dict[str, Any]:
     }
 
 
-def summary_to_markdown(summary: StructuredSummary) -> str:
-    """Convert StructuredSummary to markdown format for backward compatibility."""
-    md_lines = []
-    
-    md_lines.append("## 📄 论文总结")
-    
-    # Paper title
-    md_lines.append("")
-    md_lines.append(f"**{summary.paper_info.title_zh}**")
-    md_lines.append("")
-    md_lines.append(f"**{summary.paper_info.title_en}**")
-    md_lines.append("\n---\n")
-    
-    # One sentence summary
-    md_lines.append("### 1️⃣ 一句话总结")
-    md_lines.append("")
-    md_lines.append(summary.one_sentence_summary)
-    md_lines.append("\n---\n")
-    
-    # Innovations
-    md_lines.append("### 2️⃣ 论文创新点")
-    md_lines.append("")
-    for i, innovation in enumerate(summary.innovations, 1):
-        md_lines.append(f"#### {i}. {innovation.title}")
-        md_lines.append("")
-        md_lines.append(f"* **创新点是什么**：{innovation.description}")
-        md_lines.append(f"* **与已有方法的区别/改进**：{innovation.improvement}")
-        md_lines.append(f"* **为什么有意义**：{innovation.significance}")
-        md_lines.append("")
-    md_lines.append("\n---\n")
-    
-    # Results
-    md_lines.append("### 3️⃣ 主要结果与价值")
-    md_lines.append("")
-    
-    if summary.results.experimental_highlights:
-        md_lines.append("#### **实验结果亮点**")
-        md_lines.append("")
-        for highlight in summary.results.experimental_highlights:
-            md_lines.append(f"* {highlight}")
-        md_lines.append("")
-    
-    if summary.results.practical_value:
-        md_lines.append("#### **实际应用价值**")
-        md_lines.append("")
-        for value in summary.results.practical_value:
-            md_lines.append(f"* {value}")
-        md_lines.append("")
-    
-    md_lines.append("\n---\n")
-
-    # Terminology
-    if summary.terminology:
-        md_lines.append("### 4️⃣ 术语表")
-        md_lines.append("")
-        for term in summary.terminology:
-            md_lines.append(f"* **{term.term}**：{term.definition}")
-        md_lines.append("")
-    
-    return "\n".join(md_lines)
 
 
 def export_schema_definitions() -> Dict[str, Any]:

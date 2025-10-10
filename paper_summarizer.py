@@ -118,7 +118,6 @@ def summarize_paper_url(
     """
     import re
     from summary_service.record_manager import save_summary_with_service_record
-    from summary_service.models import summary_to_markdown
     
     if extract_only:
         _LOG.info("📄  Extracting text from %s", url)
@@ -218,7 +217,7 @@ def summarize_paper_url(
                 except Exception as exc:
                     _LOG.exception("Failed to save structured summary for %s: %s", pdf_path.stem, exc)
                     # Fallback to markdown if service record saving fails
-                    summary_markdown = summary_to_markdown(summary) if summary else "Paper summary"
+                    summary_markdown = summary.to_markdown() if summary else "Paper summary"
                     summary_path.write_text(summary_markdown, encoding="utf-8")
             else:
                 _LOG.error("❌ LLM failed to generate structured summary for %s", pdf_path.stem)
@@ -232,7 +231,7 @@ def summarize_paper_url(
                     _LOG.info("🏷️  Generating tags for %s", pdf_path.stem)
                     
                     # Convert structured summary to markdown for tag generation
-                    summary_text = summary_to_markdown(summary)
+                    summary_text = summary.to_markdown()
                     
                     tag_raw = generate_tags_from_summary(
                         summary_text, 

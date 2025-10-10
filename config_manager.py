@@ -52,17 +52,17 @@ class PathsConfig:
 
 class ConfigManager:
     """Manages application configuration loading and access."""
-    
+
     def __init__(self, config_file: str = "web_app_config.json"):
         self.config_file = Path(config_file)
         self._config: Optional[Dict[str, Any]] = None
         self._load_config()
-    
+
     def _load_config(self) -> None:
         """Load configuration from file and environment variables."""
         # Start with default config
         self._config = self._get_default_config()
-        
+
         # Load base config from file
         if self.config_file.exists():
             try:
@@ -73,10 +73,10 @@ class ConfigManager:
             except (json.JSONDecodeError, FileNotFoundError):
                 # Keep default config if file is invalid or not found
                 pass
-        
+
         # Override with environment variables
         self._override_with_env()
-    
+
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration."""
         return {
@@ -87,7 +87,7 @@ class ConfigManager:
                 "model": "deepseek-chat",
                 "max_tokens": 4000,
                 "temperature": 0.1,
-                "max_input_char": 100000
+                "max_input_char": 30000
             },
             "app": {
                 "host": "0.0.0.0",
@@ -109,7 +109,7 @@ class ConfigManager:
                 "markdown_dir": "markdown"
             }
         }
-    
+
     def _merge_config(self, file_config: Dict[str, Any]) -> None:
         """Merge file configuration with current config."""
         for section, values in file_config.items():
@@ -120,56 +120,56 @@ class ConfigManager:
                     self._config[section] = values
             else:
                 self._config[section] = values
-    
+
     def _override_with_env(self) -> None:
         """Override configuration with environment variables."""
         # LLM settings
         if os.getenv("LLM_PROVIDER"):
             self._config["llm"]["provider"] = os.getenv("LLM_PROVIDER")
-        
+
         if os.getenv("DEEPSEEK_API_KEY"):
             self._config["llm"]["api_key"] = os.getenv("DEEPSEEK_API_KEY")
-        
+
         if os.getenv("OPENAI_API_BASE"):
             self._config["llm"]["base_url"] = os.getenv("OPENAI_API_BASE")
-        
+
         if os.getenv("LLM_MODEL"):
             self._config["llm"]["model"] = os.getenv("LLM_MODEL")
-        
+
         if os.getenv("LLM_MAX_INPUT_CHAR"):
             self._config["llm"]["max_input_char"] = int(os.getenv("LLM_MAX_INPUT_CHAR"))
-        
+
         # App settings
         if os.getenv("APP_HOST"):
             self._config["app"]["host"] = os.getenv("APP_HOST")
-        
+
         if os.getenv("APP_PORT"):
             self._config["app"]["port"] = int(os.getenv("APP_PORT"))
-        
+
         if os.getenv("APP_DEBUG"):
             self._config["app"]["debug"] = os.getenv("APP_DEBUG").lower() == "true"
-        
+
         if os.getenv("ADMIN_USER_IDS"):
             self._config["app"]["admin_user_ids"] = [
                 uid.strip() for uid in os.getenv("ADMIN_USER_IDS").split(",") if uid.strip()
             ]
-        
+
         # Paper processing settings
         if os.getenv("MAX_WORKERS"):
             self._config["paper_processing"]["max_workers"] = int(os.getenv("MAX_WORKERS"))
-        
+
         if os.getenv("CHUNK_SIZE"):
             self._config["paper_processing"]["chunk_size"] = int(os.getenv("CHUNK_SIZE"))
-        
+
         if os.getenv("MAX_TAGS"):
             self._config["paper_processing"]["max_tags"] = int(os.getenv("MAX_TAGS"))
-        
+
         if os.getenv("DAILY_SUBMISSION_LIMIT"):
             self._config["paper_processing"]["daily_submission_limit"] = int(os.getenv("DAILY_SUBMISSION_LIMIT"))
-        
+
         if os.getenv("MAX_PDF_SIZE_MB"):
             self._config["paper_processing"]["max_pdf_size_mb"] = int(os.getenv("MAX_PDF_SIZE_MB"))
-    
+
     def get_llm_config(self) -> LLMConfig:
         """Get LLM configuration."""
         llm_config = self._config["llm"]
@@ -182,7 +182,7 @@ class ConfigManager:
             temperature=llm_config["temperature"],
             max_input_char=llm_config["max_input_char"]
         )
-    
+
     def get_app_config(self) -> AppConfig:
         """Get application configuration."""
         app_config = self._config["app"]
@@ -192,7 +192,7 @@ class ConfigManager:
             debug=app_config["debug"],
             admin_user_ids=app_config["admin_user_ids"]
         )
-    
+
     def get_paper_processing_config(self) -> PaperProcessingConfig:
         """Get paper processing configuration."""
         pp_config = self._config["paper_processing"]
@@ -203,7 +203,7 @@ class ConfigManager:
             daily_submission_limit=pp_config["daily_submission_limit"],
             max_pdf_size_mb=pp_config["max_pdf_size_mb"]
         )
-    
+
     def get_paths_config(self) -> PathsConfig:
         """Get paths configuration."""
         paths_config = self._config["paths"]
@@ -213,15 +213,15 @@ class ConfigManager:
             papers_dir=paths_config["papers_dir"],
             markdown_dir=paths_config["markdown_dir"]
         )
-    
+
     def get_config(self) -> Dict[str, Any]:
         """Get raw configuration dictionary."""
         return self._config.copy()
-    
+
     def reload(self) -> None:
         """Reload configuration from file."""
         self._load_config()
-    
+
     def save_config(self) -> None:
         """Save current configuration to file."""
         with open(self.config_file, 'w', encoding='utf-8') as f:
@@ -265,10 +265,10 @@ def save_config() -> None:
 def get_provider_defaults(provider: str) -> tuple[str, str]:
     """
     Get default base URL and model for the specified provider.
-    
+
     Args:
         provider: The LLM provider name
-        
+
     Returns:
         Tuple of (base_url, model) defaults for the provider
     """
@@ -283,28 +283,28 @@ def get_provider_defaults(provider: str) -> tuple[str, str]:
 def get_provider_config(provider: str, base_url: str = None, model: str = None, api_key: str = None) -> dict:
     """
     Get provider-specific configuration based on provider choice.
-    
+
     Args:
         provider: The LLM provider name
         base_url: Optional base URL override
         model: Optional model override
         api_key: Optional API key
-        
+
     Returns:
         Dictionary with provider configuration
     """
     default_base_url, default_model = get_provider_defaults(provider)
-    
+
     # Use provided values or defaults
     final_base_url = base_url if base_url else default_base_url
     final_model = model if model else default_model
-    
+
     config = {
         "provider": provider,
         "base_url": final_base_url,
         "model": final_model,
         "api_key": api_key,
     }
-    
+
     return config
 

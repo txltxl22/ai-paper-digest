@@ -111,5 +111,6 @@ class SummaryRenderer:
             "one_sentence_summary": summary.get_one_sentence_summary(),
             "innovations": summary.get_innovations(),
             "results": summary.get_results(),
-            "terminology": summary.get_terminology()
+            "terminology": summary.get_terminology(),
+            "abstract": service_data.get("abstract")
         }

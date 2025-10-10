@@ -29,6 +29,32 @@
           </div>
         </div>
         
+        <!-- Abstract Section -->
+        {% if abstract %}
+        <div class="abstract-section">
+          <div class="abstract-heading">
+            <span class="abstract-icon">📄</span>
+            <span>原始摘要</span>
+          </div>
+          <p class="abstract-text">{{ abstract }}</p>
+        </div>
+        {% else %}
+        <div class="abstract-section">
+          <div class="abstract-heading">
+            <span class="abstract-icon">📄</span>
+            <span>原始摘要</span>
+          </div>
+          <div class="abstract-loading">
+            <span class="abstract-loading-icon">⏳</span>
+            <span>正在获取摘要...</span>
+          </div>
+          <button class="abstract-fetch-btn" onclick="fetchAbstract('{{ arxiv_id }}')">
+            <span>📄</span>
+            <span>获取摘要</span>
+          </button>
+        </div>
+        {% endif %}
+        
         {% if top_tags and top_tags|length %}
         <div class="tag-row" style="margin: .2rem 0 .5rem;">
           <span class="muted" style="margin-right: .5rem;">顶级标签:</span>
@@ -66,6 +92,7 @@
     <script src="{{ url_for('static_js', filename='admin-modal.js') }}"></script>
     <script src="{{ url_for('static_js', filename='paper-submission.js') }}"></script>
     <script src="{{ url_for('static_js', filename='visitor-stats-tracker.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='abstract-viewer.js') }}"></script>
     
     <script>
       // URL configuration for Flask templates
@@ -82,6 +109,64 @@
         const href = ev.currentTarget.getAttribute('href');
         window.eventTracker.track('open_pdf', '{{ arxiv_id }}', { href });
       });
+      
+      // Abstract fetching function for detail page
+      async function fetchAbstract(arxivId) {
+        const abstractSection = document.querySelector('.abstract-section');
+        if (!abstractSection) return;
+        
+        const loadingDiv = abstractSection.querySelector('.abstract-loading');
+        const fetchBtn = abstractSection.querySelector('.abstract-fetch-btn');
+        
+        if (loadingDiv) loadingDiv.style.display = 'flex';
+        if (fetchBtn) fetchBtn.style.display = 'none';
+        
+        try {
+          const response = await fetch(`/api/abstract/${arxivId}`);
+          const data = await response.json();
+          
+          if (response.ok && data.abstract) {
+            // Replace the loading section with the abstract
+            abstractSection.innerHTML = `
+              <div class="abstract-heading">
+                <span class="abstract-icon">📄</span>
+                <span>原始摘要</span>
+              </div>
+              <p class="abstract-text">${data.abstract}</p>
+            `;
+          } else {
+            // Show error message
+            abstractSection.innerHTML = `
+              <div class="abstract-heading">
+                <span class="abstract-icon">📄</span>
+                <span>原始摘要</span>
+              </div>
+              <div class="abstract-error">
+                <p>无法获取摘要: ${data.message || '未知错误'}</p>
+                <button class="abstract-fetch-btn" onclick="fetchAbstract('${arxivId}')">
+                  <span>🔄</span>
+                  <span>重试</span>
+                </button>
+              </div>
+            `;
+          }
+        } catch (error) {
+          console.error('Error fetching abstract:', error);
+          abstractSection.innerHTML = `
+            <div class="abstract-heading">
+              <span class="abstract-icon">📄</span>
+              <span>原始摘要</span>
+            </div>
+            <div class="abstract-error">
+              <p>网络错误，无法获取摘要</p>
+              <button class="abstract-fetch-btn" onclick="fetchAbstract('${arxivId}')">
+                <span>🔄</span>
+                <span>重试</span>
+              </button>
+            </div>
+          `;
+        }
+      }
     </script>
 
 </body>

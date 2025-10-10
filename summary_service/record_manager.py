@@ -19,7 +19,7 @@ from .models import (
 
 def create_service_record(arxiv_id: str, source_type: str = "system", user_id: str = None, 
                          original_url: str = None, ai_judgment: dict = None, 
-                         first_created_at: str = None) -> dict:
+                         first_created_at: str = None, abstract: str = None) -> dict:
     """Create a service record for a paper summary.
     
     Args:
@@ -29,6 +29,7 @@ def create_service_record(arxiv_id: str, source_type: str = "system", user_id: s
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
         first_created_at: The original creation time (for resubmissions)
+        abstract: The paper abstract if available
     
     Returns:
         Service record dictionary
@@ -42,7 +43,8 @@ def create_service_record(arxiv_id: str, source_type: str = "system", user_id: s
             "created_at": current_time,  # Current submission time
             "first_created_at": first_created_at or current_time,  # Original creation time
             "original_url": original_url,
-            "ai_judgment": ai_judgment or {}
+            "ai_judgment": ai_judgment or {},
+            "abstract": abstract
         }
     }
     
@@ -56,7 +58,7 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, 
                                    tags: Union[dict, Tags], summary_dir: Path, 
                                    source_type: str = "system", user_id: str = None, 
                                    original_url: str = None, ai_judgment: dict = None, 
-                                   first_created_at: str = None):
+                                   first_created_at: str = None, abstract: str = None):
     """Save a summary with its service record in JSON format.
     
     Args:
@@ -69,9 +71,10 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, 
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
         first_created_at: The original creation time (for resubmissions)
+        abstract: The paper abstract if available
     """
     # Create the combined record
-    record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment, first_created_at)
+    record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment, first_created_at, abstract)
     
     # Handle different input types
     if isinstance(summary_content, StructuredSummary):

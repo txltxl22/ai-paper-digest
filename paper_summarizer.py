@@ -202,7 +202,8 @@ def summarize_paper_url(
                     tags=tag_obj,
                     summary_dir=SUMMARY_DIR,
                     source_type="system",
-                    original_url=pdf_url
+                    original_url=pdf_url,
+                    abstract=None  # No abstract extraction in extract-only mode
                 )
                 _LOG.info("✅  Updated tags and title for existing summary %s", pdf_path.stem)
             except Exception as exc:
@@ -230,17 +231,22 @@ def summarize_paper_url(
                 try:
                     _LOG.info("💾 Saving structured summary for %s", pdf_path.stem)
                     
-                    # Extract correct English title from arXiv page and replace LLM-generated title
+                    # Extract correct English title and abstract from arXiv page
                     extractor = PaperInfoExtractor()
+                    paper_abstract = None
                     try:
                         paper_info = extractor.get_paper_info(url)  # Use original URL
-                        if paper_info.get("success") and paper_info.get("title"):
-                            original_title_en = summary.paper_info.title_en
-                            summary.paper_info.title_en = paper_info["title"]
+                        if paper_info.get("success"):
+                            if paper_info.get("title"):
+                                original_title_en = summary.paper_info.title_en
+                                summary.paper_info.title_en = paper_info["title"]
+                            if paper_info.get("abstract"):
+                                paper_abstract = paper_info["abstract"]
+                                _LOG.info("📄 Extracted abstract for %s", pdf_path.stem)
                         else:
                             _LOG.info("⚠️  Title extraction failed for %s, keeping LLM-generated title", pdf_path.stem)
                     except Exception as extract_exc:
-                        _LOG.warning("Failed to extract title for %s: %s", pdf_path.stem, extract_exc)
+                        _LOG.warning("Failed to extract title/abstract for %s: %s", pdf_path.stem, extract_exc)
                     finally:
                         extractor.close()
                     
@@ -251,7 +257,8 @@ def summarize_paper_url(
                         tags={"top": [], "tags": []},  # Empty tags for now
                         summary_dir=SUMMARY_DIR,
                         source_type="system",
-                        original_url=pdf_url
+                        original_url=pdf_url,
+                        abstract=paper_abstract
                     )
                     _LOG.info("✅  Saved structured summary with service record for %s", pdf_path.stem)
                 except Exception as exc:
@@ -289,7 +296,8 @@ def summarize_paper_url(
                         tags=tag_obj,
                         summary_dir=SUMMARY_DIR,
                         source_type="system",
-                        original_url=pdf_url
+                        original_url=pdf_url,
+                        abstract=None  # No abstract extraction in tags-only mode
                     )
                     _LOG.info("✅  Updated summary with tags for %s", pdf_path.stem)
                         

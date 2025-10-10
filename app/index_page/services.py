@@ -85,6 +85,14 @@ class EntryScanner:
                         detail_tags = [str(t).strip().lower() for t in container.get("tags") if str(t).strip()]
                 tags = (top_tags or []) + (detail_tags or [])
                 
+                # Extract English title from structured content
+                english_title = None
+                structured_content = summary_data.get("structured_content", {})
+                if isinstance(structured_content, dict) and "paper_info" in structured_content:
+                    paper_info = structured_content.get("paper_info", {})
+                    if isinstance(paper_info, dict):
+                        english_title = paper_info.get("title_en")
+                
                 # Parse updated time
                 updated_str = summary_data.get("updated_at")
                 if updated_str:
@@ -124,6 +132,8 @@ class EntryScanner:
                     "source_type": service_data.get("source_type", "system"),
                     "user_id": service_data.get("user_id"),
                     "original_url": service_data.get("original_url"),
+                    "abstract": service_data.get("abstract"),
+                    "english_title": english_title,
                 })
                 processed_ids.add(arxiv_id)
             except Exception as e:
@@ -178,6 +188,8 @@ class EntryScanner:
                     "source_type": "system",  # Legacy files default to system
                     "user_id": None,
                     "original_url": None,
+                    "abstract": None,  # Legacy files don't have abstract
+                    "english_title": None,  # Legacy files don't have structured titles
                 })
                 processed_ids.add(arxiv_id)
             except Exception as e:

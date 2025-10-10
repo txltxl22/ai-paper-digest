@@ -6,6 +6,9 @@
       <div class="document-icon">📄</div>
       <h2>
         <a href='{{ url_for("summary_detail.view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a>
+        <button class="abstract-trigger" title="查看摘要" data-arxiv-id="{{ e.id }}" data-abstract="{{ e.abstract or '' }}" data-english-title="{{ e.english_title or '' }}">
+          <span class="abstract-trigger-icon">📝</span>
+        </button>
         {% if uid and e.is_favorited %}
           <span class="favorite-star" title="已收藏">⭐</span>
         {% elif uid %}

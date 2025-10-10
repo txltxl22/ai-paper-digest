@@ -78,6 +78,7 @@ from summary_service.summary_generator import (
     progressive_summary,
     generate_tags_from_summary,
 )
+from summary_service.paper_info_extractor import PaperInfoExtractor
 
 # Create session without proxy by default
 SESSION = build_session()
@@ -156,7 +157,7 @@ def summarize_paper_url(
         summary_path = SUMMARY_DIR / f_name
         
         if summary_path.exists():
-            # Handle existing summary - generate tags if missing
+            # Handle existing summary - generate tags if missing and update title
             try:
                 _LOG.info("🏷️  Generating tags for existing summary %s", pdf_path.stem)
                 summary_text = summary_path.read_text(encoding="utf-8")
@@ -169,16 +170,41 @@ def summarize_paper_url(
                 )
                 tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
                 
+                # Try to load existing structured summary to update title
+                summary_to_save = summary_text
+                try:
+                    from summary_service.record_manager import get_structured_summary
+                    existing_structured_summary = get_structured_summary(pdf_path.stem, SUMMARY_DIR)
+                    if existing_structured_summary:
+                        # Extract correct English title from arXiv page and replace LLM-generated title
+                        extractor = PaperInfoExtractor()
+                        try:
+                            paper_info = extractor.get_paper_info(url)  # Use original URL
+                            if paper_info.get("success") and paper_info.get("title"):
+                                original_title_en = existing_structured_summary.paper_info.title_en
+                                existing_structured_summary.paper_info.title_en = paper_info["title"]
+                                _LOG.info("🔄 Updated existing summary: replaced LLM title '%s' with extracted title '%s' for %s", 
+                                         original_title_en, paper_info["title"], pdf_path.stem)
+                                summary_to_save = existing_structured_summary  # Use updated structured summary
+                            else:
+                                _LOG.info("⚠️  Title extraction failed for existing summary %s, keeping LLM-generated title", pdf_path.stem)
+                        except Exception as extract_exc:
+                            _LOG.warning("Failed to extract title for existing summary %s: %s", pdf_path.stem, extract_exc)
+                        finally:
+                            extractor.close()
+                except Exception as structured_exc:
+                    _LOG.warning("Failed to load structured summary for %s: %s", pdf_path.stem, structured_exc)
+                
                 # Save using service record format
                 save_summary_with_service_record(
                     arxiv_id=pdf_path.stem,
-                    summary_content=summary_text,
+                    summary_content=summary_to_save,
                     tags=tag_obj,
                     summary_dir=SUMMARY_DIR,
                     source_type="system",
                     original_url=pdf_url
                 )
-                _LOG.info("✅  Updated tags for existing summary %s", pdf_path.stem)
+                _LOG.info("✅  Updated tags and title for existing summary %s", pdf_path.stem)
             except Exception as exc:
                 _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
             
@@ -203,6 +229,20 @@ def summarize_paper_url(
             if summary:
                 try:
                     _LOG.info("💾 Saving structured summary for %s", pdf_path.stem)
+                    
+                    # Extract correct English title from arXiv page and replace LLM-generated title
+                    extractor = PaperInfoExtractor()
+                    try:
+                        paper_info = extractor.get_paper_info(url)  # Use original URL
+                        if paper_info.get("success") and paper_info.get("title"):
+                            original_title_en = summary.paper_info.title_en
+                            summary.paper_info.title_en = paper_info["title"]
+                        else:
+                            _LOG.info("⚠️  Title extraction failed for %s, keeping LLM-generated title", pdf_path.stem)
+                    except Exception as extract_exc:
+                        _LOG.warning("Failed to extract title for %s: %s", pdf_path.stem, extract_exc)
+                    finally:
+                        extractor.close()
                     
                     # Save using the new service record format immediately
                     save_summary_with_service_record(

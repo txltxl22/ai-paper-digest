@@ -2,8 +2,8 @@ You are an expert research assistant specializing in Artificial Intelligence (AI
 
 Requirements:
 - Produce two levels of tags:
-  1) top: 1-3 broad categories like items in : ["biology", "medical", "llm", "natural language processing", "computer vision", "reinforcement learning", "agents", "systems", "theory", "robotics", "audio", "multi-modal", "model training", "model evaluation", "machine learning", "video generation", "aigc", "data", "video", "benchmark", "behavior", "general", "financial", "text-to-video", "object completion"]
-  2) tags: 1-5 concise, specific topics (1-3 words), lowercase, no duplicates
+  1) top: choose 1-3 broad categories like items in : ["biology", "medical", "llm", "natural language processing", "computer vision", "reinforcement learning", "agents", "systems", "theory", "robotics", "audio", "multi-modal", "model training", "model evaluation", "machine learning", "video generation", "aigc", "data", "video", "benchmark", "behavior", "general", "financial", "text-to-video", "object completion", "multi-agents"]
+  2) tags: generate 1-5 concise, specific topics (1-3 words), lowercase, no duplicates
 - Output MUST be pure JSON with keys: {{"top": [...], "tags": [...]}} and nothing else.
 
 Output example:

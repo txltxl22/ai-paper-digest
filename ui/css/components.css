@@ -1127,20 +1127,32 @@
 
 /* Abstract Trigger and Popover Styles */
 .abstract-trigger {
-    display: inline-flex;
+    display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     background: var(--action-bg);
     border: 1px solid var(--btn-border);
     border-radius: 50%;
     color: var(--action-text);
-    cursor: pointer;
+    cursor: pointer !important;
     transition: all 0.2s ease;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     margin-left: var(--spacing-xs);
-    opacity: 0.7;
+    opacity: 0.8;
+    position: relative;
+    z-index: 10;
+    pointer-events: auto !important;
+}
+
+/* Ensure abstract trigger is always visible and clickable */
+article .abstract-trigger,
+.article-header .abstract-trigger,
+h2 .abstract-trigger {
+    display: inline-flex !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
 }
 
 .abstract-trigger:hover {

@@ -341,6 +341,44 @@ def migrate_legacy_summaries_to_service_record(summary_dir: Path) -> Dict[str, A
     return migration_stats
 
 
+def update_service_record_abstract(arxiv_id: str, abstract: str, summary_dir: Path, english_title: str = None) -> bool:
+    """Update the abstract and optionally English title fields in an existing service record.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+        abstract: The abstract text to save
+        summary_dir: Directory where summaries are stored
+        english_title: The English title to save (optional)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    json_path = summary_dir / f"{arxiv_id}.json"
+    
+    if not json_path.exists():
+        return False
+    
+    try:
+        # Load existing record
+        record = json.loads(json_path.read_text(encoding="utf-8"))
+        
+        # Update abstract and optionally English title in service_data
+        if "service_data" not in record:
+            record["service_data"] = {}
+        
+        record["service_data"]["abstract"] = abstract
+        if english_title:
+            record["service_data"]["english_title"] = english_title
+        
+        # Save back to file
+        json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        return True
+    except Exception as e:
+        print(f"Error updating abstract for {arxiv_id}: {e}")
+        return False
+
+
 def check_paper_processed_globally(paper_url: str, summary_dir: Path) -> bool:
     """Check if a paper has been processed globally by looking in the summary directory.
     

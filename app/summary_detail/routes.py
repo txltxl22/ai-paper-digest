@@ -34,6 +34,15 @@ def create_summary_detail_routes(
         # Render summary
         rendered = summary_renderer.render_summary(summary_data, service_data)
         
+        # Extract English title from service_data or structured_content as fallback
+        english_title = service_data.get("english_title")
+        if not english_title:
+            structured_content = summary_data.get("structured_content", {})
+            if isinstance(structured_content, dict) and "paper_info" in structured_content:
+                paper_info = structured_content.get("paper_info", {})
+                if isinstance(paper_info, dict):
+                    english_title = paper_info.get("title_en")
+        
         return render_template_string(
             detail_template,
             content=rendered["html_content"],
@@ -44,6 +53,7 @@ def create_summary_detail_routes(
             user_id=rendered["user_id"],
             original_url=rendered["original_url"],
             abstract=rendered["abstract"],
+            english_title=english_title,
             # Add URL variables for JavaScript
             mark_read_url=url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
             unmark_read_url=url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
@@ -83,24 +93,16 @@ def create_summary_detail_routes(
                 paper_info = extractor.get_paper_info(original_url)
                 if paper_info.get("success") and paper_info.get("abstract"):
                     abstract = paper_info["abstract"]
+                    english_title = paper_info.get("title")
                     
-                    # Save the abstract to the service record
-                    save_summary_with_service_record(
-                        arxiv_id=arxiv_id,
-                        summary_content=summary_data.get("markdown_content", ""),
-                        tags=summary_data.get("tags", {}),
-                        summary_dir=summary_dir,
-                        source_type=service_data.get("source_type", "system"),
-                        user_id=service_data.get("user_id"),
-                        original_url=original_url,
-                        ai_judgment=service_data.get("ai_judgment", {}),
-                        first_created_at=service_data.get("first_created_at"),
-                        abstract=abstract
-                    )
+                    # Update abstract and English title in the existing record without overwriting summary content
+                    from summary_service.record_manager import update_service_record_abstract
+                    update_service_record_abstract(arxiv_id, abstract, summary_dir, english_title)
                     
                     logger.info(f"📄 Fetched and cached abstract for {arxiv_id}")
                     return jsonify({
                         "abstract": abstract,
+                        "english_title": english_title,
                         "cached": False
                     })
                 else:

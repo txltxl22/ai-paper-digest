@@ -10,7 +10,7 @@ class AbstractViewer {
         this.hoverTimeout = null;
         this.currentPopover = null;
         this.currentModal = null;
-        this.hoverDelay = 500; // ms
+        this.hoverDelay = 300; // ms
         this.cache = new Map(); // Cache for fetched abstracts
         
         this.init();
@@ -27,6 +27,8 @@ class AbstractViewer {
     handleMouseOver(event) {
         const trigger = event.target.closest('.abstract-trigger');
         if (!trigger) return;
+        
+        console.log('Hover detected on trigger:', trigger.dataset.arxivId);
         
         // Clear any existing timeout
         if (this.hoverTimeout) {
@@ -163,9 +165,9 @@ class AbstractViewer {
         const triggerRect = trigger.getBoundingClientRect();
         const popoverRect = popover.getBoundingClientRect();
         
-        // Position above the trigger
-        let top = triggerRect.top - popoverRect.height - 10;
-        let left = triggerRect.left + (triggerRect.width / 2) - (popoverRect.width / 2);
+        // Position above the trigger, accounting for page scroll
+        let top = triggerRect.top + window.scrollY - popoverRect.height - 10;
+        let left = triggerRect.left + window.scrollX + (triggerRect.width / 2) - (popoverRect.width / 2);
         
         // Adjust if popover goes off screen
         if (left < 10) left = 10;
@@ -173,9 +175,9 @@ class AbstractViewer {
             left = window.innerWidth - popoverRect.width - 10;
         }
         
-        if (top < 10) {
+        if (top < window.scrollY + 10) {
             // Position below if no space above
-            top = triggerRect.bottom + 10;
+            top = triggerRect.bottom + window.scrollY + 10;
             popover.querySelector('.abstract-popover-arrow').style.transform = 'translateX(-50%) rotate(180deg)';
             popover.querySelector('.abstract-popover-arrow').style.top = 'auto';
             popover.querySelector('.abstract-popover-arrow').style.bottom = '-6px';
@@ -216,8 +218,11 @@ class AbstractViewer {
                     popover.appendChild(footer);
                 }
                 
-                // Cache the abstract
+                // Cache the abstract and English title
                 trigger.dataset.abstract = data.abstract;
+                if (data.english_title) {
+                    trigger.dataset.englishTitle = data.english_title;
+                }
                 this.cache.set(arxivId, data.abstract);
             } else {
                 // Show error
@@ -359,8 +364,19 @@ class AbstractViewer {
                     <p class="abstract-modal-text">${data.abstract}</p>
                 `;
                 
-                // Cache the abstract
+                // Update modal title if English title is available
+                if (data.english_title) {
+                    const titleElement = modal.querySelector('.abstract-modal-title span:last-child');
+                    if (titleElement) {
+                        titleElement.textContent = `Abstract - ${data.english_title}`;
+                    }
+                }
+                
+                // Cache the abstract and English title
                 trigger.dataset.abstract = data.abstract;
+                if (data.english_title) {
+                    trigger.dataset.englishTitle = data.english_title;
+                }
                 this.cache.set(arxivId, data.abstract);
             } else {
                 // Show error
@@ -392,7 +408,7 @@ class AbstractViewer {
 let abstractViewer;
 document.addEventListener('DOMContentLoaded', () => {
     abstractViewer = new AbstractViewer();
+    // Export for global access
+    window.abstractViewer = abstractViewer;
+    
 });
-
-// Export for global access
-window.abstractViewer = abstractViewer;

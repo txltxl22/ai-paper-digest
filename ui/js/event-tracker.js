@@ -174,6 +174,20 @@ class EventTracker {
   trackFavoritesList() {
     this.trackSessionEvent('favorites_list');
   }
+
+  /**
+   * Track add to todo
+   */
+  trackAddToTodo(articleElement) {
+    this.trackArticleEvent('mark_todo', articleElement);
+  }
+
+  /**
+   * Track remove from todo
+   */
+  trackRemoveFromTodo(articleElement) {
+    this.trackArticleEvent('unmark_todo', articleElement);
+  }
 }
 
 // Create global event tracker instance

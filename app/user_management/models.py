@@ -229,3 +229,49 @@ class UserData:
         data = self.load()
         data.pop("password_hash", None)
         self.save(data)
+    
+    def load_todo_map(self) -> Dict[str, Optional[str]]:
+        """Load todo map for the user."""
+        data = self.load()
+        return data.get("todo", {})
+    
+    def save_todo_map(self, todo_map: Dict[str, Optional[str]]) -> None:
+        """Persist todo map, preserving other fields."""
+        data = self.load()
+        data["todo"] = todo_map
+        self.save(data)
+    
+    def mark_as_todo(self, arxiv_id: str) -> None:
+        """Mark a paper as todo with current timestamp."""
+        todo_map = self.load_todo_map()
+        todo_map[str(arxiv_id)] = datetime.now().astimezone().isoformat(timespec="seconds")
+        self.save_todo_map(todo_map)
+    
+    def unmark_as_todo(self, arxiv_id: str) -> None:
+        """Remove a paper from todo list."""
+        todo_map = self.load_todo_map()
+        todo_map.pop(str(arxiv_id), None)
+        self.save_todo_map(todo_map)
+    
+    def get_todo_stats(self) -> Dict[str, int]:
+        """Get todo statistics for the user."""
+        todo_map = self.load_todo_map()
+        todo_ids = set(todo_map.keys())
+        
+        # Count how many added to todo today
+        today_iso = date.today().isoformat()
+        todo_today = 0
+        for d in todo_map.values():
+            if not d:
+                continue
+            try:
+                # match date prefix for both date-only and datetime strings
+                if str(d).split('T', 1)[0] == today_iso:
+                    todo_today += 1
+            except Exception:
+                continue
+        
+        return {
+            "todo_total": len(todo_ids),
+            "todo_today": todo_today
+        }

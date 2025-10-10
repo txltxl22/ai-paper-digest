@@ -82,6 +82,7 @@ def create_index_routes(
         pagination: Pagination,
         show_read: bool = False,
         show_favorites: bool = False,
+        show_todo: bool = False,
         user_stats: Optional[Dict] = None,
         all_entries: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
@@ -110,6 +111,7 @@ def create_index_routes(
             'admin_users': admin_users,
             'show_read': show_read,
             'show_favorites': show_favorites,
+            'show_todo': show_todo,
             # Paper submission config
             'daily_submission_limit': paper_config.daily_submission_limit if paper_config else 3,
             'max_pdf_size_mb': paper_config.max_pdf_size_mb if paper_config else 20,
@@ -121,6 +123,8 @@ def create_index_routes(
             'unmark_read_url': url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
             'mark_favorite_url': url_for("user_management.mark_favorite", arxiv_id="__ID__").replace("__ID__", ""),
             'unmark_favorite_url': url_for("user_management.unmark_favorite", arxiv_id="__ID__").replace("__ID__", ""),
+            'mark_todo_url': url_for("user_management.mark_todo", arxiv_id="__ID__").replace("__ID__", ""),
+            'unmark_todo_url': url_for("user_management.unmark_todo", arxiv_id="__ID__").replace("__ID__", ""),
             'reset_url': url_for("user_management.reset_read"),
             **pagination.to_dict()
         }
@@ -130,13 +134,15 @@ def create_index_routes(
             context.update({
                 'unread_count': user_stats.get('unread_count'),
                 'read_total': user_stats.get('read_total'),
-                'read_today': user_stats.get('read_today')
+                'read_today': user_stats.get('read_today'),
+                'todo_count': user_stats.get('todo_count')
             })
         else:
             context.update({
                 'unread_count': None,
                 'read_total': None,
-                'read_today': None
+                'read_today': None,
+                'todo_count': None
             })
         
         return context
@@ -155,21 +161,26 @@ def create_index_routes(
             user_data = user_service.get_user_data(uid)
             read_map = user_data.load_read_map()
             favorites_map = user_data.load_favorites_map()
+            todo_map = user_data.load_todo_map()
             
-            # For index page: only filter out explicitly read papers (not favorites)
+            # For index page: filter out read papers and todo papers
             read_ids = set(read_map.keys())
+            todo_ids = set(todo_map.keys())
             
-            # Filter out only read entries (favorites can still appear on index)
+            # Filter out read entries and todo entries
             entries_meta = EntryFilter.filter_by_read_status(all_entries_meta, read_ids, show_read=False)
+            entries_meta = [e for e in entries_meta if e["id"] not in todo_ids]
             
-            # Calculate stats - separate read and favorite counts
+            # Calculate stats - separate read, favorite, and todo counts
             unread_count = len([e for e in all_entries_meta if e["id"] not in read_ids])
+            todo_count = len(todo_ids)
             stats = user_data.get_read_stats()
             
             user_stats = {
                 'unread_count': unread_count,
                 'read_total': stats["read_total"],
-                'read_today': stats["read_today"]
+                'read_today': stats["read_today"],
+                'todo_count': todo_count
             }
         else:
             entries_meta = all_entries_meta
@@ -256,6 +267,37 @@ def create_index_routes(
         
         # Build context and render - use all_entries_meta for tag cloud
         context = _build_template_context(entries, uid, filters, pagination, show_favorites=True, all_entries=all_entries_meta)
+        return render_template_string(index_template, **context)
+    
+    @bp.route("/todo")
+    def todo_papers():
+        """Todo papers page."""
+        uid = user_service.require_auth()
+        if not isinstance(uid, str):
+            return uid  # This will be a redirect response
+        
+        # Get todo entries
+        user_data = user_service.get_user_data(uid)
+        todo_map = user_data.load_todo_map()
+        all_entries_meta = entry_scanner.scan_entries_meta()
+        todo_entries_meta = [e for e in all_entries_meta if e["id"] in set(todo_map.keys())]
+        
+        # Apply filters
+        filters = _get_filter_params()
+        filtered_todo_entries_meta = _apply_filters(todo_entries_meta, filters)
+        
+        # Pagination (allow more items per page for todo list)
+        pagination_params = _get_pagination_params()
+        pagination_params['per_page'] = max(1, min(pagination_params['per_page'], 100))
+        pagination = Pagination(len(filtered_todo_entries_meta), pagination_params['page'], pagination_params['per_page'])
+        page_entries = pagination.get_page_items(filtered_todo_entries_meta)
+        
+        # Render entries
+        user_data = user_service.get_user_data(uid)
+        entries = entry_renderer.render_page_entries(page_entries, user_data, show_todo_time=True)
+        
+        # Build context and render - use all_entries_meta for tag cloud
+        context = _build_template_context(entries, uid, filters, pagination, show_todo=True, all_entries=all_entries_meta)
         return render_template_string(index_template, **context)
     
     return bp

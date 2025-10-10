@@ -111,6 +111,25 @@ class ArticleActions {
       ev.preventDefault();
       this.removeFromFavorites(ev.target);
     }
+    
+    // Handle add-todo-link clicks
+    let addTodoElement = ev.target.closest('.add-todo-link');
+    if (addTodoElement) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      
+      if (addTodoElement.classList.contains('disabled')) {
+        this.guideToLogin('添加到待读');
+      } else {
+        this.addToTodo(addTodoElement);
+      }
+      return;
+    }
+    
+    if (ev.target.matches('.remove-todo-link')) {
+      ev.preventDefault();
+      this.removeFromTodo(ev.target);
+    }
   }
 
   guideToLogin(action) {
@@ -307,7 +326,79 @@ class ArticleActions {
     });
   }
 
-  updateInfoBarCounts(unreadDelta, readDelta) {
+  addToTodo(link) {
+    const art = link.closest('article');
+    const id = art.getAttribute('data-id');
+    
+    // Add loading state
+    const originalText = link.textContent;
+    link.textContent = '添加中...';
+    link.style.opacity = '0.6';
+    link.style.pointerEvents = 'none';
+    
+    fetch(window.appUrls.mark_todo + id, { method: 'POST' }).then(r => {
+      if (r.ok) {
+        // Save scroll position before removal
+        this.saveScrollPosition(art);
+        
+        // Capture next card reference before removal
+        const nextCard = art.nextElementSibling;
+        
+        art.remove();
+        this.updateInfoBarCounts(-1, 0, 1);
+        
+        // Scroll to next card after removal
+        setTimeout(() => {
+          this.scrollToNextCard(nextCard);
+        }, 0);
+        
+        // Show success toast
+        showToast('已添加到待读列表 📌');
+        
+        // Track event
+        window.eventTracker.trackAddToTodo(art);
+      } else {
+        // Restore original state on error
+        link.textContent = originalText;
+        link.style.opacity = '';
+        link.style.pointerEvents = '';
+        showToast('操作失败，请重试');
+      }
+    }).catch(() => {
+      // Restore original state on error
+      link.textContent = originalText;
+      link.style.opacity = '';
+      link.style.pointerEvents = '';
+      showToast('网络错误，请重试');
+    });
+  }
+
+  removeFromTodo(link) {
+    const art = link.closest('article');
+    const id = art.getAttribute('data-id');
+    
+    // Save scroll position before removal
+    this.saveScrollPosition(art);
+    
+    // Capture next card reference before removal
+    const nextCard = art.nextElementSibling;
+    
+    fetch(window.appUrls.unmark_todo + id, { method: 'POST' }).then(r => {
+      if (r.ok) {
+        art.remove();
+        
+        // Scroll to next card after removal
+        setTimeout(() => {
+          this.scrollToNextCard(nextCard);
+        }, 0);
+        
+        // Track event using centralized tracker
+        window.eventTracker.trackRemoveFromTodo(art);
+      }
+    });
+  }
+
+  updateInfoBarCounts(unreadDelta, readDelta, todoDelta = 0) {
     const infoBar = document.getElementById('info-bar');
     if (infoBar) {
       const spans = infoBar.querySelectorAll('span');
@@ -329,6 +420,17 @@ class ArticleActions {
           let today = parseInt(todaySpan.textContent, 10);
           if (!isNaN(today)) {
             todaySpan.textContent = today + readDelta;
+          }
+        }
+        
+        // Update todo count if it exists
+        if (spans.length >= 4) {
+          let todoSpan = spans[3].querySelector('strong');
+          if (todoSpan) {
+            let todo = parseInt(todoSpan.textContent, 10);
+            if (!isNaN(todo)) {
+              todoSpan.textContent = Math.max(0, todo + todoDelta);
+            }
           }
         }
       }

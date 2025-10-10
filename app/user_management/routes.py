@@ -59,6 +59,8 @@ def create_user_routes(user_service: UserService) -> Blueprint:
         user_data = user_service.get_user_data(uid)
         user_data.mark_as_favorite(arxiv_id)
         user_data.mark_as_read(arxiv_id)
+        # Remove from todo list since favorite marks as read
+        user_data.unmark_as_todo(arxiv_id)
         return jsonify({"status": "ok"})
     
     @bp.route("/unmark_favorite/<arxiv_id>", methods=["POST"])
@@ -70,6 +72,28 @@ def create_user_routes(user_service: UserService) -> Blueprint:
         
         user_data = user_service.get_user_data(uid)
         user_data.unmark_as_favorite(arxiv_id)
+        return jsonify({"status": "ok"})
+    
+    @bp.route("/mark_todo/<arxiv_id>", methods=["POST"])
+    def mark_todo(arxiv_id):
+        """Mark a paper as todo."""
+        uid, error = user_service.require_auth_json()
+        if error:
+            return jsonify(error), 400
+        
+        user_data = user_service.get_user_data(uid)
+        user_data.mark_as_todo(arxiv_id)
+        return jsonify({"status": "ok"})
+    
+    @bp.route("/unmark_todo/<arxiv_id>", methods=["POST"])
+    def unmark_todo(arxiv_id):
+        """Remove a paper from todo list."""
+        uid, error = user_service.require_auth_json()
+        if error:
+            return jsonify(error), 400
+        
+        user_data = user_service.get_user_data(uid)
+        user_data.unmark_as_todo(arxiv_id)
         return jsonify({"status": "ok"})
     
     @bp.route("/set_password", methods=["POST"])

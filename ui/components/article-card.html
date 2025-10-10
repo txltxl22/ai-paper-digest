@@ -70,6 +70,8 @@
         <a class='remove-read-link action-btn secondary-btn'>从已读列表移除</a>
       {% elif show_favorites %}
         <a class='remove-favorite-link action-btn secondary-btn'>从收藏列表移除</a>
+      {% elif show_todo %}
+        <a class='remove-todo-link action-btn secondary-btn'>从待读移除</a>
       {% else %}
         {% if uid %}
           <a class='mark-read-link action-btn secondary-btn'>✓ 标记为已读</a>
@@ -77,12 +79,17 @@
           <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为已读</a>
         {% endif %}
       {% endif %}
-      {% if uid and (not show_favorites) %}
+      {% if uid and (not show_favorites) and (not show_todo) %}
         <a class='favorite-link action-btn secondary-btn' data-favorited='{{ e.is_favorited }}'>
           {% if e.is_favorited %}⭐ 取消收藏{% else %}☆ 收藏{% endif %}
         </a>
-      {% elif not uid and (not show_favorites) %}
+      {% elif not uid and (not show_favorites) and (not show_todo) %}
         <a class='favorite-link action-btn secondary-btn disabled'>☆ 收藏</a>
+      {% endif %}
+      {% if uid and (not show_favorites) and (not show_todo) and (not show_read) %}
+        <a class='add-todo-link action-btn secondary-btn'>📌 待读</a>
+      {% elif not uid and (not show_favorites) and (not show_todo) and (not show_read) %}
+        <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
       {% endif %}
       <a class='toggle-link action-btn secondary-btn'>展开</a>
     </div>
@@ -95,7 +102,7 @@
   </div>
   
   <!-- Metadata Section -->
-  {% if e.read_time or e.favorite_time %}
+  {% if e.read_time or e.favorite_time or e.todo_time %}
   <div class='paper-metadata'>
     <div class='metadata-row'>
       {% if e.read_time %}
@@ -113,6 +120,15 @@
         <div class='metadata-content'>
           <span class='metadata-label'>收藏</span>
           <span class='metadata-value'>{{ e.favorite_time[5:10] }} {{ e.favorite_time[11:16] }}</span>
+        </div>
+      </div>
+      {% endif %}
+      {% if e.todo_time %}
+      <div class='metadata-item todo'>
+        <span class='metadata-icon'>📌</span>
+        <div class='metadata-content'>
+          <span class='metadata-label'>待读</span>
+          <span class='metadata-value'>{{ e.todo_time[5:10] }} {{ e.todo_time[11:16] }}</span>
         </div>
       </div>
       {% endif %}

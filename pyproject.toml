@@ -3,7 +3,7 @@ name = "hugging-face-paper-reader-rss"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4>=4.13.4",
     "bcrypt>=4.0.1",

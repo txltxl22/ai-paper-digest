@@ -72,6 +72,7 @@ def create_user_routes(user_service: UserService) -> Blueprint:
         
         user_data = user_service.get_user_data(uid)
         user_data.unmark_as_favorite(arxiv_id)
+        user_data.unmark_as_read(arxiv_id)  # Allow paper to return to index page
         return jsonify({"status": "ok"})
     
     @bp.route("/mark_todo/<arxiv_id>", methods=["POST"])

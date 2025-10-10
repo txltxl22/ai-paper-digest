@@ -9,11 +9,9 @@
         <button class="abstract-trigger" title="查看摘要" data-arxiv-id="{{ e.id }}" data-abstract="{{ e.abstract or '' }}" data-english-title="{{ e.english_title or '' }}">
           <span class="abstract-trigger-icon">📝</span>
         </button>
-        {% if uid and e.is_favorited %}
-          <span class="favorite-star" title="已收藏">⭐</span>
-        {% elif uid %}
-          <button class="favorite-star-btn" title="收藏这篇论文" data-id="{{ e.id }}" data-favorited="{{ e.is_favorited }}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        {% if uid %}
+          <button class="favorite-star-btn" title="{{ '已收藏 - 点击取消' if e.is_favorited else '收藏这篇论文' }}" data-id="{{ e.id }}" data-favorited="{{ e.is_favorited }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="{{ '#fbbf24' if e.is_favorited else 'none' }}" stroke="currentColor" stroke-width="2">
               <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26 12,2"/>
             </svg>
           </button>

@@ -159,16 +159,33 @@ def summarize_paper_url(
         if summary_path.exists():
             # Handle existing summary - generate tags if missing and update title
             try:
-                _LOG.info("🏷️  Generating tags for existing summary %s", pdf_path.stem)
+                # Read summary text once
                 summary_text = summary_path.read_text(encoding="utf-8")
-                tag_raw = generate_tags_from_summary(
-                    summary_text, 
-                    api_key=api_key, 
-                    base_url=base_url, 
-                    provider=provider, 
-                    model=model
-                )
-                tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
+                
+                # Check if tags already exist when using local mode
+                tag_obj = None
+                if local:
+                    from summary_service.record_manager import get_tags
+                    existing_tags = get_tags(pdf_path.stem, SUMMARY_DIR)
+                    if existing_tags:
+                        # Check if tags are non-empty
+                        tags_dict = {"tags": existing_tags.tags if hasattr(existing_tags, 'tags') else [], 
+                                    "top": existing_tags.top if hasattr(existing_tags, 'top') else []}
+                        if tags_dict.get("tags") or tags_dict.get("top"):
+                            _LOG.info("🏷️  Tags already exist for %s, skipping tag generation", pdf_path.stem)
+                            tag_obj = tags_dict
+
+                # Generate tags only if they don't exist or are empty
+                if tag_obj is None:
+                    _LOG.info("🏷️  Generating tags for existing summary %s", pdf_path.stem)
+                    tag_raw = generate_tags_from_summary(
+                        summary_text, 
+                        api_key=api_key, 
+                        base_url=base_url, 
+                        provider=provider, 
+                        model=model
+                    )
+                    tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
                 
                 # Try to load existing structured summary to update title and abstract
                 summary_to_save = summary_text
@@ -210,12 +227,17 @@ def summarize_paper_url(
                     original_url=pdf_url,
                     abstract=paper_abstract
                 )
-                update_msg = "✅  Updated tags and title for existing summary %s"
-                if paper_abstract:
-                    update_msg = "✅  Updated tags, title, and abstract for existing summary %s"
+                if tag_obj and (tag_obj.get("tags") or tag_obj.get("top")):
+                    update_msg = "✅  Updated title for existing summary %s (tags preserved)"
+                    if paper_abstract:
+                        update_msg = "✅  Updated title and abstract for existing summary %s (tags preserved)"
+                else:
+                    update_msg = "✅  Updated tags and title for existing summary %s"
+                    if paper_abstract:
+                        update_msg = "✅  Updated tags, title, and abstract for existing summary %s"
                 _LOG.info(update_msg, pdf_path.stem)
             except Exception as exc:
-                _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
+                _LOG.exception("Failed to process existing summary for %s: %s", pdf_path.stem, exc)
             
             return summary_path, pdf_url, paper_subject
         else:

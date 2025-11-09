@@ -5,6 +5,7 @@ This module provides PDF download, validation, and processing functionality.
 """
 
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Optional
@@ -43,7 +44,14 @@ def resolve_pdf_url(url: str, session: requests.Session) -> str:
     elif url.endswith(".pdf"):
         return url
     elif "arxiv.org/" in url:
+        # Convert arxiv.org/abs URLs to PDF URLs
+        if "/abs/" in url:
+            arxiv_id = url.split("/abs/")[-1].split("?")[0]  # Remove query params if any
+            return f"https://arxiv.org/pdf/{arxiv_id}.pdf"
         return url + ".pdf"
+    elif re.match(r"^\d{4}\.\d{5}(v\d+)?$", url):
+        # Convert arxiv_id (e.g., "2508.20722" or "2508.20722v1") to arxiv PDF URL
+        return f"https://arxiv.org/pdf/{url}.pdf"
 
     resp = session.get(url, timeout=30)
     resp.raise_for_status()

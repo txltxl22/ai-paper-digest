@@ -37,24 +37,18 @@ FEATURES:
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import logging
-import logging.handlers
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Optional, Tuple
-import re
-from queue import Queue
-from threading import Lock
 
 from tqdm import tqdm
 import json
 
 from summary_service.record_manager import (
     migrate_legacy_summaries_to_service_record,
-    save_summary_with_service_record,
 )
 from summary_service.logging_config import setup_logging, stop_logging
 from config_manager import get_provider_config
@@ -63,22 +57,15 @@ from config_manager import get_provider_config
 # Local modules – assume we're run from the repo root or installed package
 # ---------------------------------------------------------------------------
 try:
-    from summary_service.rss_processor import get_links_from_rss, generate_rss_feed, extract_first_header  # type: ignore
-    import paper_summarizer as ps  # type: ignore
+    from summary_service.rss_processor import get_links_from_rss, generate_rss_feed
+    import paper_summarizer as ps
 
     # Import the new summary service modules
     from summary_service.pdf_processor import (
         build_session,
-        resolve_pdf_url,
-        download_pdf,
-        verify_pdf_integrity,
         cleanup_corrupted_pdfs,
     )
-    from summary_service.markdown_processor import extract_markdown
-    from summary_service.text_processor import chunk_text
-    from summary_service.llm_utils import llm_invoke
     from summary_service.summary_generator import (
-        progressive_summary,
         generate_tags_from_summary,
         aggregate_summaries,
     )

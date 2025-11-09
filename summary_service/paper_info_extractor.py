@@ -10,6 +10,7 @@ import requests
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,35 @@ class PaperInfoExtractor:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
     
-    def extract_title_from_url(self, url: str) -> Optional[str]:
+    def _fetch_url_content(self, url: str, max_retries: int = 3) -> Optional[str]:
+        """Fetch HTML content from URL with retry logic.
+        
+        Args:
+            url: URL to fetch content from
+            max_retries: Maximum number of retry attempts (default: 3)
+            
+        Returns:
+            HTML content as string, or None if fetching fails
+        """
+        for attempt in range(max_retries):
+            try:
+                response = self.session.get(url, timeout=self.timeout)
+                response.raise_for_status()
+                return response.text
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to fetch content from {url} after {max_retries} attempts: {e}")
+                    return None
+                logger.warning(f"Attempt {attempt + 1} failed for {url}, retrying...")
+                time.sleep(1)  # Wait before retry
+        return None
+    
+    def _extract_title_from_url(self, url: str, content: Optional[str] = None) -> Optional[str]:
         """Extract paper title from a URL.
         
         Args:
             url: The URL to extract title from
+            content: Optional HTML content (if None, will be fetched)
             
         Returns:
             Extracted title or None if extraction fails
@@ -43,9 +68,9 @@ class PaperInfoExtractor:
             parsed_url = urlparse(url)
             
             if "arxiv.org" in parsed_url.netloc:
-                return self._extract_arxiv_title(url)
+                return self._extract_arxiv_title(url, content)
             elif "huggingface.co" in parsed_url.netloc:
-                return self._extract_huggingface_title(url)
+                return self._extract_huggingface_title(url, content)
             else:
                 logger.warning(f"Unsupported URL domain: {parsed_url.netloc}")
                 return None
@@ -54,11 +79,12 @@ class PaperInfoExtractor:
             logger.error(f"Error extracting title from {url}: {e}")
             return None
     
-    def extract_abstract_from_url(self, url: str) -> Optional[str]:
+    def _extract_abstract_from_url(self, url: str, content: Optional[str] = None) -> Optional[str]:
         """Extract paper abstract from a URL.
         
         Args:
             url: The URL to extract abstract from
+            content: Optional HTML content (if None, will be fetched)
             
         Returns:
             Extracted abstract or None if extraction fails
@@ -67,9 +93,9 @@ class PaperInfoExtractor:
             parsed_url = urlparse(url)
             
             if "arxiv.org" in parsed_url.netloc:
-                return self._extract_arxiv_abstract(url)
+                return self._extract_arxiv_abstract(url, content)
             elif "huggingface.co" in parsed_url.netloc:
-                return self._extract_huggingface_abstract(url)
+                return self._extract_huggingface_abstract(url, content)
             else:
                 logger.warning(f"Unsupported URL domain: {parsed_url.netloc}")
                 return None
@@ -78,21 +104,21 @@ class PaperInfoExtractor:
             logger.error(f"Error extracting abstract from {url}: {e}")
             return None
     
-    def _extract_arxiv_title(self, url: str) -> Optional[str]:
+    def _extract_arxiv_title(self, url: str, content: Optional[str] = None) -> Optional[str]:
         """Extract title from arXiv URL.
         
         Args:
             url: arXiv URL
+            content: Optional HTML content (if None, will be fetched)
             
         Returns:
             Extracted title or None
         """
         try:
-            response = self.session.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            
-            # Look for title in the HTML
-            content = response.text
+            if content is None:
+                content = self._fetch_url_content(url)
+                if content is None:
+                    return None
             
             # Try multiple patterns for arXiv title extraction
             title_patterns = [
@@ -119,20 +145,21 @@ class PaperInfoExtractor:
             logger.error(f"Error extracting arXiv title from {url}: {e}")
             return None
     
-    def _extract_arxiv_abstract(self, url: str) -> Optional[str]:
+    def _extract_arxiv_abstract(self, url: str, content: Optional[str] = None) -> Optional[str]:
         """Extract abstract from arXiv URL.
         
         Args:
             url: arXiv URL
+            content: Optional HTML content (if None, will be fetched)
             
         Returns:
             Extracted abstract or None
         """
         try:
-            response = self.session.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            
-            content = response.text
+            if content is None:
+                content = self._fetch_url_content(url)
+                if content is None:
+                    return None
             
             # Try multiple patterns for arXiv abstract extraction
             abstract_patterns = [
@@ -168,31 +195,21 @@ class PaperInfoExtractor:
             logger.error(f"Error extracting arXiv abstract from {url}: {e}")
             return None
     
-    def _extract_huggingface_title(self, url: str) -> Optional[str]:
+    def _extract_huggingface_title(self, url: str, content: Optional[str] = None) -> Optional[str]:
         """Extract title from Hugging Face URL.
         
         Args:
             url: Hugging Face URL
+            content: Optional HTML content (if None, will be fetched)
             
         Returns:
             Extracted title or None
         """
         try:
-            # Add retry logic for Hugging Face
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    response = self.session.get(url, timeout=self.timeout)
-                    response.raise_for_status()
-                    break
-                except Exception as e:
-                    if attempt == max_retries - 1:
-                        raise e
-                    logger.warning(f"Attempt {attempt + 1} failed for {url}, retrying...")
-                    import time
-                    time.sleep(1)  # Wait before retry
-            
-            content = response.text
+            if content is None:
+                content = self._fetch_url_content(url, max_retries=3)
+                if content is None:
+                    return None
             
             # Try multiple patterns for Hugging Face title extraction
             title_patterns = [
@@ -221,31 +238,21 @@ class PaperInfoExtractor:
             logger.error(f"Error extracting Hugging Face title from {url}: {e}")
             return None
     
-    def _extract_huggingface_abstract(self, url: str) -> Optional[str]:
+    def _extract_huggingface_abstract(self, url: str, content: Optional[str] = None) -> Optional[str]:
         """Extract abstract from Hugging Face URL.
         
         Args:
             url: Hugging Face URL
+            content: Optional HTML content (if None, will be fetched)
             
         Returns:
             Extracted abstract or None
         """
         try:
-            # Add retry logic for Hugging Face
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    response = self.session.get(url, timeout=self.timeout)
-                    response.raise_for_status()
-                    break
-                except Exception as e:
-                    if attempt == max_retries - 1:
-                        raise e
-                    logger.warning(f"Attempt {attempt + 1} failed for {url}, retrying...")
-                    import time
-                    time.sleep(1)  # Wait before retry
-            
-            content = response.text
+            if content is None:
+                content = self._fetch_url_content(url, max_retries=3)
+                if content is None:
+                    return None
             
             # Try multiple patterns for Hugging Face abstract extraction
             abstract_patterns = [
@@ -401,13 +408,21 @@ class PaperInfoExtractor:
                 info["source"] = "huggingface"
             else:
                 info["source"] = "unknown"
+
+            # Convert url to abs url
+            abs_url = f"https://arxiv.org/abs/{arxiv_id}"
             
-            # Extract title
-            title = self.extract_title_from_url(url)
+            # Fetch HTML content once
+            content = self._fetch_url_content(abs_url)
+            if content is None:
+                info["error"] = "Failed to fetch content from URL"
+                return info
+            
+            # Extract title and abstract using the same content
+            title = self._extract_title_from_url(abs_url, content)
             info["title"] = title
             
-            # Extract abstract
-            abstract = self.extract_abstract_from_url(url)
+            abstract = self._extract_abstract_from_url(abs_url, content)
             info["abstract"] = abstract
             
             if title or abstract:
@@ -439,7 +454,8 @@ def extract_title(url: str, timeout: int = 10) -> Optional[str]:
     """
     extractor = PaperInfoExtractor(timeout=timeout)
     try:
-        return extractor.extract_title_from_url(url)
+        info = extractor.get_paper_info(url)
+        return info.get("title")
     finally:
         extractor.close()
 
@@ -456,7 +472,8 @@ def extract_abstract(url: str, timeout: int = 10) -> Optional[str]:
     """
     extractor = PaperInfoExtractor(timeout=timeout)
     try:
-        return extractor.extract_abstract_from_url(url)
+        info = extractor.get_paper_info(url)
+        return info.get("abstract")
     finally:
         extractor.close()
 

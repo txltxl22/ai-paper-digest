@@ -170,26 +170,31 @@ def summarize_paper_url(
                 )
                 tag_obj = {"tags": tag_raw.tags, "top": tag_raw.top} if hasattr(tag_raw, 'tags') else {"tags": [], "top": []}
                 
-                # Try to load existing structured summary to update title
+                # Try to load existing structured summary to update title and abstract
                 summary_to_save = summary_text
+                paper_abstract = None
                 try:
                     from summary_service.record_manager import get_structured_summary
                     existing_structured_summary = get_structured_summary(pdf_path.stem, SUMMARY_DIR)
                     if existing_structured_summary:
-                        # Extract correct English title from arXiv page and replace LLM-generated title
+                        # Extract correct English title and abstract from arXiv page
                         extractor = PaperInfoExtractor()
                         try:
                             paper_info = extractor.get_paper_info(url)  # Use original URL
                             if paper_info.get("success") and paper_info.get("title"):
                                 original_title_en = existing_structured_summary.paper_info.title_en
                                 existing_structured_summary.paper_info.title_en = paper_info["title"]
+                                # Extract abstract if available
+                                if paper_info.get("abstract"):
+                                    paper_abstract = paper_info["abstract"]
+                                    _LOG.info("📄 Extracted abstract for existing summary %s", pdf_path.stem)
                                 _LOG.info("🔄 Updated existing summary: replaced LLM title '%s' with extracted title '%s' for %s", 
                                          original_title_en, paper_info["title"], pdf_path.stem)
                                 summary_to_save = existing_structured_summary  # Use updated structured summary
                             else:
-                                _LOG.info("⚠️  Title extraction failed for existing summary %s, keeping LLM-generated title", pdf_path.stem)
+                                _LOG.info("⚠️  Paper info extraction failed for existing summary %s, keeping LLM-generated title", pdf_path.stem)
                         except Exception as extract_exc:
-                            _LOG.warning("Failed to extract title for existing summary %s: %s", pdf_path.stem, extract_exc)
+                            _LOG.warning("Failed to extract paper info for existing summary %s: %s", pdf_path.stem, extract_exc)
                         finally:
                             extractor.close()
                 except Exception as structured_exc:
@@ -203,9 +208,12 @@ def summarize_paper_url(
                     summary_dir=SUMMARY_DIR,
                     source_type="system",
                     original_url=pdf_url,
-                    abstract=None  # No abstract extraction in extract-only mode
+                    abstract=paper_abstract
                 )
-                _LOG.info("✅  Updated tags and title for existing summary %s", pdf_path.stem)
+                update_msg = "✅  Updated tags and title for existing summary %s"
+                if paper_abstract:
+                    update_msg = "✅  Updated tags, title, and abstract for existing summary %s"
+                _LOG.info(update_msg, pdf_path.stem)
             except Exception as exc:
                 _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
             

@@ -10,7 +10,7 @@
           <span class="abstract-trigger-icon">📝</span>
         </button>
         {% if uid %}
-          <button class="favorite-star-btn" title="{{ '已收藏 - 点击取消' if e.is_favorited else '收藏这篇论文' }}" data-id="{{ e.id }}" data-favorited="{{ e.is_favorited }}">
+          <button class="favorite-star-btn" title="{{ '已收藏 - 点击取消' if e.is_favorited else '收藏这篇论文' }}" data-id="{{ e.id }}" data-favorited="{{ 'true' if e.is_favorited else 'false' }}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="{{ '#fbbf24' if e.is_favorited else 'none' }}" stroke="currentColor" stroke-width="2">
               <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26 12,2"/>
             </svg>
@@ -78,7 +78,7 @@
         {% endif %}
       {% endif %}
       {% if uid and (not show_favorites) and (not show_todo) %}
-        <a class='favorite-link action-btn secondary-btn' data-favorited='{{ e.is_favorited }}'>
+        <a class='favorite-link action-btn secondary-btn' data-favorited='{{ 'true' if e.is_favorited else 'false' }}'>
           {% if e.is_favorited %}⭐ 取消收藏{% else %}☆ 收藏{% endif %}
         </a>
       {% elif not uid and (not show_favorites) and (not show_todo) %}

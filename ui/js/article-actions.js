@@ -228,7 +228,7 @@ class ArticleActions {
         const newFavorited = !isFavorited;
         
         // Update button state (no removal from page)
-        link.setAttribute('data-favorited', newFavorited);
+        link.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
         link.textContent = newFavorited ? '取消收藏' : '收藏';
         link.style.opacity = '';
         link.style.pointerEvents = '';
@@ -271,7 +271,7 @@ class ArticleActions {
         const newFavorited = !isFavorited;
         
         // Update button state (no removal from page)
-        button.setAttribute('data-favorited', newFavorited);
+        button.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
         const svg = button.querySelector('svg');
         if (svg) {
           svg.style.fill = newFavorited ? '#fbbf24' : 'none';

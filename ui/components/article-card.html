@@ -70,6 +70,11 @@
         <a class='remove-favorite-link action-btn secondary-btn'>从收藏列表移除</a>
       {% elif show_todo %}
         <a class='remove-todo-link action-btn secondary-btn'>从待读移除</a>
+        {% if uid %}
+          <a class='mark-read-link action-btn secondary-btn'>✓ 标记为已读</a>
+        {% else %}
+          <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为已读</a>
+        {% endif %}
       {% else %}
         {% if uid %}
           <a class='mark-read-link action-btn secondary-btn'>✓ 标记为已读</a>
@@ -77,11 +82,11 @@
           <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为已读</a>
         {% endif %}
       {% endif %}
-      {% if uid and (not show_favorites) and (not show_todo) %}
+      {% if uid and (not show_favorites) %}
         <a class='favorite-link action-btn secondary-btn' data-favorited='{{ 'true' if e.is_favorited else 'false' }}'>
           {% if e.is_favorited %}⭐ 取消收藏{% else %}☆ 收藏{% endif %}
         </a>
-      {% elif not uid and (not show_favorites) and (not show_todo) %}
+      {% elif not uid and (not show_favorites) %}
         <a class='favorite-link action-btn secondary-btn disabled'>☆ 收藏</a>
       {% endif %}
       {% if uid and (not show_favorites) and (not show_todo) and (not show_read) %}

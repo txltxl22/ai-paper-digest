@@ -215,6 +215,10 @@ class ArticleActions {
     const id = art.getAttribute('data-id');
     const isFavorited = link.getAttribute('data-favorited') === 'true';
     
+    // Check if we're on todo page (marking as favorite removes from todo)
+    const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
+    const isMarkingFavorite = !isFavorited;
+    
     // Add loading state
     const originalText = link.textContent;
     link.textContent = isFavorited ? '取消中...' : '收藏中...';
@@ -223,15 +227,36 @@ class ArticleActions {
     
     const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
     
+    // Save scroll position before potential removal
+    if (isOnTodoPage && isMarkingFavorite) {
+      this.saveScrollPosition(art);
+    }
+    
+    // Capture next card reference before potential removal
+    const nextCard = isOnTodoPage && isMarkingFavorite ? art.nextElementSibling : null;
+    
     fetch(url + id, { method: 'POST' }).then(r => {
       if (r.ok) {
         const newFavorited = !isFavorited;
         
-        // Update button state (no removal from page)
-        link.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
-        link.textContent = newFavorited ? '取消收藏' : '收藏';
-        link.style.opacity = '';
-        link.style.pointerEvents = '';
+        // If on todo page and marking as favorite, remove card (backend removes from todo)
+        if (isOnTodoPage && isMarkingFavorite) {
+          art.remove();
+          
+          // Update todo count in info bar
+          this.updateInfoBarCounts(0, 0, -1);
+          
+          // Scroll to next card after removal
+          setTimeout(() => {
+            this.scrollToNextCard(nextCard);
+          }, 0);
+        } else {
+          // Update button state (no removal from page)
+          link.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
+          link.textContent = newFavorited ? '取消收藏' : '收藏';
+          link.style.opacity = '';
+          link.style.pointerEvents = '';
+        }
         
         // Show success toast
         showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');
@@ -259,6 +284,10 @@ class ArticleActions {
     const id = button.getAttribute('data-id') || art.getAttribute('data-id');
     const isFavorited = button.getAttribute('data-favorited') === 'true';
     
+    // Check if we're on todo page (marking as favorite removes from todo)
+    const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
+    const isMarkingFavorite = !isFavorited;
+    
     // Add loading state with animation
     button.style.opacity = '0.5';
     button.style.pointerEvents = 'none';
@@ -266,19 +295,40 @@ class ArticleActions {
     
     const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
     
+    // Save scroll position before potential removal
+    if (isOnTodoPage && isMarkingFavorite) {
+      this.saveScrollPosition(art);
+    }
+    
+    // Capture next card reference before potential removal
+    const nextCard = isOnTodoPage && isMarkingFavorite ? art.nextElementSibling : null;
+    
     fetch(url + id, { method: 'POST' }).then(r => {
       if (r.ok) {
         const newFavorited = !isFavorited;
         
-        // Update button state (no removal from page)
-        button.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
-        const svg = button.querySelector('svg');
-        if (svg) {
-          svg.style.fill = newFavorited ? '#fbbf24' : 'none';
+        // If on todo page and marking as favorite, remove card (backend removes from todo)
+        if (isOnTodoPage && isMarkingFavorite) {
+          art.remove();
+          
+          // Update todo count in info bar
+          this.updateInfoBarCounts(0, 0, -1);
+          
+          // Scroll to next card after removal
+          setTimeout(() => {
+            this.scrollToNextCard(nextCard);
+          }, 0);
+        } else {
+          // Update button state (no removal from page)
+          button.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
+          const svg = button.querySelector('svg');
+          if (svg) {
+            svg.style.fill = newFavorited ? '#fbbf24' : 'none';
+          }
+          button.style.opacity = newFavorited ? '1' : '0.6';
+          button.style.pointerEvents = '';
+          button.style.transform = '';
         }
-        button.style.opacity = newFavorited ? '1' : '0.6';
-        button.style.pointerEvents = '';
-        button.style.transform = '';
         
         // Show success toast
         showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');

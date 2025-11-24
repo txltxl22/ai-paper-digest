@@ -133,6 +133,38 @@
       {% endif %}
     </div>
     {% endif %}
+    {% if personalization and personalization.active %}
+    <section class="personalization-banner">
+      <div class="personalization-primary">
+        <span class="personalization-pill">🎯 个性推荐</span>
+        <p class="personalization-copy">
+          根据你收藏的论文主题推荐最新内容
+        </p>
+      </div>
+      {% if personalization.top_tags %}
+      <div class="personalization-tags">
+        {% for tag in personalization.top_tags[:6] %}
+        <span class="match-chip">#{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+    {% elif personalization and personalization.promotional %}
+    <section class="personalization-banner promotional">
+      <div class="personalization-primary">
+        <span class="personalization-pill">🎯 个性推荐</span>
+        <p class="personalization-copy">
+          根据你收藏的论文主题智能推荐最新内容，发现你感兴趣的研究方向
+        </p>
+      </div>
+      <div class="personalization-cta">
+        <a href="#login" class="login-cta-btn" id="promo-login-btn">
+          <span class="cta-icon">🔑</span>
+          <span class="cta-text">登录以启用个性推荐</span>
+        </a>
+      </div>
+    </section>
+    {% endif %}
     {% for e in entries %}
       {% include 'components/article-card.html' %}
     {% else %}
@@ -178,6 +210,21 @@
       admin_stream: '{{ admin_stream_url }}',
       admin_fetch: '{{ admin_fetch_url }}'
     };
+    
+    // Handle promotional login CTA button
+    document.addEventListener('DOMContentLoaded', function() {
+      const promoBtn = document.getElementById('promo-login-btn');
+      if (promoBtn) {
+        promoBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const input = document.querySelector('input[name="uid"]');
+          if (input) {
+            input.focus();
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+      }
+    });
     
     // Admin users configuration
     window.adminUsers = {{ admin_users | tojson }};

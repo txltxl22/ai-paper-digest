@@ -1,5 +1,158 @@
 /* Component-specific styles */
 
+/* Personalized Recommendation Banner */
+.personalization-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(14, 165, 233, 0.08));
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+}
+
+.personalization-primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.personalization-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary);
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.personalization-pill.small {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.6rem;
+  text-transform: none;
+}
+
+.personalization-copy {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.personalization-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+/* Promotional banner for non-logged-in users */
+.personalization-banner.promotional {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.12));
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  animation: subtle-pulse 3s ease-in-out infinite;
+}
+
+@keyframes subtle-pulse {
+  0%, 100% {
+    box-shadow: var(--card-shadow);
+  }
+  50% {
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+  }
+}
+
+.personalization-cta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.login-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.login-cta-btn:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+}
+
+.login-cta-btn:active {
+  transform: translateY(0);
+}
+
+.cta-icon {
+  font-size: 1rem;
+}
+
+.cta-text {
+  font-size: 0.9rem;
+}
+
+.recommendation-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0 0 var(--spacing-sm) 0;
+}
+
+.recommendation-note {
+  font-size: 0.8rem;
+  color: var(--muted-text);
+  margin-right: var(--spacing-xs);
+}
+
+.match-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-hover);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .personalization-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .personalization-cta {
+    width: 100%;
+  }
+  
+  .login-cta-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* Modern Tag Filter Components */
 .filters-panel { 
   background: var(--card-bg); 

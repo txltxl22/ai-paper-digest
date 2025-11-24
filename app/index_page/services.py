@@ -287,6 +287,7 @@ class EntryRenderer:
             except Exception:
                 preview_html = ""
             item = dict(meta)
+            item.setdefault("recommendation", None)
             item["preview_html"] = preview_html
             item["is_favorited"] = meta["id"] in favorites_map
             item["is_todo"] = meta["id"] in todo_map

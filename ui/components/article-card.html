@@ -29,6 +29,17 @@
       <div class="update-time">{{ e.updated.strftime('%m-%d %H:%M') }}</div>
     </div>
   </div>
+  {% if e.recommendation %}
+  <div class="recommendation-row">
+    <span class="personalization-pill small">🎯 为你推荐</span>
+    {% if e.recommendation.matched_tags %}
+    <span class="recommendation-note">匹配标签:</span>
+    {% for tag in e.recommendation.matched_tags[:4] %}
+      <span class="match-chip">#{{ tag }}</span>
+    {% endfor %}
+    {% endif %}
+  </div>
+  {% endif %}
   
   <!-- Tags Section -->
   {% if e.top_tags and e.top_tags|length %}

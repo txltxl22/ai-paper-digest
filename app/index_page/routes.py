@@ -2,9 +2,10 @@
 Index page routes for main index and read pages.
 """
 from flask import Blueprint, request, render_template_string, make_response, redirect, url_for
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from .services import EntryScanner, EntryRenderer, EntryFilter
 from .models import TagCloud, Pagination
+from summary_service.recommendations import RecommendationContext, RecommendationEngine, RecommendationResponse
 
 
 def create_index_routes(
@@ -14,7 +15,8 @@ def create_index_routes(
     index_template: str,
     detail_template: str,
     paper_config=None,
-    search_service=None
+    search_service=None,
+    recommendation_engine: RecommendationEngine | None = None,
 ) -> Blueprint:
     """Create index page routes."""
     bp = Blueprint('index_page', __name__)
@@ -84,7 +86,8 @@ def create_index_routes(
         show_favorites: bool = False,
         show_todo: bool = False,
         user_stats: Optional[Dict] = None,
-        all_entries: Optional[List[Dict]] = None
+        all_entries: Optional[List[Dict]] = None,
+        personalization: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build the template context with all necessary data."""
         # Build tag clouds from all entries (not just filtered ones)
@@ -126,6 +129,7 @@ def create_index_routes(
             'mark_todo_url': url_for("user_management.mark_todo", arxiv_id="__ID__").replace("__ID__", ""),
             'unmark_todo_url': url_for("user_management.unmark_todo", arxiv_id="__ID__").replace("__ID__", ""),
             'reset_url': url_for("user_management.reset_read"),
+            'personalization': personalization or {'active': False},
             **pagination.to_dict()
         }
         
@@ -147,6 +151,70 @@ def create_index_routes(
         
         return context
     
+    def _apply_recommendations(
+        entries: List[Dict[str, Any]],
+        favorites_meta: List[Dict[str, Any]],
+        favorites_map: Dict[str, Optional[str]],
+        uid: Optional[str],
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        if (
+            not recommendation_engine
+            or not favorites_meta
+            or not favorites_map
+            or not entries
+        ):
+            return entries, {'active': False}
+
+        context = RecommendationContext(
+            candidate_entries=entries,
+            favorites_meta=favorites_meta,
+            favorites_map=favorites_map,
+            extra={'uid': uid} if uid else {},
+        )
+        response: RecommendationResponse = recommendation_engine.recommend(context)
+        if not response.scores:
+            return entries, {
+                'active': False,
+                'profiles': response.profiles,
+                'generated_at': response.generated_at.isoformat(),
+            }
+
+        annotated: List[Dict[str, Any]] = []
+        for entry in entries:
+            entry_copy = dict(entry)
+            rec_score = response.scores.get(entry_copy.get("id"))
+            if rec_score:
+                entry_copy["recommendation"] = {
+                    "score": rec_score.score,
+                    "matched_tags": rec_score.matched_tags,
+                    "breakdown": rec_score.breakdown,
+                    "metadata": rec_score.metadata,
+                }
+            else:
+                entry_copy["recommendation"] = None
+            annotated.append(entry_copy)
+
+        def _sort_key(item: Dict[str, Any]) -> Tuple[int, float, float, float]:
+            rec = item.get("recommendation") or {}
+            score = float(rec.get("score") or 0.0)
+            has_reco = 0 if score > 0 else 1
+            updated = item.get("updated")
+            timestamp = updated.timestamp() if hasattr(updated, "timestamp") else 0.0
+            submission = item.get("submission_time")
+            submission_ts = submission.timestamp() if hasattr(submission, "timestamp") else timestamp
+            return (has_reco, -score, -timestamp, -submission_ts)
+
+        annotated.sort(key=_sort_key)
+
+        tag_profile = response.profiles.get("tag_preference") if response.profiles else {}
+        personalization = {
+            'active': True,
+            'matched_entries': len(response.scores),
+            'top_tags': (tag_profile or {}).get("top_tags", []),
+            'generated_at': response.generated_at.isoformat(),
+        }
+        return annotated, personalization
+
     @bp.route("/", methods=["GET"])
     def index():
         """Main index page."""
@@ -157,8 +225,10 @@ def create_index_routes(
         
         # Get user data and stats
         user_stats = None
-        if uid:
-            user_data = user_service.get_user_data(uid)
+        personalization = {'active': False}
+        favorites_map: Dict[str, Optional[str]] = {}
+        user_data = user_service.get_user_data(uid) if uid else None
+        if user_data:
             read_map = user_data.load_read_map()
             favorites_map = user_data.load_favorites_map()
             todo_map = user_data.load_todo_map()
@@ -184,20 +254,43 @@ def create_index_routes(
             }
         else:
             entries_meta = all_entries_meta
+            favorites_map = {}
         
         # Apply filters
         filtered_entries_meta = _apply_filters(entries_meta, filters)
+
+        if favorites_map:
+            favorites_meta = [e for e in all_entries_meta if e["id"] in favorites_map]
+            filtered_entries_meta, personalization = _apply_recommendations(
+                filtered_entries_meta,
+                favorites_meta,
+                favorites_map,
+                uid,
+            )
+        elif not uid:
+            # Show promotional banner for non-logged-in users
+            personalization = {
+                'active': False,
+                'promotional': True,
+            }
         
         # Pagination
         pagination = Pagination(len(filtered_entries_meta), pagination_params['page'], pagination_params['per_page'])
         page_entries = pagination.get_page_items(filtered_entries_meta)
         
         # Render entries
-        user_data = user_service.get_user_data(uid) if uid else None
         entries = entry_renderer.render_page_entries(page_entries, user_data)
         
         # Build context and render - use all_entries_meta for tag cloud, filtered_entries_meta for display
-        context = _build_template_context(entries, uid, filters, pagination, user_stats=user_stats, all_entries=all_entries_meta)
+        context = _build_template_context(
+            entries,
+            uid,
+            filters,
+            pagination,
+            user_stats=user_stats,
+            all_entries=all_entries_meta,
+            personalization=personalization,
+        )
         return make_response(render_template_string(index_template, **context))
     
     @bp.route("/read")

@@ -194,15 +194,20 @@ def create_index_routes(
                 entry_copy["recommendation"] = None
             annotated.append(entry_copy)
 
-        def _sort_key(item: Dict[str, Any]) -> Tuple[int, float, float, float]:
+        def _sort_key(item: Dict[str, Any]) -> Tuple[int, float]:
             rec = item.get("recommendation") or {}
             score = float(rec.get("score") or 0.0)
             has_reco = 0 if score > 0 else 1
-            updated = item.get("updated")
-            timestamp = updated.timestamp() if hasattr(updated, "timestamp") else 0.0
+            # Use submission_time (creation date) for ordering within each group
             submission = item.get("submission_time")
-            submission_ts = submission.timestamp() if hasattr(submission, "timestamp") else timestamp
-            return (has_reco, -score, -timestamp, -submission_ts)
+            if submission and hasattr(submission, "timestamp"):
+                submission_ts = submission.timestamp()
+            else:
+                # Fallback to updated time if submission_time not available
+                updated = item.get("updated")
+                submission_ts = updated.timestamp() if hasattr(updated, "timestamp") else 0.0
+            # Sort by: 1) has recommendation (0=yes, 1=no), 2) creation time (newest first)
+            return (has_reco, -submission_ts)
 
         annotated.sort(key=_sort_key)
 

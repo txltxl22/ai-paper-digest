@@ -120,12 +120,19 @@ def test_route_sorting_prefers_recommended_entries():
         rec = item.get("recommendation") or {}
         score = rec.get("score", 0.0)
         has_reco = 0 if score > 0 else 1
-        updated_ts = item["updated"].timestamp()
-        return (has_reco, -score, -updated_ts)
+        # Use submission_time for creation date ordering
+        submission = item.get("submission_time")
+        if submission and hasattr(submission, "timestamp"):
+            submission_ts = submission.timestamp()
+        else:
+            submission_ts = item["updated"].timestamp()
+        return (has_reco, -submission_ts)
 
     annotated.sort(key=sort_key)
     ordered_ids = [item["id"] for item in annotated]
 
+    # Recommended entries come first, sorted by creation time (newest first)
+    # "recent" (0 days ago) should come before "older" (2 days ago)
     assert ordered_ids[:2] == ["recent", "older"]
     assert ordered_ids[-1] == "unmatched"
 

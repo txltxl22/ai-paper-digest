@@ -278,6 +278,101 @@ def root_favicon_ico():
     return send_from_directory('../ui', 'favicon.svg', mimetype="image/svg+xml")
 
 
+@app.get("/robots.txt")
+def robots_txt():
+    """Serve robots.txt file."""
+    return send_from_directory('../ui', 'robots.txt', mimetype="text/plain")
+
+
+@app.get("/manifest.json")
+def manifest_json():
+    """Serve PWA manifest.json file."""
+    return send_from_directory('../ui', 'manifest.json', mimetype="application/manifest+json")
+
+
+@app.get("/service-worker.js")
+def service_worker():
+    """Serve service worker for PWA functionality."""
+    return send_from_directory('../ui/js', 'service-worker.js', mimetype="application/javascript")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    """Generate and serve XML sitemap for all paper summaries."""
+    from xml.etree.ElementTree import Element, SubElement, tostring
+    from datetime import datetime
+    
+    # Create root element
+    urlset = Element('urlset')
+    urlset.set('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9')
+    urlset.set('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance')
+    urlset.set('xsi:schemaLocation', 'http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd')
+    
+    # Add homepage
+    url = SubElement(urlset, 'url')
+    SubElement(url, 'loc').text = request.url_root.rstrip('/')
+    SubElement(url, 'lastmod').text = datetime.now().strftime('%Y-%m-%d')
+    SubElement(url, 'changefreq').text = 'daily'
+    SubElement(url, 'priority').text = '1.0'
+    
+    # Get all entries from the index page module
+    entry_scanner = index_page_module["scanner"]
+    entries_meta = entry_scanner.scan_entries_meta()
+    
+    # Add each paper summary page
+    for entry in entries_meta:
+        arxiv_id = entry.get("id")
+        if arxiv_id:
+            url = SubElement(urlset, 'url')
+            summary_url = f"{request.url_root.rstrip('/')}/summary/{arxiv_id}"
+            SubElement(url, 'loc').text = summary_url
+            
+            # Use updated time if available
+            updated = entry.get("updated")
+            if updated:
+                if isinstance(updated, datetime):
+                    SubElement(url, 'lastmod').text = updated.strftime('%Y-%m-%d')
+                elif isinstance(updated, str):
+                    try:
+                        dt = datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                        SubElement(url, 'lastmod').text = dt.strftime('%Y-%m-%d')
+                    except:
+                        SubElement(url, 'lastmod').text = datetime.now().strftime('%Y-%m-%d')
+            else:
+                SubElement(url, 'lastmod').text = datetime.now().strftime('%Y-%m-%d')
+            
+            SubElement(url, 'changefreq').text = 'weekly'
+            SubElement(url, 'priority').text = '0.8'
+    
+    # Convert to string
+    xml_string = tostring(urlset, encoding='utf-8', xml_declaration=True)
+    response = make_response(xml_string)
+    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
+    return response
+
+
+@app.get("/sitemap-index.xml")
+def sitemap_index_xml():
+    """Generate and serve sitemap index XML."""
+    from xml.etree.ElementTree import Element, SubElement, tostring
+    from datetime import datetime
+    
+    # Create root element
+    sitemapindex = Element('sitemapindex')
+    sitemapindex.set('xmlns', 'http://www.sitemaps.org/schemas/sitemap/0.9')
+    
+    # Add main sitemap
+    sitemap = SubElement(sitemapindex, 'sitemap')
+    SubElement(sitemap, 'loc').text = f"{request.url_root.rstrip('/')}/sitemap.xml"
+    SubElement(sitemap, 'lastmod').text = datetime.now().strftime('%Y-%m-%d')
+    
+    # Convert to string
+    xml_string = tostring(sitemapindex, encoding='utf-8', xml_declaration=True)
+    response = make_response(xml_string)
+    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
+    return response
+
+
 # Event tracking routes are now handled by the decoupled event tracking system
 # The /event endpoint is registered via the event tracking blueprint
 

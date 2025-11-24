@@ -1,0 +1,38 @@
+{
+  "name": "AI Papers Reader - arXiv Research Summaries",
+  "short_name": "AI Papers",
+  "description": "Latest AI research papers from arXiv with intelligent summaries and analysis",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity", "research"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "shortcuts": [
+    {
+      "name": "Latest Papers",
+      "short_name": "Latest",
+      "description": "View latest AI research papers",
+      "url": "/",
+      "icons": [{ "src": "/static/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Search Papers",
+      "short_name": "Search",
+      "description": "Search for specific papers",
+      "url": "/?q=",
+      "icons": [{ "src": "/static/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}

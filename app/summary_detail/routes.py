@@ -54,6 +54,9 @@ def create_summary_detail_routes(
             original_url=rendered["original_url"],
             abstract=rendered["abstract"],
             english_title=english_title,
+            one_sentence_summary=rendered.get("one_sentence_summary", ""),
+            created_at=service_data.get("created_at", ""),
+            updated_at=service_data.get("updated_at", ""),
             # Add URL variables for JavaScript
             mark_read_url=url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
             unmark_read_url=url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),

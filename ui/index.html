@@ -5,11 +5,97 @@
   <meta charset='utf-8'>
   <title>arXiv最新AI论文速览速学</title>
   <meta name='viewport' content='width=device-width,initial-scale=1'>
+  
+  <!-- Primary Meta Tags -->
+  <meta name="title" content="arXiv最新AI论文速览速学 - AI Papers Reader">
+  <meta name="description" content="Latest AI research papers from arXiv with intelligent summaries. Browse machine learning, deep learning, and artificial intelligence research papers with AI-powered summaries.">
+  <meta name="keywords" content="AI papers, machine learning, arXiv, research summaries, artificial intelligence, deep learning, neural networks, computer vision, NLP, natural language processing">
+  <meta name="author" content="AI Papers Reader">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English, Chinese">
+  <meta name="revisit-after" content="1 days">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta property="og:title" content="arXiv最新AI论文速览速学 - AI Papers Reader">
+  <meta property="og:description" content="Latest AI research papers from arXiv with intelligent summaries. Browse machine learning, deep learning, and artificial intelligence research papers.">
+  <meta property="og:image" content="{{ url_for('static_favicon_svg', _external=True) }}">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="zh_CN">
+  <meta property="og:site_name" content="AI Papers Reader">
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="{{ request.url }}">
+  <meta property="twitter:title" content="arXiv最新AI论文速览速学 - AI Papers Reader">
+  <meta property="twitter:description" content="Latest AI research papers from arXiv with intelligent summaries. Browse machine learning, deep learning, and artificial intelligence research papers.">
+  <meta property="twitter:image" content="{{ url_for('static_favicon_svg', _external=True) }}">
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="{{ request.url }}">
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AI Papers">
+  
+  <!-- Stylesheets -->
   <link rel="stylesheet" href="{{ url_for('base_css') }}">
   <link rel="stylesheet" href="{{ url_for('static_css', filename='badges.css') }}">
   <link rel="stylesheet" href="{{ url_for('static_css', filename='components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static_css', filename='modal.css') }}">
   <link rel="icon" href="{{ url_for('static_favicon_svg') }}" type="image/svg+xml">
+  
+  <!-- Structured Data - WebSite -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "AI Papers Reader",
+    "alternateName": "arXiv最新AI论文速览速学",
+    "url": "{{ request.url_root }}",
+    "description": "Latest AI research papers from arXiv with intelligent summaries and analysis",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "{{ request.url_root }}?search={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "AI Papers Reader"
+    }
+  }
+  </script>
+  
+  <!-- Structured Data - BreadcrumbList -->
+  {% if show_read or show_favorites or show_todo %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "{{ request.url_root }}"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "{% if show_read %}Read Papers{% elif show_favorites %}Favorite Papers{% elif show_todo %}Todo Papers{% endif %}",
+        "item": "{{ request.url }}"
+      }
+    ]
+  }
+  </script>
+  {% endif %}
 </head>
 
 <body>
@@ -95,6 +181,19 @@
     
     // Admin users configuration
     window.adminUsers = {{ admin_users | tojson }};
+    
+    // Service Worker Registration for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then((registration) => {
+            console.log('Service Worker registered:', registration.scope);
+          })
+          .catch((error) => {
+            console.log('Service Worker registration failed:', error);
+          });
+      });
+    }
   </script>
 </body>
 

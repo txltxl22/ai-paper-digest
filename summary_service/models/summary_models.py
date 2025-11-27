@@ -11,9 +11,10 @@ from dataclasses import dataclass
 
 @dataclass
 class PaperInfo:
-    """Paper title information."""
+    """Paper information."""
     title_zh: str
     title_en: str
+    abstract: str
 
 
 @dataclass

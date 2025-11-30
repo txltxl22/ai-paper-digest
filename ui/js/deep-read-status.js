@@ -56,28 +56,13 @@ class DeepReadStatusBar {
     }
     
     // Poll immediately
-    this.updateStatus().then(() => {
-      // Check if we should continue polling after first update
-      this.checkAndContinuePolling();
-    });
+    this.updateStatus();
 
     // Then poll at intervals
+    // Note: renderStatus() will automatically stop polling when there are no processing jobs
     this.pollInterval = setInterval(() => {
-      this.updateStatus().then(() => {
-        this.checkAndContinuePolling();
-      });
+      this.updateStatus();
     }, this.pollIntervalMs);
-  }
-  
-  checkAndContinuePolling() {
-    // Stop polling if there are no processing jobs
-    // (Completed jobs don't need polling, user can dismiss them)
-    const hasProcessing = this.processingList && this.processingList.children.length > 0;
-    
-    if (!hasProcessing) {
-      // No processing jobs, stop polling
-      this.stopPolling();
-    }
   }
 
   stopPolling() {
@@ -144,7 +129,11 @@ class DeepReadStatusBar {
       this.statusBar.style.display = 'block';
     } else {
       this.statusBar.style.display = 'none';
-      // No jobs at all, stop polling
+    }
+
+    // Stop polling if there are no processing jobs
+    // (Completed jobs don't need polling, user can dismiss them)
+    if (processing.length === 0) {
       this.stopPolling();
     }
   }
@@ -208,6 +197,7 @@ class DeepReadStatusBar {
         // Mark as dismissed locally
         this.dismissedItems.add(`completed-${arxivId}`);
         // Update status to remove it from view
+        // Note: renderStatus() will stop polling if no processing jobs remain
         this.updateStatus();
       }
     } catch (error) {

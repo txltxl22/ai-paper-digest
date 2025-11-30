@@ -408,8 +408,8 @@ def create_index_routes(
         user_data = user_service.get_user_data(uid)
         entries = entry_renderer.render_page_entries(page_entries, user_data, show_read_time=True, show_favorite_time=True)
         
-        # Build context and render - use all_entries_meta for tag cloud
-        context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=all_entries_meta)
+        # Build context and render - use read_entries_meta for tag cloud (only tags from read papers)
+        context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=read_entries_meta)
         return render_template_string(index_template, **context)
     
     @bp.route("/favorites")
@@ -439,8 +439,8 @@ def create_index_routes(
         user_data = user_service.get_user_data(uid)
         entries = entry_renderer.render_page_entries(page_entries, user_data, show_favorite_time=True)
         
-        # Build context and render - use all_entries_meta for tag cloud
-        context = _build_template_context(entries, uid, filters, pagination, show_favorites=True, all_entries=all_entries_meta)
+        # Build context and render - use favorite_entries_meta for tag cloud (only tags from favorite papers)
+        context = _build_template_context(entries, uid, filters, pagination, show_favorites=True, all_entries=favorite_entries_meta)
         return render_template_string(index_template, **context)
     
     @bp.route("/todo")
@@ -470,8 +470,8 @@ def create_index_routes(
         user_data = user_service.get_user_data(uid)
         entries = entry_renderer.render_page_entries(page_entries, user_data, show_todo_time=True)
         
-        # Build context and render - use all_entries_meta for tag cloud
-        context = _build_template_context(entries, uid, filters, pagination, show_todo=True, all_entries=all_entries_meta)
+        # Build context and render - use todo_entries_meta for tag cloud (only tags from todo papers)
+        context = _build_template_context(entries, uid, filters, pagination, show_todo=True, all_entries=todo_entries_meta)
         return render_template_string(index_template, **context)
     
     return bp

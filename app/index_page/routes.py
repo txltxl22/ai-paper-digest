@@ -173,9 +173,13 @@ def create_index_routes(
         )
         response: RecommendationResponse = recommendation_engine.recommend(context)
         if not response.scores:
+            # User has favorites but no recommendations were generated
+            tag_profile = response.profiles.get("tag_preference") if response.profiles else {}
             return entries, {
                 'active': False,
+                'has_favorites': True,  # Flag to indicate user has favorites but no matches
                 'profiles': response.profiles,
+                'top_tags': (tag_profile or {}).get("top_tags", []),
                 'generated_at': response.generated_at.isoformat(),
             }
 
@@ -266,12 +270,20 @@ def create_index_routes(
 
         if favorites_map:
             favorites_meta = [e for e in all_entries_meta if e["id"] in favorites_map]
-            filtered_entries_meta, personalization = _apply_recommendations(
-                filtered_entries_meta,
-                favorites_meta,
-                favorites_map,
-                uid,
-            )
+            if favorites_meta:
+                filtered_entries_meta, personalization = _apply_recommendations(
+                    filtered_entries_meta,
+                    favorites_meta,
+                    favorites_map,
+                    uid,
+                )
+            else:
+                # User has favorites but they don't exist in summary directory
+                personalization = {
+                    'active': False,
+                    'has_favorites': True,
+                    'no_favorites_in_summary': True,  # Flag for missing favorite papers
+                }
         elif not uid:
             # Show promotional banner for non-logged-in users
             personalization = {

@@ -147,6 +147,28 @@
       </div>
       {% endif %}
     </section>
+    {% elif personalization and personalization.has_favorites and not personalization.active %}
+    <section class="personalization-banner">
+      <div class="personalization-primary">
+        <span class="personalization-pill">🎯 个性推荐</span>
+        <p class="personalization-copy">
+          {% if personalization.no_favorites_in_summary %}
+          你感兴趣的论文暂时不在系统中，无法生成推荐。请等待系统处理这些论文。
+          {% elif personalization.top_tags %}
+          暂未找到与你的兴趣匹配的新论文。一些你感兴趣的主题：
+          {% else %}
+          暂未找到与你感兴趣论文匹配的新内容。请尝试标记更多感兴趣的论文以获得更好的推荐。
+          {% endif %}
+        </p>
+      </div>
+      {% if personalization.top_tags %}
+      <div class="personalization-tags">
+        {% for tag in personalization.top_tags[:6] %}
+        <span class="match-chip">#{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
     {% elif personalization and personalization.promotional %}
     <section class="personalization-banner promotional">
       <div class="personalization-primary">

@@ -53,11 +53,12 @@ def create_index_routes(
     
     def _apply_filters(entries: List[Dict], filters: Dict[str, Any]) -> List[Dict]:
         """Apply all filters to entries."""
-        if filters['active_tag']:
-            entries = EntryFilter.filter_by_tag(entries, filters['active_tag'])
-        if filters['tag_query']:
+        active_tag = filters.get('active_tag')
+        if active_tag:
+            entries = EntryFilter.filter_by_tag(entries, active_tag)
+        if filters.get('tag_query'):
             entries = EntryFilter.filter_by_tag_query(entries, filters['tag_query'])
-        if filters['active_tops']:
+        if filters.get('active_tops'):
             entries = EntryFilter.filter_by_top_tags(entries, filters['active_tops'])
         
         # Apply search filter if search service is available
@@ -270,20 +271,6 @@ def create_index_routes(
             if e.get("updated") and (normalized := normalize_datetime(e["updated"])) and normalized >= cutoff_72h
         ])
         
-        # Find latest paper by first_created_time
-        latest_paper = None
-        if all_entries_meta:
-            latest_entry = max(
-                all_entries_meta,
-                key=lambda e: e.get("first_created_time") or datetime.min
-            )
-            if latest_entry.get("first_created_time"):
-                latest_paper = {
-                    'id': latest_entry.get("id"),
-                    'title': latest_entry.get("english_title") or latest_entry.get("id"),
-                    'first_created_time': latest_entry.get("first_created_time"),
-                }
-        
         # Get user data and stats
         user_stats = None
         personalization = {'active': False}
@@ -319,6 +306,21 @@ def create_index_routes(
         
         # Apply filters
         filtered_entries_meta = _apply_filters(entries_meta, filters)
+        
+        # Find latest paper by first_created_time (use filtered entries if filter is active)
+        latest_paper = None
+        entries_for_latest = filtered_entries_meta if (filters.get('active_tag') or filters.get('tag_query') or filters.get('active_tops') or filters.get('search_query')) else all_entries_meta
+        if entries_for_latest:
+            latest_entry = max(
+                entries_for_latest,
+                key=lambda e: e.get("first_created_time") or datetime.min
+            )
+            if latest_entry.get("first_created_time"):
+                latest_paper = {
+                    'id': latest_entry.get("id"),
+                    'title': latest_entry.get("english_title") or latest_entry.get("id"),
+                    'first_created_time': latest_entry.get("first_created_time"),
+                }
 
         if favorites_map:
             favorites_meta = [e for e in all_entries_meta if e["id"] in favorites_map]

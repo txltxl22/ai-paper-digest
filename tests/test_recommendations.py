@@ -161,7 +161,7 @@ def test_negative_signal_reduces_score():
         _make_entry("paper-b", detail=["diffusion"]),  # Only matches positive
     ]
 
-    strategy = TagPreferenceStrategy(now=now)
+    strategy = TagPreferenceStrategy(now=now, min_negative_samples=2)
     ctx = RecommendationContext(
         candidate_entries=candidates,
         favorites_meta=favorites_meta,
@@ -199,7 +199,7 @@ def test_negative_signal_prevents_recommendation():
         _make_entry("paper-a", detail=["vision"]),  # Only matches negative (stronger)
     ]
 
-    strategy = TagPreferenceStrategy(now=now)
+    strategy = TagPreferenceStrategy(now=now, min_negative_samples=2)
     ctx = RecommendationContext(
         candidate_entries=candidates,
         favorites_meta=favorites_meta,

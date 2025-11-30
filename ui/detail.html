@@ -183,25 +183,25 @@
         {% endif %}
         
         <!-- Deep Read Control Section -->
-        <div class="deep-read-control" style="text-align:center; padding: 2rem 0; display: none;" id="deep-read-control-container">
-            <div class="deep-read-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; max-width: 600px; margin: 0 auto;">
+        <div class="deep-read-control" style="text-align:center; padding: var(--spacing-2xl) 0; display: none;" id="deep-read-control-container">
+            <div class="deep-read-card" style="background: var(--card-bg); border: 1px solid var(--btn-border); border-radius: var(--radius-md); padding: var(--spacing-xl); max-width: 600px; margin: 0 auto;">
                 <h3 style="margin-top: 0;">🤖 AI 深度阅读</h3>
                 
                 <!-- Case 1: Generate (Abstract Only) -->
                 <div id="deep-read-generate-ui" style="display: none;">
-                    <p style="color: var(--text-muted);">当前仅显示摘要总结。如需获取详细的论文深度解读（包含创新点、实验结果、术语解释等），请点击下方按钮。</p>
+                    <p style="color: var(--muted-text);">当前仅显示摘要总结。如需获取详细的论文深度解读（包含创新点、实验结果、术语解释等），请点击下方按钮。</p>
                     
                     {% if current_user_id %}
-                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: 1.1rem; padding: 0.8rem 1.5rem; margin-top: 1rem;">
+                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: 1.1rem; padding: var(--spacing-lg) var(--spacing-xl); margin-top: var(--spacing-lg);">
                         <span>📚</span> 生成深度解读
                     </button>
-                    <div id="deep-read-loading" style="display: none; margin-top: 1rem;">
-                        <div class="loading-spinner" style="display: inline-block; margin-right: 0.5rem;"></div>
+                    <div id="deep-read-loading" style="display: none; margin-top: var(--spacing-lg);">
+                        <div class="loading-spinner" style="display: inline-block; margin-right: var(--spacing-sm);"></div>
                         <span>AI正在深入阅读并生成详细报告，请稍候... (约30-60秒)</span>
                     </div>
-                    <div id="deep-read-error" style="display: none; margin-top: 1rem; color: var(--error-color);"></div>
+                    <div id="deep-read-error" style="display: none; margin-top: var(--spacing-lg); color: var(--danger);"></div>
                     {% else %}
-                    <div style="margin-top: 1rem;">
+                    <div style="margin-top: var(--spacing-lg);">
                         <a href="/#login" class="login-cta-btn" style="display: inline-block; text-decoration: none;">
                             <span class="cta-icon">🔑</span>
                             <span class="cta-text">登录以启用深度阅读</span>
@@ -216,7 +216,7 @@
         <article class='markdown-body'>
             {{ content | safe }}
         </article>
-        <p style='text-align:center;margin-top:2rem;'>
+        <p style='text-align:center;margin-top:var(--spacing-2xl);'>
             <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf'>📄 打开原文 PDF</a>
         </p>
     </main>

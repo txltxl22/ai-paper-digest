@@ -477,8 +477,8 @@ header a {
 
 .header-right {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-direction: row;
+    align-items: center;
     gap: var(--spacing-xs);
 }
 
@@ -504,12 +504,12 @@ header h1 a:hover {
 .nav-btn {
     display: inline-flex;
     align-items: center;
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
     background: var(--header-btn-bg);
     color: var(--header-text);
     border: 1px solid var(--header-btn-border);
     border-radius: var(--radius-sm);
-    font-size: 0.7rem;
+    font-size: 0.85rem;
     font-weight: 500;
     text-decoration: none;
     cursor: pointer;
@@ -547,6 +547,8 @@ header h1 a:hover {
     border-radius: var(--radius-md);
     font-size: 0.85rem;
     font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .user-icon {
@@ -566,13 +568,13 @@ header h1 a:hover {
 }
 
 .login-input {
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
     border: 1px solid var(--header-btn-border);
     border-radius: var(--radius-sm);
     background: var(--header-btn-bg);
     color: var(--header-text);
-    font-size: 0.7rem;
-    min-width: 80px;
+    font-size: 0.85rem;
+    min-width: 100px;
     flex-shrink: 0;
 }
 
@@ -689,7 +691,7 @@ main {
 .page-header-right {
     display: flex;
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     gap: var(--spacing-xs);
 }
 
@@ -698,7 +700,7 @@ main {
     color: var(--primary);
     border: 1px solid var(--primary);
     font-weight: 500;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
 }
 
 .update-time {
@@ -793,8 +795,8 @@ main {
     background: var(--action-bg) !important;
     color: var(--action-text) !important;
     border-color: var(--btn-border) !important;
-    font-size: 0.8rem !important;
-    padding: var(--spacing-xs) var(--spacing-sm) !important;
+    font-size: 0.85rem !important;
+    padding: var(--spacing-sm) var(--spacing-md) !important;
     opacity: 0.8;
     transition: all 0.2s ease;
 }
@@ -888,8 +890,8 @@ main {
     background: none;
     border: none;
     cursor: pointer;
-    padding: 0.25rem;
-    border-radius: 4px;
+    padding: var(--spacing-xs);
+    border-radius: var(--radius-sm);
     transition: all 0.2s ease;
     color: var(--muted);
 }
@@ -934,16 +936,6 @@ article h2 {
     overflow: hidden;
 }
 
-.card-actions {
-    margin-top: 0.75rem;
-    font-size: 0.9rem;
-    color: var(--muted);
-}
-
-.card-actions a {
-    margin-right: 0.75rem;
-    cursor: pointer;
-}
 
 .muted {
     color: var(--muted);
@@ -958,27 +950,27 @@ pre {
     overflow: auto;
     background: var(--code-bg);
     padding: 1rem;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
 }
 
 code {
     background: var(--code-bg);
-    padding: 0.2rem 0.4rem;
-    border-radius: 4px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
     font-size: 87%;
 }
 
 .topbar-btn {
-    padding: 0.25rem 0.7rem;
-    border: none;
-    border-radius: 4px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--btn-border);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     background: var(--btn-bg);
     color: var(--btn-text);
     font-size: 0.85rem;
     text-decoration: none;
     display: inline-block;
-    border: 1px solid var(--btn-border);
+    transition: all 0.2s ease;
 }
 
 .topbar-btn:hover {
@@ -1014,31 +1006,8 @@ code {
     margin: 0 0.2rem;
 }
 
-.user-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    background: var(--header-btn-bg);
-    color: var(--header-text);
-    border: 1px solid var(--header-btn-border);
-    border-radius: var(--radius-sm);
-    font-size: 0.7rem;
-    font-weight: 500;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
 
 /* Modern Action Buttons */
-.card-actions {
-    margin-top: var(--spacing-lg);
-    padding-top: var(--spacing-md);
-    border-top: 1px solid var(--divider);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--spacing-md);
-}
-
 .action-btn,
 .card-actions a {
     display: inline-flex;
@@ -1436,6 +1405,16 @@ code {
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--muted-text);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
 .abstract-error {

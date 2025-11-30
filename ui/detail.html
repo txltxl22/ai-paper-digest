@@ -191,7 +191,7 @@
                 <div id="deep-read-generate-ui" style="display: none;">
                     <p style="color: var(--text-muted);">当前仅显示摘要总结。如需获取详细的论文深度解读（包含创新点、实验结果、术语解释等），请点击下方按钮。</p>
                     
-                    {% if user_id %}
+                    {% if current_user_id %}
                     <button id="deep-read-gen-btn" class="primary-btn" style="font-size: 1.1rem; padding: 0.8rem 1.5rem; margin-top: 1rem;">
                         <span>📚</span> 生成深度解读
                     </button>

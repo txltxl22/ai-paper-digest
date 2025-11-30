@@ -37,6 +37,9 @@ def create_summary_detail_routes(
         
         is_abstract_only = record.service_data.is_abstract_only
         
+        # Get current logged-in user ID from cookies (for deep read feature)
+        current_user_id = request.cookies.get("uid")
+        
         return render_template_string(
             detail_template,
             content=rendered["html_content"],
@@ -45,6 +48,7 @@ def create_summary_detail_routes(
             detail_tags=rendered["detail_tags"],
             source_type=rendered["source_type"],
             user_id=rendered["user_id"],
+            current_user_id=current_user_id,
             original_url=rendered["original_url"],
             abstract=rendered["abstract"],
             english_title=english_title,

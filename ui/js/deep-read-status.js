@@ -26,7 +26,6 @@ class DeepReadStatusBar {
   setup() {
     this.statusBar = document.getElementById('deep-read-status-bar');
     if (!this.statusBar) {
-      console.log('Deep read status bar not found - user may not be logged in');
       return; // Status bar not present (user not logged in)
     }
 
@@ -34,23 +33,51 @@ class DeepReadStatusBar {
     this.completedList = document.getElementById('deep-read-completed-list');
 
     if (!this.processingList || !this.completedList) {
-      console.error('Deep read status bar elements not found');
       return;
     }
 
-    console.log('Deep read status bar initialized');
-    // Start polling
-    this.startPolling();
+    // Check status once on page load, but don't start polling yet
+    // Polling will only start when user triggers a deep read
+    this.updateStatus().then(() => {
+      // Only start polling if there are already active jobs (processing)
+      const hasProcessing = this.processingList && this.processingList.children.length > 0;
+      if (hasProcessing) {
+        // There are jobs in progress, start polling
+        this.startPolling();
+      }
+      // If only completed jobs exist, don't poll (user can dismiss them)
+    });
   }
 
   startPolling() {
+    // Don't start if already polling
+    if (this.pollInterval) {
+      return;
+    }
+    
     // Poll immediately
-    this.updateStatus();
+    this.updateStatus().then(() => {
+      // Check if we should continue polling after first update
+      this.checkAndContinuePolling();
+    });
 
     // Then poll at intervals
     this.pollInterval = setInterval(() => {
-      this.updateStatus();
+      this.updateStatus().then(() => {
+        this.checkAndContinuePolling();
+      });
     }, this.pollIntervalMs);
+  }
+  
+  checkAndContinuePolling() {
+    // Stop polling if there are no processing jobs
+    // (Completed jobs don't need polling, user can dismiss them)
+    const hasProcessing = this.processingList && this.processingList.children.length > 0;
+    
+    if (!hasProcessing) {
+      // No processing jobs, stop polling
+      this.stopPolling();
+    }
   }
 
   stopPolling() {
@@ -68,23 +95,22 @@ class DeepReadStatusBar {
           // User not logged in, hide status bar
           this.hideStatusBar();
           this.stopPolling();
-          return;
+          return Promise.resolve();
         }
-        console.warn('Failed to fetch deep read status:', response.status, response.statusText);
-        return;
+        return Promise.resolve();
       }
 
       const data = await response.json();
       this.renderStatus(data);
+      return Promise.resolve();
     } catch (error) {
-      console.error('Error fetching deep read status:', error);
-      // Don't hide on error, just log it - might be network issue
+      // Silently handle network errors
+      return Promise.resolve();
     }
   }
 
   renderStatus(data) {
     if (!this.statusBar) {
-      console.warn('Status bar element not found in renderStatus');
       return;
     }
 
@@ -94,8 +120,6 @@ class DeepReadStatusBar {
     const completed = (data.completed || []).filter(
       item => !this.dismissedItems.has(`completed-${item.arxiv_id}`)
     );
-
-    console.log('Deep read status update:', { processing: processing.length, completed: completed.length });
 
     // Show/hide processing section
     const processingSection = document.getElementById('deep-read-processing');
@@ -120,6 +144,8 @@ class DeepReadStatusBar {
       this.statusBar.style.display = 'block';
     } else {
       this.statusBar.style.display = 'none';
+      // No jobs at all, stop polling
+      this.stopPolling();
     }
   }
 
@@ -185,7 +211,7 @@ class DeepReadStatusBar {
         this.updateStatus();
       }
     } catch (error) {
-      console.error('Error dismissing completed job:', error);
+      // Silently handle errors
     }
   }
 
@@ -224,12 +250,56 @@ if (!document.getElementById('deep-read-status-styles')) {
   document.head.appendChild(style);
 }
 
-// Initialize status bar
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
+// Initialize status bar - ensure it runs on every page load
+function initializeDeepReadStatusBar() {
+  // Clean up existing instance if any
+  if (window.deepReadStatusBar) {
+    if (window.deepReadStatusBar.stopPolling) {
+      window.deepReadStatusBar.stopPolling();
+    }
+    window.deepReadStatusBar = null;
+  }
+  
+  // Initialize new instance
+  try {
     window.deepReadStatusBar = new DeepReadStatusBar();
-  });
-} else {
-  window.deepReadStatusBar = new DeepReadStatusBar();
+  } catch (error) {
+    console.error('Error initializing deep read status bar:', error);
+  }
 }
+
+// Initialize on multiple events to ensure it runs on every page load
+(function() {
+  // Function to try initialization
+  function tryInitialize() {
+    initializeDeepReadStatusBar();
+  }
+  
+  // Initialize immediately if DOM is ready
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    // Use setTimeout to ensure DOM is fully ready
+    setTimeout(tryInitialize, 0);
+  } else {
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', tryInitialize, { once: true });
+  }
+  
+  // Also initialize on window load (fallback)
+  window.addEventListener('load', function() {
+    if (!window.deepReadStatusBar) {
+      tryInitialize();
+    }
+  }, { once: true });
+  
+  // Re-initialize on pageshow event (handles back/forward navigation and cached pages)
+  window.addEventListener('pageshow', function(event) {
+    // Always re-initialize on pageshow to handle cached pages
+    setTimeout(tryInitialize, 0);
+  });
+  
+  // Also listen for popstate (back/forward navigation)
+  window.addEventListener('popstate', function() {
+    setTimeout(tryInitialize, 100);
+  });
+})();
 

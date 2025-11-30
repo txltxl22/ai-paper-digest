@@ -358,13 +358,16 @@
                 // Processing started, show status bar and keep loading
                 showToast('深度阅读生成已开始，请稍候');
                 if (window.deepReadStatusBar) {
-                  window.deepReadStatusBar.updateStatus();
+                  window.deepReadStatusBar.updateStatus().then(() => {
+                    // Start polling to track the new job
+                    window.deepReadStatusBar.startPolling();
+                  });
                 }
                 // Don't reload yet - status bar will show progress
                 // User can manually reload or wait for completion
               } else {
                 // Shouldn't happen with new async flow, but keep as fallback
-                window.location.reload();
+              window.location.reload();
               }
             } else {
               loading.style.display = 'none';

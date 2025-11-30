@@ -189,17 +189,34 @@ def create_summary_detail_routes(
         
         try:
             processing_jobs = processing_tracker.get_processing_jobs(uid)
+            
+            # Verify processing jobs - check if summary is actually complete
+            verified_processing = []
+            for job in processing_jobs:
+                # Check if summary file exists and is not abstract-only
+                record = summary_loader.load_summary(job.arxiv_id)
+                if record:
+                    # If summary exists and is not abstract-only, it's actually complete
+                    if not record.service_data.is_abstract_only:
+                        # Summary is complete, mark it as completed
+                        processing_tracker.mark_completed(job.arxiv_id, uid)
+                        logger.info(f"Auto-marked {job.arxiv_id} as completed (summary file verified)")
+                    else:
+                        # Still abstract-only, keep as processing
+                        verified_processing.append(job)
+                else:
+                    # Summary doesn't exist yet, keep as processing
+                    verified_processing.append(job)
+            
             completed_jobs = processing_tracker.get_completed_jobs(uid, limit=10)
-            
-            logger.debug(f"Status request for user {uid}: {len(processing_jobs)} processing, {len(completed_jobs)} completed")
-            
+            logger.info(f"Completed jobs for user {uid}: {completed_jobs}")
             return jsonify({
                 "processing": [
                     {
                         "arxiv_id": job.arxiv_id,
                         "started_at": job.started_at.isoformat()
                     }
-                    for job in processing_jobs
+                    for job in verified_processing
                 ],
                 "completed": [
                     {

@@ -207,26 +207,26 @@ class ArticleActions {
 
     try {
       const r = await fetch(`/api/summary/${id}/deep_read`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
       });
 
-      let data = {};
-      try {
-        data = await r.json();
-      } catch (_) {
-        // ignore JSON parse error
-      }
+        let data = {};
+        try {
+          data = await r.json();
+        } catch (_) {
+          // ignore JSON parse error
+        }
 
       if (r.status === 401) {
         // Restore button state
         button.textContent = originalText;
         button.style.opacity = '';
         button.disabled = false;
-        this.guideToLogin('使用深度阅读');
-      } else if (r.ok && data.success) {
+          this.guideToLogin('使用深度阅读');
+        } else if (r.ok && data.success) {
         // Keep button in "生成中" state
         button.textContent = '生成中...';
         button.style.opacity = '0.7';
@@ -238,15 +238,13 @@ class ArticleActions {
           showToast('深度阅读生成已开始，请稍候');
         }
         
-        // Trigger status bar update immediately and then again after a short delay
+        // Trigger status bar update and start polling
         if (window.deepReadStatusBar) {
-          window.deepReadStatusBar.updateStatus();
-          // Also update again after 1 second to ensure it shows
-          setTimeout(() => {
-            window.deepReadStatusBar.updateStatus();
-          }, 1000);
-        } else {
-          console.warn('Deep read status bar not available');
+          // Update status and start polling (will check if already polling)
+          window.deepReadStatusBar.updateStatus().then(() => {
+            // Start polling to track the new job
+            window.deepReadStatusBar.startPolling();
+          });
         }
       } else {
         // Restore button state on error
@@ -260,7 +258,7 @@ class ArticleActions {
       button.textContent = originalText;
       button.style.opacity = '';
       button.disabled = false;
-      showToast('网络错误，无法触发深度阅读');
+        showToast('网络错误，无法触发深度阅读');
     }
   }
 

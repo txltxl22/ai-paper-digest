@@ -150,6 +150,8 @@ header {
     min-height: 50px;
     padding: 0.75rem 2rem;
     overflow: visible; /* Changed from hidden to allow sticky to work on mobile */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Header Status Bar Styles */
@@ -611,9 +613,14 @@ header {
         flex-shrink: 0;
     }
     
-    .header-left {
+    .header-main-row .header-left {
         flex: 1;
         min-width: 0;
+    }
+    
+    /* Ensure desktop nav is hidden on mobile */
+    .header-main-row .page-header-right.desktop-nav {
+        display: none !important;
     }
 }
 
@@ -655,10 +662,13 @@ header a {
 }
 
 
-.header-left {
+/* Header left section - desktop */
+.header-main-row .header-left {
     flex: 1;
     min-width: 0;
     flex-shrink: 1;
+    display: flex;
+    align-items: center;
 }
 
 .header-right {
@@ -866,7 +876,8 @@ main {
     border-bottom: 1px solid var(--divider);
 }
 
-.header-left {
+/* This .header-left is for article cards, not header - keep separate */
+.article-header .header-left {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -900,11 +911,14 @@ main {
     color: var(--primary);
 }
 
-.page-header-right {
+/* Header right section - desktop */
+.header-main-row .page-header-right {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: var(--spacing-xs);
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .source-badge .user-chip {

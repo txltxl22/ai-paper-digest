@@ -65,8 +65,6 @@ class StructuredSummary(BaseModel):
         """Convert StructuredSummary to markdown format for backward compatibility."""
         md_lines = []
 
-        md_lines.append("## 📄 论文总结")
-
         # Paper title
         md_lines.append("")
         md_lines.append(f"**{self.paper_info.title_zh}** / ")

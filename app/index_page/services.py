@@ -210,7 +210,7 @@ class EntryRenderer:
                             md_text = md_path.read_text(encoding="utf-8", errors="ignore")
                         else:
                             # No content available, show a message
-                            md_text = f"## 📄 论文总结\n\n**{meta['id']}**\n\n⚠️ 内容暂时不可用\n\n该论文的摘要内容当前不可用。请稍后再试或联系管理员。"
+                            md_text = f"**{meta['id']}**\n\n⚠️ 内容暂时不可用\n\n该论文的摘要内容当前不可用。请稍后再试或联系管理员。"
                 else:
                     # Fallback to legacy .md file
                     md_path = self.summary_dir / f"{meta['id']}.md"

@@ -57,12 +57,12 @@ class SummaryRenderer:
         
         # If content is empty, generate from structured content
         if not content:
-                        content = structured_summary.to_markdown()
+            content = structured_summary.to_markdown()
         
         # If content is still empty, show a message
         if not content:
             arxiv_id = record.service_data.arxiv_id
-            content = f"## 📄 论文总结\n\n**{arxiv_id}**\n\n⚠️ 内容暂时不可用\n\n该论文的摘要内容当前不可用。请稍后再试或联系管理员。"
+            content = f"**{arxiv_id}**\n\n⚠️ 内容暂时不可用\n\n该论文的摘要内容当前不可用。"
         
         # Render HTML content
         html_content = self.render_markdown(content)

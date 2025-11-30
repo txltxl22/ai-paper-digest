@@ -95,10 +95,7 @@ def parse_summary(json_str: str) -> StructuredSummary:
     try:
         cleaned_json = clean_json_response(json_str)
         data = json.loads(cleaned_json)
-        if not validate_json_schema(data, SUMMARY_SCHEMA):
-            raise ValueError("Invalid summary schema")
-        
-        # Use Pydantic's model_validate for type-safe parsing
+
         return StructuredSummary.model_validate(data)
     except Exception as e:
         raise ValueError(f"Failed to parse summary: {e}")

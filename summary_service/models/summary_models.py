@@ -51,22 +51,28 @@ class StructuredSummary(BaseModel):
     """Complete structured summary."""
     paper_info: PaperInfo
     one_sentence_summary: str
-    innovations: List[Innovation]
-    results: Results
-    terminology: List[TermDefinition]
-    
+    innovations: List[Innovation] = Field(
+        default_factory=list, description="Innovations in the paper"
+    )
+    results: Results = Field(
+        default_factory=Results, description="Results and value points in the paper"
+    )
+    terminology: List[TermDefinition] = Field(
+        default_factory=list, description="Terminology in the paper"
+    )
+
     def to_markdown(self) -> str:
         """Convert StructuredSummary to markdown format for backward compatibility."""
         md_lines = []
-        
+
         md_lines.append("## 📄 论文总结")
-        
+
         # Paper title
         md_lines.append("")
         md_lines.append(f"**{self.paper_info.title_zh}** / ")
         md_lines.append(f"**{self.paper_info.title_en}**")
         md_lines.append("\n---\n")
-        
+
         # One sentence summary
         md_lines.append("### 1️⃣ 一句话总结")
         md_lines.append("")
@@ -93,26 +99,26 @@ class StructuredSummary(BaseModel):
                     md_lines.append(f"* **意义**：{innovation.significance}")
                     md_lines.append("")
                 md_lines.append("\n---\n")
-            
+
             # Results
             if self.results.experimental_highlights or self.results.practical_value:
                 md_lines.append("### 3️⃣ 主要结果与价值")
                 md_lines.append("")
-                
+
                 if self.results.experimental_highlights:
                     md_lines.append("#### **结果亮点**")
                     md_lines.append("")
                     for highlight in self.results.experimental_highlights:
                         md_lines.append(f"* {highlight}")
                     md_lines.append("")
-                
+
                 if self.results.practical_value:
                     md_lines.append("#### **实际价值**")
                     md_lines.append("")
                     for value in self.results.practical_value:
                         md_lines.append(f"* {value}")
                     md_lines.append("")
-                
+
                 md_lines.append("\n---\n")
 
             # Terminology

@@ -1,4 +1,4 @@
-You are an expert research assistant specializing in Artificial Intelligence (AI). Your task is to generate topic tags for the following paper abstract.
+You are an expert research assistant specializing in Artificial Intelligence (AI). Your task is to generate topic tags for the following paper title and its abstract.
 
 Requirements:
 - Produce two levels of tags:
@@ -23,5 +23,7 @@ Output example:
 
 **重要：确保返回的是有效的JSON格式，所有字符串用双引号包围。**
 
-Summary:
-{summary_content}
+Paper title:
+{title}
+Paper abstract:
+{abstract}

@@ -76,6 +76,7 @@ from summary_service.markdown_processor import extract_markdown
 from summary_service.text_processor import chunk_text
 from summary_service.llm_utils import llm_invoke
 from summary_service.summary_generator import (
+    generate_tags_from_abstract,
     progressive_summary,
     generate_tags_from_summary,
     generate_abstract_summary,
@@ -141,7 +142,7 @@ def summarize_paper_url(
         finally:
             extractor.close()
         return paper_info_cache
-    
+
     if extract_only:
         _LOG.info("📄  Extracting text from %s", url)
     else:
@@ -150,10 +151,10 @@ def summarize_paper_url(
     try:
         # Use provided session or default
         current_session = session or SESSION
-        
+
         # Step 1: Process PDF and extract text
         pdf_url = resolve_pdf_url(url, current_session)
-        
+
         if local:
             pdf_path = download_pdf(pdf_url, output_dir=PDF_DIR, session=current_session, skip_download=True)
         else:
@@ -163,7 +164,7 @@ def summarize_paper_url(
         text = md_path.read_text(encoding="utf-8")
         paper_subject = extract_first_header(text)
         summary_path = SUMMARY_DIR / f"{pdf_path.stem}.md"  # Define summary_path early
-        
+
         # Step 2: If extract_only mode, save paper info if extracted and return
         if extract_only:
             paper_info = _get_paper_info_once()
@@ -194,7 +195,7 @@ def summarize_paper_url(
                     _LOG.info("💾 Saved extracted paper info for %s", pdf_path.stem)
                 except Exception as exc:
                     _LOG.warning("Failed to save paper info in extract_only mode: %s", exc)
-            
+
             _LOG.info("✅  Extracted text saved to %s", md_path)
             return SummarizationResult.success(
                 summary_path=md_path,
@@ -211,7 +212,7 @@ def summarize_paper_url(
 
         # Step 4: Check if summary already exists
         existing_summary_record = load_summary_with_service_record(pdf_path.stem, SUMMARY_DIR)
-        
+
         # If user requested full deep read (abstract_only=False) but existing summary is abstract-only,
         # we need to regenerate the full summary instead of returning the existing one
         should_regenerate_full = (
@@ -219,18 +220,18 @@ def summarize_paper_url(
             not abstract_only and  # User wants full deep read
             existing_summary_record.service_data.is_abstract_only  # But existing is abstract-only
         )
-        
+
         if existing_summary_record and not should_regenerate_full:
             # Handle existing summary - update title/abstract if extracted, generate tags if empty
             existing_structured_summary = existing_summary_record.summary_data.structured_content
             existing_tags = existing_summary_record.summary_data.tags
-            
+
             try:
-                # Check if paper info is missing 
+                # Check if paper info is missing
                 paper_info = None
                 if existing_structured_summary.paper_info.title_en:
                     paper_info = existing_structured_summary.paper_info
-                
+
                 # If paper info is missing, extract and save it
                 updated_abstract = False
                 if not paper_info:
@@ -245,13 +246,20 @@ def summarize_paper_url(
                             _LOG.info("💾 Saved extracted paper info for %s", pdf_path.stem)
                         except Exception as exc:
                             _LOG.warning("Failed to save paper info in extract_only mode: %s", exc)
-                
+
                 # Generate tags if they are empty (always, not just in local mode)
                 tags_to_save = existing_tags
                 if not existing_tags.tags and not existing_tags.top:
                     _LOG.info("🏷️  Generating tags for existing summary %s (tags are empty)", pdf_path.stem)
                     if abstract_only:
-                        tags_raw = generate_abstract_summary(paper_info.abstract, paper_info.title_en, api_key=api_key, base_url=base_url, provider=provider, model=model)
+                        tags_raw = generate_tags_from_abstract(
+                            title=paper_info.title_en,
+                            abstract_text=paper_info.abstract,
+                            api_key=api_key,
+                            base_url=base_url,
+                            provider=provider,
+                            model=model,
+                        )
                     else:
                         summary_text = existing_structured_summary.to_markdown()
                         tags_raw = generate_tags_from_summary(
@@ -262,7 +270,7 @@ def summarize_paper_url(
                             model=model
                         )
                     tags_to_save = tags_raw
-                
+
                 # Save updated summary if title/abstract were updated or tags were generated
                 if updated_abstract or (tags_to_save != existing_tags):
                     save_summary_with_service_record(
@@ -277,18 +285,18 @@ def summarize_paper_url(
                         first_created_at=existing_summary_record.service_data.first_created_at,
                         is_abstract_only=existing_summary_record.service_data.is_abstract_only
                     )
-                    
+
                     if updated_abstract:
                         update_msg = "✅  Updated abstract for existing summary %s"
                     if tags_to_save != existing_tags:
                         update_msg += " and tags generated"
-                    
+
                     _LOG.info(update_msg, pdf_path.stem)
                 else:
                     _LOG.info("✅  Existing summary %s is up to date", pdf_path.stem)   
             except Exception as exc:
                 _LOG.exception("Failed to process existing summary for %s: %s", pdf_path.stem, exc)
-            
+
             return SummarizationResult.success(
                 summary_path=summary_path,
                 pdf_url=pdf_url,
@@ -311,19 +319,11 @@ def summarize_paper_url(
             else:
                 # Truly new summary - check if a record file exists to preserve first_created_at
                 preserved_first_created_at = None
-                try:
-                    existing_check = load_summary_with_service_record(pdf_path.stem, SUMMARY_DIR)
-                    if existing_check and existing_check.service_data.first_created_at:
-                        preserved_first_created_at = existing_check.service_data.first_created_at
-                        _LOG.info("📅 Preserving first_created_at from existing record: %s", preserved_first_created_at)
-                except Exception:
-                    pass
-                
                 preserved_source_type = "system"
                 preserved_user_id = None
                 preserved_original_url = pdf_url
                 preserved_ai_judgment = None
-            
+
             summary_json_path = SUMMARY_DIR / (pdf_path.stem + ".json")
             chunk_summary_path = CHUNKS_SUMMARY_DIR / (pdf_path.stem + ".json")
 
@@ -331,17 +331,34 @@ def summarize_paper_url(
             paper_info = _get_paper_info_once()
             paper_title = paper_info.title_en
             paper_abstract = paper_info.abstract
-            
-            summary, chunks_summary = progressive_summary(
-                chunks,
-                summary_path=summary_json_path,
-                chunk_summary_path=chunk_summary_path,
-                api_key=api_key,
-                base_url=base_url,
-                provider=provider,
-                model=model,
-                max_workers=max_workers,
-            )
+
+            # Use abstract-only summarization if requested
+            if abstract_only:
+                _LOG.info("📄 Using abstract-only summarization for %s", pdf_path.stem)
+                if not paper_abstract:
+                    _LOG.warning("⚠️  No abstract found for %s, falling back to full summary", pdf_path.stem)
+                    summary = None
+                    chunks_summary = []
+                else:
+                    summary = generate_abstract_summary(
+                        abstract_text=paper_abstract,
+                        title=paper_title,
+                        api_key=api_key,
+                        base_url=base_url,
+                        provider=provider,
+                        model=model,
+                    )
+            else:
+                summary, _ = progressive_summary(
+                    chunks,
+                    summary_path=summary_json_path,
+                    chunk_summary_path=chunk_summary_path,
+                    api_key=api_key,
+                    base_url=base_url,
+                    provider=provider,
+                    model=model,
+                    max_workers=max_workers,
+                )
 
             # Save structured summary immediately after LLM generation
             if summary:
@@ -361,7 +378,7 @@ def summarize_paper_url(
                     if paper_abstract:
                         summary.paper_info.abstract = paper_abstract
                         _LOG.info("📄 Extracted abstract for %s", pdf_path.stem)
-                    
+
                     # Save using the new service record format immediately
                     # Abstract is already in summary.paper_info.abstract
                     from summary_service.models import Tags
@@ -375,35 +392,40 @@ def summarize_paper_url(
                         original_url=preserved_original_url,
                         ai_judgment=preserved_ai_judgment,
                         first_created_at=preserved_first_created_at,
-                        is_abstract_only=False  # This is a full deep read
+                        is_abstract_only=abstract_only  # Set based on abstract_only flag
                     )
                     _LOG.info("✅  Saved structured summary with service record for %s", pdf_path.stem)
                 except Exception as exc:
                     _LOG.exception("Failed to save structured summary for %s: %s", pdf_path.stem, exc)
-                    # Fallback to markdown if service record saving fails
-                    summary_markdown = summary.to_markdown() if summary else "Paper summary"
-                    summary_path.write_text(summary_markdown, encoding="utf-8")
+                    raise exc
             else:
-                _LOG.error("❌ LLM failed to generate structured summary for %s", pdf_path.stem)
-                # Generate a basic markdown summary as fallback
-                summary_markdown = f"# {pdf_path.stem}\n\nLLM failed to generate structured summary. Please try again later."
-                summary_path.write_text(summary_markdown, encoding="utf-8")
-            
+                raise Exception("LLM failed to generate structured summary")
+
             # Generate and persist tags alongside the summary
             if summary:  # Only generate tags if we have a structured summary
                 try:
                     _LOG.info("🏷️  Generating tags for %s", pdf_path.stem)
-                    
-                    # Convert structured summary to markdown for tag generation
-                    summary_text = summary.to_markdown()
-                    
-                    tag_raw = generate_tags_from_summary(
-                        summary_text, 
-                        api_key=api_key, 
-                        base_url=base_url, 
-                        provider=provider, 
-                        model=model
-                    )
+
+                    if abstract_only:
+                        tag_raw = generate_tags_from_abstract(
+                            title=paper_title,
+                            abstract_text=paper_abstract,
+                            api_key=api_key,
+                            base_url=base_url,
+                            provider=provider,
+                            model=model,
+                        )
+                    else:
+                        # Convert structured summary to markdown for tag generation
+                        summary_text = summary.to_markdown()
+
+                        tag_raw = generate_tags_from_summary(
+                            summary_text, 
+                            api_key=api_key, 
+                            base_url=base_url, 
+                            provider=provider, 
+                            model=model
+                        )
                     # Update the service record with tags
                     # Abstract is already in summary.paper_info.abstract
                     save_summary_with_service_record(
@@ -416,10 +438,10 @@ def summarize_paper_url(
                         original_url=preserved_original_url,
                         ai_judgment=preserved_ai_judgment,
                         first_created_at=preserved_first_created_at,
-                        is_abstract_only=False  # This is a full deep read
+                        is_abstract_only=abstract_only  # Set based on abstract_only flag
                     )
                     _LOG.info("✅  Updated summary with tags for %s", pdf_path.stem)
-                        
+
                 except Exception as exc:
                     _LOG.exception("Failed to generate tags for %s: %s", pdf_path.stem, exc)
                     # Tags failed, but structured summary is already saved

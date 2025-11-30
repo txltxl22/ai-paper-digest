@@ -84,7 +84,7 @@ SUMMARY_SCHEMA = {
             }
         }
     },
-    "required": ["paper_info", "one_sentence_summary", "innovations", "results", "terminology"]
+    "required": ["paper_info", "one_sentence_summary"]
 }
 
 TAGS_SCHEMA = {

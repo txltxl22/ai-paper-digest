@@ -446,6 +446,7 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
                 extract_only=args.extract_only,
                 local=args.local,
                 max_workers=args.workers,
+                abstract_only=True,  # Default to abstract-only (especially for local mode)
             ): idx
             for idx, link in enumerate(links)
         }

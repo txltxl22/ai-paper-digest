@@ -45,7 +45,8 @@ SUMMARY_SCHEMA = {
             "type": "object",
             "properties": {
                 "title_zh": {"type": "string"},
-                "title_en": {"type": "string"}
+                "title_en": {"type": "string"},
+                "abstract": {"type": "string"}
             },
             "required": ["title_zh", "title_en"]
         },

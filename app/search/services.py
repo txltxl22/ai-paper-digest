@@ -6,6 +6,7 @@ import re
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import logging
+from summary_service.models import SummaryRecord
 
 
 class SearchService:
@@ -49,19 +50,20 @@ class SearchService:
         content_index: List[Dict] = []
         processed_ids = set()
         
-        # Process new JSON format files first
+        # Process new JSON format files first using Pydantic models
+        from summary_service.record_manager import load_summary_with_service_record
         for json_path in json_files:
             try:
                 arxiv_id = json_path.stem
                 if arxiv_id in processed_ids:
                     continue
                     
-                data = json.loads(json_path.read_text(encoding="utf-8"))
-                service_data = data.get("service_data", {})
-                summary_data = data.get("summary_data", {})
+                record = load_summary_with_service_record(arxiv_id, self.summary_dir)
+                if not record:
+                    continue
                 
                 # Extract searchable content
-                searchable_content = self._extract_searchable_content(data, arxiv_id)
+                searchable_content = self._extract_searchable_content(record, arxiv_id)
                 if searchable_content:
                     content_index.append(searchable_content)
                     processed_ids.add(arxiv_id)
@@ -128,48 +130,25 @@ class SearchService:
         self._cache["latest_mtime"] = latest_mtime
         return content_index
     
-    def _extract_searchable_content(self, data: Dict, arxiv_id: str) -> Optional[Dict[str, Any]]:
-        """Extract searchable content from JSON data."""
+    def _extract_searchable_content(self, record: SummaryRecord, arxiv_id: str) -> Optional[Dict[str, Any]]:
+        """Extract searchable content from SummaryRecord model."""
         try:
-            service_data = data.get("service_data", {})
-            summary_data = data.get("summary_data", {})
+            # Extract title from PaperInfo
+            title = self._extract_title_from_data(record, arxiv_id)
             
-            # Extract title
-            title = self._extract_title_from_data(summary_data, arxiv_id)
+            # Extract content from SummaryData
+            content = record.summary_data.markdown_content
             
-            # Extract content
-            content = summary_data.get("markdown_content", summary_data.get("content", ""))
+            # If markdown content is empty, generate from structured content
+            if not content:
+                structured_summary = record.summary_data.structured_content
+                content = structured_summary.to_markdown()
             
-            # If markdown content is empty, try to generate from structured content
-            if not content and "structured_content" in summary_data:
-                try:
-                    structured_content = summary_data.get("structured_content", {})
-                    if structured_content and isinstance(structured_content, dict):
-                        if "paper_info" in structured_content:
-                            from summary_service.models import parse_summary
-                            structured_summary = parse_summary(json.dumps(structured_content))
-                            content = structured_summary.to_markdown()
-                        elif "content" in structured_content:
-                            content = structured_content.get("content", "")
-                except Exception as e:
-                    logging.error(f"Error converting structured content to markdown: {e}")
-            
-            # Parse tags
-            tags: List[str] = []
-            top_tags: List[str] = []
-            detail_tags: List[str] = []
-            
-            tags_dict = summary_data.get("tags", {})
-            if isinstance(tags_dict, dict):
-                container = tags_dict
-                if isinstance(tags_dict.get("tags"), dict):
-                    container = tags_dict.get("tags") or {}
-                
-                if isinstance(container.get("top"), list):
-                    top_tags = [str(t).strip().lower() for t in container.get("top") if str(t).strip()]
-                if isinstance(container.get("tags"), list):
-                    detail_tags = [str(t).strip().lower() for t in container.get("tags") if str(t).strip()]
-            tags = (top_tags or []) + (detail_tags or [])
+            # Extract tags from Tags model
+            tags_obj = record.summary_data.tags
+            top_tags = [str(t).strip().lower() for t in (tags_obj.top or []) if str(t).strip()]
+            detail_tags = [str(t).strip().lower() for t in (tags_obj.tags or []) if str(t).strip()]
+            tags = top_tags + detail_tags
             
             return {
                 "id": arxiv_id,
@@ -178,27 +157,23 @@ class SearchService:
                 "tags": tags,
                 "top_tags": top_tags,
                 "detail_tags": detail_tags,
-                "source_type": service_data.get("source_type", "system"),
-                "user_id": service_data.get("user_id"),
-                "original_url": service_data.get("original_url"),
+                "source_type": record.service_data.source_type or "system",
+                "user_id": record.service_data.user_id,
+                "original_url": record.service_data.original_url,
             }
         except Exception as e:
             logging.error(f"Error extracting searchable content for {arxiv_id}: {e}")
             return None
     
-    def _extract_title_from_data(self, summary_data: Dict, arxiv_id: str) -> str:
-        """Extract title from summary data."""
-        # Try to get title from structured content first
-        structured_content = summary_data.get("structured_content", {})
-        if isinstance(structured_content, dict):
-            paper_info = structured_content.get("paper_info", {})
-            if isinstance(paper_info, dict):
-                title = paper_info.get("title", "")
-                if title:
-                    return title
+    def _extract_title_from_data(self, record: SummaryRecord, arxiv_id: str) -> str:
+        """Extract title from SummaryRecord model."""
+        # Try to get title from PaperInfo first
+        paper_info = record.summary_data.structured_content.paper_info
+        if paper_info.title_en:
+            return paper_info.title_en
         
         # Try to extract from markdown content
-        content = summary_data.get("markdown_content", summary_data.get("content", ""))
+        content = record.summary_data.markdown_content
         if content:
             title = self._extract_title_from_markdown(content)
             if title:

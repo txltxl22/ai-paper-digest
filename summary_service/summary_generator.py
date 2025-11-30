@@ -19,6 +19,8 @@ from .llm_utils import llm_invoke
 from .models import (
     ChunkSummary,
     StructuredSummary,
+    PaperInfo,
+    Results,
     Innovation,
     TermDefinition,
     Tags,
@@ -31,6 +33,9 @@ _LOG = logging.getLogger("summary_generator")
 
 # Default configuration
 DEFAULT_LLM_PROVIDER = "deepseek"
+
+# Get prompts directory path relative to this module
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 def progressive_summary(
@@ -77,7 +82,7 @@ def progressive_summary(
     def _summarize_one(idx: int, chunk: str) -> Tuple[int, ChunkSummary]:
         msg = HumanMessage(
             PromptTemplate.from_file(
-                os.path.join("prompts", "chunk_summary.json.md"), encoding="utf-8"
+                _PROMPTS_DIR / "chunk_summary.json.md", encoding="utf-8"
             ).format(chunk_content=chunk)
         )
         resp = llm_invoke(
@@ -158,7 +163,7 @@ def progressive_summary(
 
     # Generate final structured summary
     prompt_template = PromptTemplate.from_file(
-        os.path.join("prompts", "summary.json.md"), encoding="utf-8"
+        _PROMPTS_DIR / "summary.json.md", encoding="utf-8"
     )
     
     # Create the complete prompt with chunk summaries
@@ -216,6 +221,71 @@ def progressive_summary(
         return None, chunk_summaries  # type: ignore
 
 
+def generate_abstract_summary(
+    abstract_text: str,
+    title: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    provider: str = DEFAULT_LLM_PROVIDER,
+    model: str = None,
+) -> StructuredSummary:
+    """Generate a one-sentence summary from the abstract using LLM."""
+    
+    tmpl = PromptTemplate.from_file(
+        _PROMPTS_DIR / "abstract_summary.json.md", encoding="utf-8"
+    ).format(title=title, abstract=abstract_text)
+
+    resp = llm_invoke(
+        [HumanMessage(content=tmpl)],
+        api_key=api_key,
+        base_url=base_url,
+        provider=provider,
+        model=model,
+    )
+    
+    raw = (resp.content or "").strip()
+    
+    # Clean up any <think> tags that might appear in Ollama output
+    if provider.lower() == "ollama":
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
+        
+    # Strip fenced code blocks if present
+    fenced_match = re.search(r"```(?:json|\w+)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+    if fenced_match:
+        raw = fenced_match.group(1).strip()
+        
+    try:
+        data = json.loads(raw)
+        
+        # Create StructuredSummary with minimal data
+        paper_info = PaperInfo(
+            title_zh=data.get("paper_info", {}).get("title_zh", ""),
+            title_en=data.get("paper_info", {}).get("title_en", ""),
+            abstract=abstract_text # Use original abstract
+        )
+        
+        return StructuredSummary(
+            paper_info=paper_info,
+            one_sentence_summary=data.get("one_sentence_summary", ""),
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        
+    except Exception as e:
+        _LOG.error(f"Failed to parse abstract summary: {e}")
+        _LOG.error(f"LLM response was: {resp.content}")
+        
+        # Fallback
+        return StructuredSummary(
+            paper_info=PaperInfo(title_zh="", title_en=title, abstract=abstract_text),
+            one_sentence_summary="Summary generation failed.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+
+
 def generate_tags_from_summary(
     summary_text: str,
     api_key: Optional[str] = None,
@@ -226,16 +296,16 @@ def generate_tags_from_summary(
 ) -> Tags:
     """Generate AI-aware top-level and detailed tags using the LLM.
 
-    Reads prompt from prompts/tags.json.md. Returns a Tags object.
+    Reads prompt from summary_service/prompts/tags.json.md. Returns a Tags object.
     """
     # Use top-level imports
 
-    tmpl = PromptTemplate.from_file(
-        os.path.join("prompts", "tags.json.md"), encoding="utf-8"
+    user_prompt = PromptTemplate.from_file(
+        _PROMPTS_DIR / "tags.json.md", encoding="utf-8"
     ).format(summary_content=summary_text)
 
     resp = llm_invoke(
-        [HumanMessage(content=tmpl)],
+        [HumanMessage(content=user_prompt)],
         api_key=api_key,
         base_url=base_url,
         provider=provider,
@@ -347,6 +417,21 @@ class SummaryGenerator:
             max_workers=self.max_workers,
             use_summary_cache=use_summary_cache,
             use_chunk_summary_cache=use_chunk_summary_cache,
+        )
+
+    def generate_abstract_summary(
+        self,
+        abstract_text: str,
+        title: str,
+    ) -> StructuredSummary:
+        """Generate abstract-only summary using instance configuration."""
+        return generate_abstract_summary(
+            abstract_text=abstract_text,
+            title=title,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            provider=self.provider,
+            model=self.model,
         )
 
 

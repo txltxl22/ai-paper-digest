@@ -107,26 +107,27 @@ class TestIndexPageSubsystem:
     
     def test_entry_scanning(self):
         """Test entry scanning functionality."""
-        # Create a test summary file
-        test_summary = {
-            "service_data": {
-                "source_type": "system",
-                "user_id": None,
-                "original_url": None
-            },
-            "summary_data": {
-                "content": "# Test Paper\n\nThis is a test paper.",
-                "tags": {
-                    "top": ["ai", "ml"],
-                    "tags": ["machine-learning", "artificial-intelligence"]
-                },
-                "updated_at": "2024-01-01T00:00:00Z"
-            }
-        }
+        # Create a test summary file using proper save function
+        from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+        from summary_service.record_manager import save_summary_with_service_record
         
-        summary_file = self.summary_dir / "test_paper.json"
-        with open(summary_file, 'w') as f:
-            json.dump(test_summary, f)
+        structured_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试", title_en="Test Paper", abstract="Test Abstract"),
+            one_sentence_summary="This is a test paper.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        
+        tags = Tags(top=["ai", "ml"], tags=["machine-learning", "artificial-intelligence"])
+        
+        save_summary_with_service_record(
+            arxiv_id="test_paper",
+            summary_content=structured_summary,
+            tags=tags,
+            summary_dir=self.summary_dir,
+            source_type="system"
+        )
         
         # Test scanning
         entries = self.entry_scanner.scan_entries_meta()
@@ -149,32 +150,34 @@ class TestIndexPageSubsystem:
             "original_url": None
         }
         
-        # Create corresponding summary file
-        test_summary = {
-            "service_data": {
-                "source_type": "system",
-                "user_id": None,
-                "original_url": None
-            },
-            "summary_data": {
-                "content": "# Test Paper\n\nThis is a test paper.",
-                "tags": {
-                    "top": ["ai"],
-                    "tags": ["ml"]
-                }
-            }
-        }
+        # Create corresponding summary file using proper save function
+        from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+        from summary_service.record_manager import save_summary_with_service_record
         
-        summary_file = self.summary_dir / "test_paper.json"
-        with open(summary_file, 'w') as f:
-            json.dump(test_summary, f)
+        structured_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试", title_en="Test Paper", abstract="Test Abstract"),
+            one_sentence_summary="This is a test paper.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        
+        tags = Tags(top=["ai"], tags=["ml"])
+        
+        save_summary_with_service_record(
+            arxiv_id="test_paper",
+            summary_content=structured_summary,
+            tags=tags,
+            summary_dir=self.summary_dir,
+            source_type="system"
+        )
         
         # Test rendering
         rendered = self.entry_renderer.render_page_entries([entry_meta])
         assert len(rendered) == 1
         assert "preview_html" in rendered[0]
         assert "Test Paper" in rendered[0]["preview_html"]
-        assert "<h1" in rendered[0]["preview_html"]
+        assert "<h" in rendered[0]["preview_html"]  # Check for any heading tag
     
     def test_tag_cloud(self):
         """Test tag cloud functionality."""

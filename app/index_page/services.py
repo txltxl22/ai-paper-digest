@@ -56,45 +56,37 @@ class EntryScanner:
         entries_meta: List[Dict] = []
         processed_ids = set()
         
-        # Process new JSON format files first
+        # Process new JSON format files first using Pydantic models
+        from summary_service.record_manager import load_summary_with_service_record
         for json_path in json_files:
             try:
                 arxiv_id = json_path.stem
                 if arxiv_id in processed_ids:
                     continue
-                    
-                data = json.loads(json_path.read_text(encoding="utf-8"))
-                service_data = data.get("service_data", {})
-                summary_data = data.get("summary_data", {})
                 
-                # Parse tags
-                tags: List[str] = []
-                top_tags: List[str] = []
-                detail_tags: List[str] = []
+                # Load using Pydantic model
+                record = load_summary_with_service_record(arxiv_id, self.summary_dir)
+                if not record:
+                    continue
                 
-                tags_dict = summary_data.get("tags", {})
-                if isinstance(tags_dict, dict):
-                    # Handle nested structure: {"tags": {"top": [...], "tags": [...]}}
-                    container = tags_dict
-                    if isinstance(tags_dict.get("tags"), dict):
-                        container = tags_dict.get("tags") or {}
-                    
-                    if isinstance(container.get("top"), list):
-                        top_tags = [str(t).strip().lower() for t in container.get("top") if str(t).strip()]
-                    if isinstance(container.get("tags"), list):
-                        detail_tags = [str(t).strip().lower() for t in container.get("tags") if str(t).strip()]
-                tags = (top_tags or []) + (detail_tags or [])
+                # Skip summaries without one_sentence_summary (not fully processed)
+                one_sentence_summary = record.summary_data.structured_content.one_sentence_summary
+                if not one_sentence_summary or not one_sentence_summary.strip():
+                    continue
                 
-                # Extract English title from structured content
-                english_title = None
-                structured_content = summary_data.get("structured_content", {})
-                if isinstance(structured_content, dict) and "paper_info" in structured_content:
-                    paper_info = structured_content.get("paper_info", {})
-                    if isinstance(paper_info, dict):
-                        english_title = paper_info.get("title_en")
+                # Extract tags from Tags model
+                tags_obj = record.summary_data.tags
+                top_tags = [str(t).strip().lower() for t in (tags_obj.top or []) if str(t).strip()]
+                detail_tags = [str(t).strip().lower() for t in (tags_obj.tags or []) if str(t).strip()]
+                tags = top_tags + detail_tags
+                
+                # Extract English title and abstract from PaperInfo
+                paper_info = record.summary_data.structured_content.paper_info
+                english_title = paper_info.title_en
+                abstract = paper_info.abstract
                 
                 # Parse updated time
-                updated_str = summary_data.get("updated_at")
+                updated_str = record.summary_data.updated_at
                 if updated_str:
                     try:
                         updated = datetime.fromisoformat(updated_str.replace('Z', '+00:00'))
@@ -105,7 +97,7 @@ class EntryScanner:
                 
                 # Parse submission/creation time
                 submission_time = updated  # Default to updated time
-                created_str = service_data.get("created_at")
+                created_str = record.service_data.created_at
                 if created_str:
                     try:
                         submission_time = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
@@ -114,7 +106,7 @@ class EntryScanner:
                 
                 # Parse first creation time (original processing time)
                 first_created_time = submission_time  # Default to submission time
-                first_created_str = service_data.get("first_created_at")
+                first_created_str = record.service_data.first_created_at
                 if first_created_str:
                     try:
                         first_created_time = datetime.fromisoformat(first_created_str.replace('Z', '+00:00'))
@@ -129,73 +121,18 @@ class EntryScanner:
                     "tags": tags,
                     "top_tags": top_tags,
                     "detail_tags": detail_tags,
-                    "source_type": service_data.get("source_type", "system"),
-                    "user_id": service_data.get("user_id"),
-                    "original_url": service_data.get("original_url"),
-                    "abstract": service_data.get("abstract"),
+                    "source_type": record.service_data.source_type or "system",
+                    "user_id": record.service_data.user_id,
+                    "original_url": record.service_data.original_url,
+                    "abstract": abstract,  # From PaperInfo in structured_content
                     "english_title": english_title,
+                    "is_abstract_only": bool(record.service_data.is_abstract_only or False),
                 })
                 processed_ids.add(arxiv_id)
             except Exception as e:
                 print(f"Error processing JSON file {json_path}: {e}")
                 continue
         
-        # Process legacy .md files
-        for md_path in md_files:
-            try:
-                arxiv_id = md_path.stem
-                if arxiv_id in processed_ids:
-                    continue
-                    
-                stat = md_path.stat()
-                updated = datetime.fromtimestamp(stat.st_mtime)
-                submission_time = updated  # For legacy files, use file mtime as submission time
-                first_created_time = updated  # For legacy files, use file mtime as first creation time
-
-                # Load tags from legacy .tags.json file
-                tags: List[str] = []
-                top_tags: List[str] = []
-                detail_tags: List[str] = []
-                tags_file = md_path.with_suffix("")
-                tags_file = tags_file.with_name(tags_file.name + ".tags.json")
-                try:
-                    if tags_file.exists():
-                        data = json.loads(tags_file.read_text(encoding="utf-8"))
-                        # support legacy [..], flat {"top": [...], "tags": [...]},
-                        # and nested {"tags": {"top": [...], "tags": [...]}}
-                        if isinstance(data, list):
-                            detail_tags = [str(t).strip().lower() for t in data if str(t).strip()]
-                        elif isinstance(data, dict):
-                            container = data
-                            if isinstance(data.get("tags"), dict):
-                                container = data.get("tags") or {}
-                            if isinstance(container.get("top"), list):
-                                top_tags = [str(t).strip().lower() for t in container.get("top") if str(t).strip()]
-                            if isinstance(container.get("tags"), list):
-                                detail_tags = [str(t).strip().lower() for t in container.get("tags") if str(t).strip()]
-                        tags = (top_tags or []) + (detail_tags or [])
-                except Exception:
-                    tags = []
-
-                entries_meta.append({
-                    "id": arxiv_id,
-                    "updated": updated,
-                    "submission_time": submission_time,
-                    "first_created_time": first_created_time,
-                    "tags": tags,
-                    "top_tags": top_tags,
-                    "detail_tags": detail_tags,
-                    "source_type": "system",  # Legacy files default to system
-                    "user_id": None,
-                    "original_url": None,
-                    "abstract": None,  # Legacy files don't have abstract
-                    "english_title": None,  # Legacy files don't have structured titles
-                })
-                processed_ids.add(arxiv_id)
-            except Exception as e:
-                print(f"Error processing legacy MD file {md_path}: {e}")
-                continue
-
         # Sort by updated time (newest first), then by submission time as secondary sort
         entries_meta.sort(key=lambda e: (e["updated"], e["submission_time"]), reverse=True)
         self._cache["meta"] = list(entries_meta)
@@ -246,29 +183,25 @@ class EntryRenderer:
         
         for meta in entries_meta:
             try:
-                # Try to load from new JSON format first
+                # Try to load from new JSON format first using Pydantic models
                 json_path = self.summary_dir / f"{meta['id']}.json"
                 if json_path.exists():
-                    data = json.loads(json_path.read_text(encoding="utf-8"))
-                    summary_data = data.get("summary_data", {})
-                    md_text = summary_data.get("markdown_content", summary_data.get("content", ""))
-                    
-                    # If markdown content is empty or None, try to generate from structured content
-                    if not md_text and "structured_content" in summary_data:
-                        try:
-                            structured_content = summary_data.get("structured_content", {})
-                            if structured_content and isinstance(structured_content, dict):
-                                if "paper_info" in structured_content:
-                                    # Use the structured content directly - it should already be in the right format
-                                    from summary_service.models import parse_summary
-                                    structured_summary = parse_summary(json.dumps(structured_content))
-                                    md_text = structured_summary.to_markdown()
-                                elif "content" in structured_content:
-                                    # This should not happen anymore with the fix above
-                                    logging.warning(f"Found legacy content in structured_content for {meta['id']}")
-                                    md_text = structured_content.get("content", "")
-                        except Exception as e:
-                            logging.error(f"Error converting structured content to markdown: {e}")
+                    try:
+                        from summary_service.record_manager import load_summary_with_service_record
+                        record = load_summary_with_service_record(meta['id'], self.summary_dir)
+                        if record:
+                            # Use markdown_content from SummaryData
+                            md_text = record.summary_data.markdown_content
+                            
+                            # If markdown content is empty, generate from structured content
+                            if not md_text:
+                                structured_summary = record.summary_data.structured_content
+                                md_text = structured_summary.to_markdown()
+                        else:
+                            md_text = None
+                    except Exception as e:
+                        logging.error(f"Error loading record for {meta['id']}: {e}")
+                        md_text = None
                     
                     # If content is still empty, try to fall back to .md file
                     if not md_text:
@@ -282,6 +215,18 @@ class EntryRenderer:
                     # Fallback to legacy .md file
                     md_path = self.summary_dir / f"{meta['id']}.md"
                     md_text = md_path.read_text(encoding="utf-8", errors="ignore")
+                
+                # Truncate md_text to ensure only the visible summary part is in the preview
+                # For new format (has <div class="deep-section"), we strip that and everything after
+                if '<div class="deep-section"' in md_text:
+                    md_text = md_text.split('<div class="deep-section"', 1)[0]
+                # For legacy format, try to split at "### 2️⃣" or similar known headers
+                elif "### 2️⃣" in md_text:
+                    md_text = md_text.split("### 2️⃣", 1)[0]
+                elif "## Innovations" in md_text:
+                    md_text = md_text.split("## Innovations", 1)[0]
+                elif "### Innovations" in md_text:
+                    md_text = md_text.split("### Innovations", 1)[0]
                 
                 preview_html = self.render_markdown(md_text)
             except Exception:

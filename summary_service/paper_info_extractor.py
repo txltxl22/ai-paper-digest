@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 import logging
 import time
+from summary_service.models import PaperInfo
 
 logger = logging.getLogger(__name__)
 
@@ -18,29 +19,35 @@ logger = logging.getLogger(__name__)
 class PaperInfoExtractor:
     """Extract paper titles, abstracts, and metadata from various URL sources."""
     
-    def __init__(self, timeout: int = 10):
+    def __init__(self, timeout: int = 10, retry_delay: float = 1.0):
         """Initialize the paper info extractor.
         
         Args:
             timeout: Request timeout in seconds
+            retry_delay: Delay in seconds between retries (default: 1.0)
         """
         self.timeout = timeout
+        self.retry_delay = retry_delay
         self.session = requests.Session()
         # Set a user agent to avoid being blocked
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
     
-    def _fetch_url_content(self, url: str, max_retries: int = 3) -> Optional[str]:
+    def _fetch_url_content(self, url: str, max_retries: int = 3, retry_delay: Optional[float] = None) -> Optional[str]:
         """Fetch HTML content from URL with retry logic.
         
         Args:
             url: URL to fetch content from
             max_retries: Maximum number of retry attempts (default: 3)
+            retry_delay: Delay in seconds between retries (default: uses self.retry_delay)
             
         Returns:
             HTML content as string, or None if fetching fails
         """
+        if retry_delay is None:
+            retry_delay = self.retry_delay
+        
         for attempt in range(max_retries):
             try:
                 response = self.session.get(url, timeout=self.timeout)
@@ -51,7 +58,7 @@ class PaperInfoExtractor:
                     logger.error(f"Failed to fetch content from {url} after {max_retries} attempts: {e}")
                     return None
                 logger.warning(f"Attempt {attempt + 1} failed for {url}, retrying...")
-                time.sleep(1)  # Wait before retry
+                time.sleep(retry_delay)  # Wait before retry
         return None
     
     def _extract_title_from_url(self, url: str, content: Optional[str] = None) -> Optional[str]:
@@ -377,37 +384,36 @@ class PaperInfoExtractor:
             logger.error(f"Error extracting arXiv ID from {url}: {e}")
             return None
     
-    def get_paper_info(self, url: str) -> Dict[str, Any]:
+    def get_paper_info(self, url: str) -> PaperInfo:
         """Get comprehensive paper information from URL.
         
         Args:
             url: Paper URL
             
         Returns:
-            Dictionary containing paper information
+            PaperInfo model containing paper information. Returns PaperInfo with empty/None fields if extraction fails.
         """
-        info = {
-            "url": url,
-            "title": None,
-            "abstract": None,
-            "arxiv_id": None,
-            "source": None,
-            "success": False,
-            "error": None
-        }
+        # Initialize with defaults
+        paper_info = PaperInfo(
+            url=url,
+            title_en="",
+            abstract="",
+            arxiv_id=None,
+            source=None
+        )
         
         try:
             # Extract arXiv ID
             arxiv_id = self.extract_arxiv_id_from_url(url)
-            info["arxiv_id"] = arxiv_id
+            paper_info.arxiv_id = arxiv_id
             
             # Determine source
             if "arxiv.org" in url:
-                info["source"] = "arxiv"
+                paper_info.source = "arxiv"
             elif "huggingface.co" in url:
-                info["source"] = "huggingface"
+                paper_info.source = "huggingface"
             else:
-                info["source"] = "unknown"
+                paper_info.source = "unknown"
 
             # Convert url to abs url
             abs_url = f"https://arxiv.org/abs/{arxiv_id}"
@@ -415,26 +421,20 @@ class PaperInfoExtractor:
             # Fetch HTML content once
             content = self._fetch_url_content(abs_url)
             if content is None:
-                info["error"] = "Failed to fetch content from URL"
-                return info
+                logger.warning(f"Failed to fetch content from {url}")
+                return paper_info
             
             # Extract title and abstract using the same content
             title = self._extract_title_from_url(abs_url, content)
-            info["title"] = title
+            paper_info.title_en = title or ""
             
             abstract = self._extract_abstract_from_url(abs_url, content)
-            info["abstract"] = abstract
-            
-            if title or abstract:
-                info["success"] = True
-            else:
-                info["error"] = "Failed to extract title and abstract"
+            paper_info.abstract = abstract or ""
                 
         except Exception as e:
-            info["error"] = str(e)
             logger.error(f"Error getting paper info from {url}: {e}")
         
-        return info
+        return paper_info
     
     def close(self):
         """Close the session."""
@@ -455,7 +455,7 @@ def extract_title(url: str, timeout: int = 10) -> Optional[str]:
     extractor = PaperInfoExtractor(timeout=timeout)
     try:
         info = extractor.get_paper_info(url)
-        return info.get("title")
+        return info.title_en if info.title_en else None
     finally:
         extractor.close()
 
@@ -473,12 +473,12 @@ def extract_abstract(url: str, timeout: int = 10) -> Optional[str]:
     extractor = PaperInfoExtractor(timeout=timeout)
     try:
         info = extractor.get_paper_info(url)
-        return info.get("abstract")
+        return info.abstract if info.abstract else None
     finally:
         extractor.close()
 
 
-def get_paper_info(url: str, timeout: int = 10) -> Dict[str, Any]:
+def get_paper_info(url: str, timeout: int = 10) -> PaperInfo:
     """Get paper information from URL using default settings.
     
     Args:

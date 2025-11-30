@@ -102,7 +102,8 @@ ai-paper-digest/
 │   ├── __init__.py                       # Python包初始化
 │   └── main.py                          # Flask Web应用主程序
 ├── run_app.py                           # 便捷启动脚本
-├── prompts/                              # AI摘要提示词模板
+├── summary_service/
+│   └── prompts/                          # AI摘要提示词模板
 ├── summary/                              # 生成的论文摘要
 ├── papers/                               # 下载的PDF论文
 ├── markdown/                             # 提取的Markdown文本

@@ -1,5 +1,5 @@
 <!-- Modern Article Card Component -->
-<article data-id='{{ e.id }}'>
+<article data-id='{{ e.id }}' data-abstract-only='{{ 'true' if e.is_abstract_only else 'false' }}'>
   <!-- Header Section -->
   <div class="article-header">
     <div class="header-left">
@@ -26,7 +26,7 @@
           <span class="user-chip" title="系统自动处理">🤖 系统</span>
         {% endif %}
       </div>
-      <div class="update-time">{{ e.updated.strftime('%m-%d %H:%M') }}</div>
+      <div class="update-time">{{ e.submission_time.strftime('%m-%d %H:%M') }}</div>
     </div>
   </div>
   {% if e.recommendation %}
@@ -105,6 +105,10 @@
       {% elif not uid and (not show_favorites) and (not show_todo) and (not show_read) %}
         <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
       {% endif %}
+
+      <button type="button" class='deep-read-link action-btn secondary-btn' data-id='{{ e.id }}' style="color: var(--primary-color); border-color: var(--primary-color);">
+        <span>🤖</span> Deep Read
+      </button>
       <a class='toggle-link action-btn secondary-btn'>展开</a>
     </div>
     <div class="secondary-actions">

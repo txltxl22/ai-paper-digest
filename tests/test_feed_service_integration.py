@@ -29,9 +29,9 @@ class TestFeedServiceIntegration:
         # Test that save_summary_with_service_record handles Tags objects
         # This simulates what feed_paper_summarizer_service.py does
         from summary_service.models import StructuredSummary, PaperInfo, Results
-        
+
         summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="测试", title_en="Test"),
+            paper_info=PaperInfo(title_zh="测试", title_en="Test", abstract="Test Abstract"),
             one_sentence_summary="Test summary.",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),
@@ -72,7 +72,7 @@ class TestFeedServiceIntegration:
         
         # Create a StructuredSummary object
         summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper"),
+            paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper", abstract="Test Abstract"),
             one_sentence_summary="This is a test summary for feed service.",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),

@@ -1373,6 +1373,17 @@ h2 .abstract-trigger {
     overflow-y: auto;
 }
 
+/* Ensure Deep Read button is clickable even when disabled (to show login message) */
+.deep-read-link.disabled {
+    pointer-events: auto !important;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.deep-read-link.disabled:hover {
+    opacity: 0.8;
+}
+
 .abstract-popover-text.truncated {
     display: -webkit-box;
     -webkit-line-clamp: 6;

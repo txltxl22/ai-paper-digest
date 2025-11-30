@@ -99,7 +99,7 @@ def test_summarize_url_success(monkeypatch, tmp_path: Path):
             # Return a mock StructuredSummary object
             from summary_service.models import StructuredSummary, PaperInfo, Innovation, Results, TermDefinition
             summary = StructuredSummary(
-                paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper"),
+                paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper", abstract="Test Abstract"),
                 one_sentence_summary="This is a test summary.",
                 innovations=[
                     Innovation(
@@ -147,7 +147,7 @@ def test_summarize_url_success(monkeypatch, tmp_path: Path):
         os.makedirs(tmp_path / 'chunks', exist_ok=True)
         from summary_service.models import StructuredSummary, PaperInfo, Innovation, Results, TermDefinition
         summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper"),
+            paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper", abstract="Test Abstract"),
             one_sentence_summary="This is a test summary.",
             innovations=[
                 Innovation(
@@ -198,8 +198,9 @@ def test_summarize_url_success(monkeypatch, tmp_path: Path):
         tags_path.write_text(json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Mock the summarize_paper_url function
-    def mock_summarize_paper_url(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat", 
-                                max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None):
+    def mock_summarize_paper_url(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat",
+                                max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None,
+                                abstract_only=False):
         # Create the expected output files
         summary_path = tmp_path / "dummy.md"
         summary_path.write_text("测试论文\nTest Paper\nThis is a test summary.", encoding="utf-8")
@@ -337,9 +338,10 @@ def test_summarize_url_backfills_tags_on_cached_summary(monkeypatch, tmp_path: P
     (tmp_path / "dummy.md").write_text("CACHED SUMMARY TEXT", encoding="utf-8")
     # Don't create tags file so it will trigger backfilling
 
-        # Mock the summarize_paper_url function for cached summary case
-    def mock_summarize_paper_url_cached(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat", 
-                                       max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None):
+    # Mock the summarize_paper_url function for cached summary case
+    def mock_summarize_paper_url_cached(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat",
+                                       max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None,
+                                       abstract_only=False):
         # Create the expected output files
         summary_path = tmp_path / "dummy.md"
         summary_path.write_text("CACHED SUMMARY TEXT", encoding="utf-8")
@@ -389,14 +391,16 @@ def test_summarize_url_failure(monkeypatch):
     """_summarize_url should swallow exceptions and return None."""
 
     def mock_summarize_paper_url_failure(url, api_key=None, base_url=None, provider="deepseek", model="deepseek-chat", 
-                                       max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None):
+                                       max_input_char=50000, extract_only=False, local=False, max_workers=1, session=None,
+                                       abstract_only=False):
         raise RuntimeError("boom")
 
     # Mock the paper_summarizer module to raise an exception
     monkeypatch.setattr(svc.ps, "summarize_paper_url", mock_summarize_paper_url_failure)
 
-    result, _, _ = svc._summarize_url("https://bad-url.com")  # type: ignore[attr-defined]
-    assert result is None
+    result = svc._summarize_url("https://bad-url.com")  # type: ignore[attr-defined]
+    assert result is not None
+    assert not result.is_success
 
 
 def test_collect_local_links_prefers_markdown_over_pdfs(monkeypatch, tmp_path: Path):

@@ -51,24 +51,44 @@ class TestSummaryDetailSubsystem:
     
     def test_summary_renderer_integration(self):
         """Test the complete summary rendering process."""
+        from summary_service.models import SummaryRecord, ServiceRecord, SummaryData, StructuredSummary, PaperInfo, Tags, Results
+        from datetime import datetime
+        
         renderer = SummaryRenderer()
         
-        summary_data = {
-            "arxiv_id": "test123",
-            "content": "# Test Paper\n\nThis is a test paper.",
-            "tags": {
-                "top": ["llm"],
-                "tags": ["machine learning"]
-            }
-        }
+        # Create a proper SummaryRecord object
+        structured_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试", title_en="Test Paper", abstract="Test Abstract"),
+            one_sentence_summary="This is a test paper.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
         
-        service_data = {
-            "source_type": "system",
-            "user_id": None,
-            "original_url": None
-        }
+        tags = Tags(top=["llm"], tags=["machine learning"])
         
-        rendered = renderer.render_summary(summary_data, service_data)
+        service_record = ServiceRecord(
+            arxiv_id="test123",
+            source_type="system",
+            user_id=None,
+            original_url=None,
+            created_at=datetime.now().isoformat(),
+            first_created_at=datetime.now().isoformat()
+        )
+        
+        summary_data_obj = SummaryData(
+            structured_content=structured_summary,
+            markdown_content="# Test Paper\n\nThis is a test paper.",
+            tags=tags,
+            updated_at=datetime.now().isoformat()
+        )
+        
+        record = SummaryRecord(
+            service_data=service_record,
+            summary_data=summary_data_obj
+        )
+        
+        rendered = renderer.render_summary(record)
         
         assert "html_content" in rendered
         assert "top_tags" in rendered
@@ -84,24 +104,43 @@ class TestSummaryDetailSubsystem:
     
     def test_separate_tag_extraction(self):
         """Test that top tags and detail tags are extracted separately."""
+        from summary_service.models import SummaryRecord, ServiceRecord, SummaryData, StructuredSummary, PaperInfo, Tags, Results
+        from datetime import datetime
+        
         renderer = SummaryRenderer()
         
-        summary_data = {
-            "arxiv_id": "test123",
-            "content": "# Test Paper\n\nThis is a test paper.",
-            "tags": {
-                "top": ["llm", "nlp"],
-                "tags": ["machine learning", "natural language processing"]
-            }
-        }
+        structured_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试", title_en="Test Paper", abstract="Test Abstract"),
+            one_sentence_summary="This is a test paper.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
         
-        service_data = {
-            "source_type": "system",
-            "user_id": None,
-            "original_url": None
-        }
+        tags = Tags(top=["llm", "nlp"], tags=["machine learning", "natural language processing"])
         
-        rendered = renderer.render_summary(summary_data, service_data)
+        service_record = ServiceRecord(
+            arxiv_id="test123",
+            source_type="system",
+            user_id=None,
+            original_url=None,
+            created_at=datetime.now().isoformat(),
+            first_created_at=datetime.now().isoformat()
+        )
+        
+        summary_data_obj = SummaryData(
+            structured_content=structured_summary,
+            markdown_content="# Test Paper\n\nThis is a test paper.",
+            tags=tags,
+            updated_at=datetime.now().isoformat()
+        )
+        
+        record = SummaryRecord(
+            service_data=service_record,
+            summary_data=summary_data_obj
+        )
+        
+        rendered = renderer.render_summary(record)
         
         # Test separate tag extraction (bug fix)
         assert "top_tags" in rendered
@@ -114,28 +153,45 @@ class TestSummaryDetailSubsystem:
         assert rendered["detail_tags"] == ["machine learning", "natural language processing"]
     
     def test_nested_tag_structure_handling(self):
-        """Test handling of nested tag structure (bug case)."""
+        """Test handling of tag structure."""
+        from summary_service.models import SummaryRecord, ServiceRecord, SummaryData, StructuredSummary, PaperInfo, Tags, Results
+        from datetime import datetime
+        
         renderer = SummaryRenderer()
         
-        summary_data = {
-            "arxiv_id": "test123",
-            "content": "# Test Paper\n\nThis is a test paper.",
-            "tags": {
-                "tags": {
-                    "top": ["llm", "nlp"],
-                    "tags": ["machine learning", "natural language processing"]
-                }
-            }
-        }
+        structured_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试", title_en="Test Paper", abstract="Test Abstract"),
+            one_sentence_summary="This is a test paper.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
         
-        service_data = {
-            "source_type": "system",
-            "user_id": None,
-            "original_url": None
-        }
+        tags = Tags(top=["llm", "nlp"], tags=["machine learning", "natural language processing"])
         
-        rendered = renderer.render_summary(summary_data, service_data)
+        service_record = ServiceRecord(
+            arxiv_id="test123",
+            source_type="system",
+            user_id=None,
+            original_url=None,
+            created_at=datetime.now().isoformat(),
+            first_created_at=datetime.now().isoformat()
+        )
         
-        # Should handle nested structure correctly
+        summary_data_obj = SummaryData(
+            structured_content=structured_summary,
+            markdown_content="# Test Paper\n\nThis is a test paper.",
+            tags=tags,
+            updated_at=datetime.now().isoformat()
+        )
+        
+        record = SummaryRecord(
+            service_data=service_record,
+            summary_data=summary_data_obj
+        )
+        
+        rendered = renderer.render_summary(record)
+        
+        # Should handle tag structure correctly
         assert rendered["top_tags"] == ["llm", "nlp"]
         assert rendered["detail_tags"] == ["machine learning", "natural language processing"]

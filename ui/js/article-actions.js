@@ -130,14 +130,95 @@ class ArticleActions {
       ev.preventDefault();
       this.removeFromTodo(ev.target);
     }
+
+    // Handle Deep Read button on index cards
+    let deepReadElement = ev.target.closest('.deep-read-link');
+    if (!deepReadElement && ev.target.classList && ev.target.classList.contains('deep-read-link')) {
+      deepReadElement = ev.target;
+    }
+    
+    if (deepReadElement) {
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const art = deepReadElement.closest('article');
+      const isAbstractOnly = art && art.getAttribute('data-abstract-only') === 'true';
+      
+      // If complete summary exists, navigate directly (no login needed)
+      if (!isAbstractOnly) {
+        const id = art.getAttribute('data-id') || deepReadElement.getAttribute('data-id');
+        if (id) {
+          window.location.href = `/summary/${id}`;
+        }
+        return;
+      }
+      
+      // If abstract-only, trigger generation (backend will check login)
+      this.triggerDeepReadFromIndex(deepReadElement);
+      return;
+    }
   }
 
   guideToLogin(action) {
     // Show informative toast message
-    showToast(`需要登录才能${action}，\n请在页面顶部输入任意用户名登陆`);
+    if (typeof showToast === 'function') {
+      showToast(`需要登录才能${action}，\n请在页面顶部输入任意用户名登陆`);
+    } else {
+      // Fallback if showToast is not available
+      alert(`需要登录才能${action}，请在页面顶部输入任意用户名登陆`);
+    }
     
     // Just show toast, no focus behavior to avoid scrolling
     // User can manually click the login form if they want
+  }
+
+  triggerDeepReadFromIndex(button) {
+    const art = button.closest('article');
+    const id = art.getAttribute('data-id') || button.getAttribute('data-id');
+    if (!id) {
+      return;
+    }
+
+    // Save original state and show loading
+    const originalText = button.textContent;
+    button.textContent = '生成中...';
+    button.style.opacity = '0.7';
+
+    fetch(`/api/summary/${id}/deep_read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then(async (r) => {
+        let data = {};
+        try {
+          data = await r.json();
+        } catch (_) {
+          // ignore JSON parse error
+        }
+
+        // Restore button state
+        button.textContent = originalText;
+        button.style.opacity = '';
+
+        if (r.status === 401) {
+          this.guideToLogin('使用深度阅读');
+        } else if (r.ok && data.success) {
+          showToast('深度阅读生成成功，正在打开详细页面...');
+          setTimeout(() => {
+            window.location.href = `/summary/${id}`;
+          }, 500);
+        } else {
+          showToast(data.message || '深度阅读生成失败，请稍后重试');
+        }
+      })
+      .catch(() => {
+        // Restore button state on error
+        button.textContent = originalText;
+        button.style.opacity = '';
+        showToast('网络错误，无法触发深度阅读');
+      });
   }
 
   togglePreview(link) {

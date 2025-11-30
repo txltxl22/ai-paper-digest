@@ -149,7 +149,8 @@ def test_progressive_summary(monkeypatch, tmp_path):
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
-                    "title_en": "Test Paper"
+                    "title_en": "Test Paper",
+                    "abstract": "Test Abstract"
                 },
                 "one_sentence_summary": "FINAL",
                 "innovations": [
@@ -215,7 +216,8 @@ def test_progressive_summary_cache_logic(monkeypatch, tmp_path):
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
-                    "title_en": "Test Paper"
+                    "title_en": "Test Paper",
+                    "abstract": "Test Abstract"
                 },
                 "one_sentence_summary": "FINAL",
                 "innovations": [
@@ -364,7 +366,8 @@ def test_progressive_summary_cache_file_creation(monkeypatch, tmp_path):
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
-                    "title_en": "Test Paper"
+                    "title_en": "Test Paper",
+                    "abstract": "Test Abstract"
                 },
                 "one_sentence_summary": "FINAL",
                 "innovations": [
@@ -444,7 +447,8 @@ def test_progressive_summary_cache_corruption_handling(monkeypatch, tmp_path):
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
-                    "title_en": "Test Paper"
+                    "title_en": "Test Paper",
+                    "abstract": "Test Abstract"
                 },
                 "one_sentence_summary": "FINAL",
                 "innovations": [
@@ -523,7 +527,8 @@ def test_progressive_summary_cache_missing_chunk_file(monkeypatch, tmp_path):
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
-                    "title_en": "Test Paper"
+                    "title_en": "Test Paper",
+                    "abstract": "Test Abstract"
                 },
                 "one_sentence_summary": "FINAL",
                 "innovations": [
@@ -567,7 +572,8 @@ def test_progressive_summary_cache_missing_chunk_file(monkeypatch, tmp_path):
     summary_path.write_text(json.dumps({
         "paper_info": {
             "title_zh": "测试论文",
-            "title_en": "Test Paper"
+            "title_en": "Test Paper",
+            "abstract": "Test Abstract"
         },
         "one_sentence_summary": "CACHED",
         "innovations": [
@@ -627,7 +633,8 @@ def test_progressive_summary_cache_default_values(monkeypatch, tmp_path):
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
-                    "title_en": "Test Paper"
+                    "title_en": "Test Paper",
+                    "abstract": "Test Abstract"
                 },
                 "one_sentence_summary": "FINAL",
                 "innovations": [
@@ -717,7 +724,8 @@ def test_progressive_summary_cache_only_chunk_exists(monkeypatch, tmp_path):
             return AIMessage(content=json.dumps({
                 "paper_info": {
                     "title_zh": "测试论文",
-                    "title_en": "Test Paper"
+                    "title_en": "Test Paper",
+                    "abstract": "Test Abstract"
                 },
                 "one_sentence_summary": "FINAL",
                 "innovations": [

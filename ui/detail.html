@@ -181,6 +181,38 @@
           <button type="submit" class="topbar-btn">筛选</button>
         </form>
         {% endif %}
+        
+        <!-- Deep Read Control Section -->
+        <div class="deep-read-control" style="text-align:center; padding: 2rem 0; display: none;" id="deep-read-control-container">
+            <div class="deep-read-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; max-width: 600px; margin: 0 auto;">
+                <h3 style="margin-top: 0;">🤖 AI 深度阅读</h3>
+                
+                <!-- Case 1: Generate (Abstract Only) -->
+                <div id="deep-read-generate-ui" style="display: none;">
+                    <p style="color: var(--text-muted);">当前仅显示摘要总结。如需获取详细的论文深度解读（包含创新点、实验结果、术语解释等），请点击下方按钮。</p>
+                    
+                    {% if user_id %}
+                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: 1.1rem; padding: 0.8rem 1.5rem; margin-top: 1rem;">
+                        <span>📚</span> 生成深度解读
+                    </button>
+                    <div id="deep-read-loading" style="display: none; margin-top: 1rem;">
+                        <div class="loading-spinner" style="display: inline-block; margin-right: 0.5rem;"></div>
+                        <span>AI正在深入阅读并生成详细报告，请稍候... (约30-60秒)</span>
+                    </div>
+                    <div id="deep-read-error" style="display: none; margin-top: 1rem; color: var(--error-color);"></div>
+                    {% else %}
+                    <div style="margin-top: 1rem;">
+                        <a href="/#login" class="login-cta-btn" style="display: inline-block; text-decoration: none;">
+                            <span class="cta-icon">🔑</span>
+                            <span class="cta-text">登录以启用深度阅读</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+
         <article class='markdown-body'>
             {{ content | safe }}
         </article>
@@ -287,6 +319,58 @@
           `;
         }
       }
+
+      // Deep Read handling - only show section for abstract-only summaries
+      const isAbstractOnly = '{{ is_abstract_only | string | lower }}' === 'true';
+      
+      if (isAbstractOnly) {
+        const controlContainer = document.getElementById('deep-read-control-container');
+        const generateUI = document.getElementById('deep-read-generate-ui');
+        controlContainer.style.display = 'block';
+        generateUI.style.display = 'block';
+      }
+      // If complete summary exists, it's shown directly (no section needed)
+
+      // Generate Button Logic
+      const deepReadGenBtn = document.getElementById('deep-read-gen-btn');
+      if (deepReadGenBtn) {
+        deepReadGenBtn.addEventListener('click', async () => {
+          const loading = document.getElementById('deep-read-loading');
+          const error = document.getElementById('deep-read-error');
+          
+          deepReadGenBtn.style.display = 'none';
+          loading.style.display = 'block';
+          error.style.display = 'none';
+          
+          try {
+            const response = await fetch('{{ deep_read_url }}', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+              // Reload page to show full summary
+              window.location.reload();
+            } else {
+              loading.style.display = 'none';
+              deepReadGenBtn.style.display = 'inline-block';
+              error.textContent = data.message || '生成失败，请稍后重试';
+              error.style.display = 'block';
+            }
+          } catch (err) {
+            console.error('Deep read error:', err);
+            loading.style.display = 'none';
+            deepReadGenBtn.style.display = 'inline-block';
+            error.textContent = '网络错误，请稍后重试';
+            error.style.display = 'block';
+          }
+        });
+      }
+      
     </script>
 
 </body>

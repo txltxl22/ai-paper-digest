@@ -143,39 +143,40 @@ def test_index_renders_tags_and_filters(tmp_path, monkeypatch):
     client = sp.app.test_client()
 
     # create two summaries with tags in new service record format
-    s1_data = {
-        "service_data": {
-            "source_type": "system",
-            "user_id": None,
-            "original_url": None
-        },
-        "summary_data": {
-            "arxiv_id": "2506.11111",
-            "content": "# s1\ncontent",
-            "tags": {
-                "top": ["llm"],
-                "tags": ["llm", "agents"]
-            }
-        }
-    }
-    (sp.SUMMARY_DIR / "2506.11111.json").write_text(json.dumps(s1_data), encoding="utf-8")
+    from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+    from summary_service.record_manager import save_summary_with_service_record
+    
+    s1_summary = StructuredSummary(
+        paper_info=PaperInfo(title_zh="s1", title_en="s1", abstract="Test"),
+        one_sentence_summary="content",
+        innovations=[],
+        results=Results(experimental_highlights=[], practical_value=[]),
+        terminology=[]
+    )
+    s1_tags = Tags(top=["llm"], tags=["llm", "agents"])
+    save_summary_with_service_record(
+        arxiv_id="2506.11111",
+        summary_content=s1_summary,
+        tags=s1_tags,
+        summary_dir=sp.SUMMARY_DIR,
+        source_type="system"
+    )
 
-    s2_data = {
-        "service_data": {
-            "source_type": "system", 
-            "user_id": None,
-            "original_url": None
-        },
-        "summary_data": {
-            "arxiv_id": "2506.22222",
-            "content": "# s2\ncontent", 
-            "tags": {
-                "top": ["vision"],
-                "tags": ["vision", "agents"]
-            }
-        }
-    }
-    (sp.SUMMARY_DIR / "2506.22222.json").write_text(json.dumps(s2_data), encoding="utf-8")
+    s2_summary = StructuredSummary(
+        paper_info=PaperInfo(title_zh="s2", title_en="s2", abstract="Test"),
+        one_sentence_summary="content",
+        innovations=[],
+        results=Results(experimental_highlights=[], practical_value=[]),
+        terminology=[]
+    )
+    s2_tags = Tags(top=["vision"], tags=["vision", "agents"])
+    save_summary_with_service_record(
+        arxiv_id="2506.22222",
+        summary_content=s2_summary,
+        tags=s2_tags,
+        summary_dir=sp.SUMMARY_DIR,
+        source_type="system"
+    )
 
     # index should show tag chips and tag cloud
     res = client.get("/")
@@ -208,7 +209,10 @@ def test_tag_cloud_built_from_all_entries(tmp_path, monkeypatch):
     client = sp.app.test_client()
 
     # Create multiple summaries with different tags
-    summaries = [
+    from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+    from summary_service.record_manager import save_summary_with_service_record
+    
+    summaries_data = [
         {
             "id": "2506.11111",
             "top": ["llm"],
@@ -226,23 +230,22 @@ def test_tag_cloud_built_from_all_entries(tmp_path, monkeypatch):
         }
     ]
 
-    for summary in summaries:
-        s_data = {
-            "service_data": {
-                "source_type": "system",
-                "user_id": None,
-                "original_url": None
-            },
-            "summary_data": {
-                "arxiv_id": summary["id"],
-                "content": f"# {summary['id']}\ncontent",
-                "tags": {
-                    "top": summary["top"],
-                    "tags": summary["tags"]
-                }
-            }
-        }
-        (sp.SUMMARY_DIR / f"{summary['id']}.json").write_text(json.dumps(s_data), encoding="utf-8")
+    for summary_data in summaries_data:
+        summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh=summary_data["id"], title_en=summary_data["id"], abstract="Test"),
+            one_sentence_summary="content",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        tags = Tags(top=summary_data["top"], tags=summary_data["tags"])
+        save_summary_with_service_record(
+            arxiv_id=summary_data["id"],
+            summary_content=summary,
+            tags=tags,
+            summary_dir=sp.SUMMARY_DIR,
+            source_type="system"
+        )
 
     # Test that all tags are shown in tag cloud when no filter is applied
     res = client.get("/")
@@ -287,25 +290,25 @@ def test_nested_tag_structure_handling(tmp_path, monkeypatch):
     sp.app.config.update(TESTING=True)
     client = sp.app.test_client()
 
-    # Create summary with nested tag structure (the bug case)
-    s_data = {
-        "service_data": {
-            "source_type": "system",
-            "user_id": None,
-            "original_url": None
-        },
-        "summary_data": {
-            "arxiv_id": "2506.12345",
-            "content": "# Test\ncontent",
-            "tags": {
-                "tags": {
-                    "top": ["llm", "nlp"],
-                    "tags": ["machine learning", "natural language processing"]
-                }
-            }
-        }
-    }
-    (sp.SUMMARY_DIR / "2506.12345.json").write_text(json.dumps(s_data), encoding="utf-8")
+    # Create summary with tags
+    from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+    from summary_service.record_manager import save_summary_with_service_record
+    
+    summary = StructuredSummary(
+        paper_info=PaperInfo(title_zh="Test", title_en="Test", abstract="Test"),
+        one_sentence_summary="content",
+        innovations=[],
+        results=Results(experimental_highlights=[], practical_value=[]),
+        terminology=[]
+    )
+    tags = Tags(top=["llm", "nlp"], tags=["machine learning", "natural language processing"])
+    save_summary_with_service_record(
+        arxiv_id="2506.12345",
+        summary_content=summary,
+        tags=tags,
+        summary_dir=sp.SUMMARY_DIR,
+        source_type="system"
+    )
 
     # Test that the page loads correctly
     res = client.get("/")
@@ -339,22 +342,24 @@ def test_detail_page_separate_tag_display(tmp_path, monkeypatch):
     client = sp.app.test_client()
 
     # Create summary with both top and detail tags
-    s_data = {
-        "service_data": {
-            "source_type": "system",
-            "user_id": None,
-            "original_url": None
-        },
-        "summary_data": {
-            "arxiv_id": "2506.12345",
-            "content": "# Test\ncontent",
-            "tags": {
-                "top": ["llm", "nlp"],
-                "tags": ["machine learning", "natural language processing"]
-            }
-        }
-    }
-    (sp.SUMMARY_DIR / "2506.12345.json").write_text(json.dumps(s_data), encoding="utf-8")
+    from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+    from summary_service.record_manager import save_summary_with_service_record
+    
+    summary = StructuredSummary(
+        paper_info=PaperInfo(title_zh="Test", title_en="Test", abstract="Test"),
+        one_sentence_summary="content",
+        innovations=[],
+        results=Results(experimental_highlights=[], practical_value=[]),
+        terminology=[]
+    )
+    tags = Tags(top=["llm", "nlp"], tags=["machine learning", "natural language processing"])
+    save_summary_with_service_record(
+        arxiv_id="2506.12345",
+        summary_content=summary,
+        tags=tags,
+        summary_dir=sp.SUMMARY_DIR,
+        source_type="system"
+    )
 
     # Test detail page
     res = client.get("/summary/2506.12345")

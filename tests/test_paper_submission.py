@@ -569,9 +569,9 @@ class TestIntegration:
             first_created_at="2025-08-30T15:30:00.000000"
         )
         
-        # Verify first_created_at is set correctly
-        assert record["service_data"]["first_created_at"] == "2025-08-30T15:30:00.000000"
-        assert record["service_data"]["created_at"] != record["service_data"]["first_created_at"]
+        # Verify first_created_at is set correctly (now returns ServiceRecord object)
+        assert record.first_created_at == "2025-08-30T15:30:00.000000"
+        assert record.created_at != record.first_created_at
         
         # Test create_service_record without first_created_at (should use current time)
         record2 = create_service_record(
@@ -582,7 +582,7 @@ class TestIntegration:
         )
         
         # Verify first_created_at defaults to created_at
-        assert record2["service_data"]["first_created_at"] == record2["service_data"]["created_at"]
+        assert record2.first_created_at == record2.created_at
 
     def test_paper_sorting_by_submission_time(self, client, tmp_path):
         """Test that papers are sorted by submission time (newest first)."""
@@ -594,42 +594,78 @@ class TestIntegration:
         summary_dir = tmp_path / "summary"
         summary_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create test summary files with different submission times
+        # Create test summary files with different submission times using proper save function
+        from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+        from summary_service.record_manager import save_summary_with_service_record
+        
         # Paper 1: submitted first (older)
-        paper1_data = {
-            "service_data": {
-                "arxiv_id": "2506.12345",
-                "source_type": "user",
-                "created_at": "2025-08-30T10:00:00.000000",  # Older submission
-                "first_created_at": "2025-08-30T10:00:00.000000",
-                "user_id": "testuser",
-                "original_url": "https://arxiv.org/abs/2506.12345"
-            },
-            "summary_data": {
-                "content": "Paper 1 content",
-                "tags": {"top": [], "tags": []},
-                "updated_at": "2025-08-30T10:00:00.000000"
-            }
-        }
-        (summary_dir / "2506.12345.json").write_text(json.dumps(paper1_data), encoding="utf-8")
+        paper1_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="Paper 1", title_en="Paper 1", abstract="Paper 1 content"),
+            one_sentence_summary="Paper 1 content",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        paper1_tags = Tags(top=[], tags=[])
+        save_summary_with_service_record(
+            arxiv_id="2506.12345",
+            summary_content=paper1_summary,
+            tags=paper1_tags,
+            summary_dir=summary_dir,
+            source_type="user",
+            user_id="testuser",
+            original_url="https://arxiv.org/abs/2506.12345"
+        )
+        
+        # Manually update timestamps for paper 1
+        from summary_service.record_manager import load_summary_with_service_record
+        record1 = load_summary_with_service_record("2506.12345", summary_dir)
+        if record1:
+            record1.service_data.created_at = "2025-08-30T10:00:00.000000"
+            record1.service_data.first_created_at = "2025-08-30T10:00:00.000000"
+            save_summary_with_service_record(
+                arxiv_id="2506.12345",
+                summary_content=record1.summary_data.structured_content,
+                tags=record1.summary_data.tags,
+                summary_dir=summary_dir,
+                source_type="user",
+                user_id="testuser",
+                original_url="https://arxiv.org/abs/2506.12345"
+            )
         
         # Paper 2: submitted second (newer)
-        paper2_data = {
-            "service_data": {
-                "arxiv_id": "2506.67890",
-                "source_type": "user",
-                "created_at": "2025-08-31T15:00:00.000000",  # Newer submission
-                "first_created_at": "2025-08-31T15:00:00.000000",
-                "user_id": "testuser",
-                "original_url": "https://arxiv.org/abs/2506.67890"
-            },
-            "summary_data": {
-                "content": "Paper 2 content",
-                "tags": {"top": [], "tags": []},
-                "updated_at": "2025-08-31T15:00:00.000000"
-            }
-        }
-        (summary_dir / "2506.67890.json").write_text(json.dumps(paper2_data), encoding="utf-8")
+        paper2_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="Paper 2", title_en="Paper 2", abstract="Paper 2 content"),
+            one_sentence_summary="Paper 2 content",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        paper2_tags = Tags(top=[], tags=[])
+        save_summary_with_service_record(
+            arxiv_id="2506.67890",
+            summary_content=paper2_summary,
+            tags=paper2_tags,
+            summary_dir=summary_dir,
+            source_type="user",
+            user_id="testuser",
+            original_url="https://arxiv.org/abs/2506.67890"
+        )
+        
+        # Manually update timestamps for paper 2
+        record2 = load_summary_with_service_record("2506.67890", summary_dir)
+        if record2:
+            record2.service_data.created_at = "2025-08-31T15:00:00.000000"
+            record2.service_data.first_created_at = "2025-08-31T15:00:00.000000"
+            save_summary_with_service_record(
+                arxiv_id="2506.67890",
+                summary_content=record2.summary_data.structured_content,
+                tags=record2.summary_data.tags,
+                summary_dir=summary_dir,
+                source_type="user",
+                user_id="testuser",
+                original_url="https://arxiv.org/abs/2506.67890"
+            )
         
         # Create scanner and scan entries
         scanner = EntryScanner(summary_dir)

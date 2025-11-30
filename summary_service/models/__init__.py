@@ -14,11 +14,13 @@ from .summary_models import (
     TermDefinition
 )
 
-from .tag_models import Tags
+from .tags import Tags
 
 from .service_models import (
     ServiceRecord,
-    SummaryRecord
+    SummaryRecord,
+    SummaryData,
+    SummarizationResult
 )
 
 from .schemas import (
@@ -32,10 +34,7 @@ from .utils import (
     parse_chunk_summary,
     parse_summary,
     parse_tags,
-    summary_to_dict,
-    tags_to_dict,
     get_schema_version,
-    export_schema_definitions,
     clean_json_response
 )
 
@@ -54,6 +53,8 @@ __all__ = [
     # Service models
     "ServiceRecord",
     "SummaryRecord",
+    "SummaryData",
+    "SummarizationResult",
     
     # Schemas
     "CHUNK_SUMMARY_SCHEMA",
@@ -65,9 +66,6 @@ __all__ = [
     "parse_chunk_summary",
     "parse_summary",
     "parse_tags",
-    "summary_to_dict",
-    "tags_to_dict",
     "get_schema_version",
-    "export_schema_definitions",
     "clean_json_response"
 ]

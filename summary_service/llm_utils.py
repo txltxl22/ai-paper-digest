@@ -160,9 +160,7 @@ def llm_invoke(
 
 def clean_ollama_response(content: str) -> str:
     """Clean Ollama response by removing <think> tags."""
-    if isinstance(content, str):
-        return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-    return content
+    return re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
 
 
 def extract_json_from_response(content: str, provider: str = "deepseek") -> str:

@@ -13,8 +13,8 @@
   <!-- Desktop Navigation -->
   <div class="page-header-right desktop-nav">
     {% if uid and not show_back_link %}
-      <a href="{{ url_for('index_page.read_papers') }}" class="nav-btn">已读论文</a>
-      <a href="{{ url_for('index_page.favorite_papers') }}" class="nav-btn">收藏论文</a>
+      <a href="{{ url_for('index_page.read_papers') }}" class="nav-btn">没兴趣论文</a>
+      <a href="{{ url_for('index_page.favorite_papers') }}" class="nav-btn">感兴趣论文</a>
       <a href="{{ url_for('index_page.todo_papers') }}" class="nav-btn">待读论文</a>
       {% if uid in admin_users %}
       <button id='admin-fetch-btn' class="nav-btn admin-btn" title="获取最新论文摘要">获取最新</button>
@@ -118,11 +118,11 @@
       {% if uid and not show_back_link %}
         <a href="{{ url_for('index_page.read_papers') }}" class="mobile-nav-item">
           <span class="nav-icon">📖</span>
-          <span class="nav-text">已读论文</span>
+          <span class="nav-text">没兴趣论文</span>
         </a>
         <a href="{{ url_for('index_page.favorite_papers') }}" class="mobile-nav-item">
           <span class="nav-icon">⭐</span>
-          <span class="nav-text">收藏论文</span>
+          <span class="nav-text">感兴趣论文</span>
         </a>
         <a href="{{ url_for('index_page.todo_papers') }}" class="mobile-nav-item">
           <span class="nav-icon">📌</span>

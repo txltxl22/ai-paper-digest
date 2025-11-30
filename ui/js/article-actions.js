@@ -72,7 +72,7 @@ class ArticleActions {
       ev.stopPropagation();
       
       if (markReadElement.classList.contains('disabled')) {
-        this.guideToLogin('标记为已读');
+        this.guideToLogin('标记为没兴趣');
       } else {
         this.markRead(markReadElement);
       }
@@ -92,7 +92,7 @@ class ArticleActions {
       ev.stopPropagation();
       
       if (favoriteElement.classList.contains('disabled')) {
-        this.guideToLogin('收藏');
+        this.guideToLogin('感兴趣');
       } else {
         this.toggleFavorite(favoriteElement);
       }
@@ -302,7 +302,7 @@ class ArticleActions {
     
     // Add loading state
     const originalText = link.textContent;
-    link.textContent = isFavorited ? '取消中...' : '收藏中...';
+    link.textContent = isFavorited ? '取消中...' : '感兴趣中...';
     link.style.opacity = '0.6';
     link.style.pointerEvents = 'none';
     
@@ -334,13 +334,13 @@ class ArticleActions {
         } else {
           // Update button state (no removal from page)
           link.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
-          link.textContent = newFavorited ? '取消收藏' : '收藏';
+          link.textContent = newFavorited ? '取消感兴趣' : '感兴趣';
           link.style.opacity = '';
           link.style.pointerEvents = '';
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');
+        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
         window.eventTracker.trackFavorite(art, newFavorited);
@@ -412,7 +412,7 @@ class ArticleActions {
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');
+        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
         window.eventTracker.trackFavorite(art, newFavorited);

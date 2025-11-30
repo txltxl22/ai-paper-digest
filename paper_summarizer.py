@@ -101,7 +101,7 @@ def summarize_paper_url(
     extract_only: bool = False,
     abstract_only: bool = False,
     local: bool = False,
-    max_workers: int = 1,
+    max_workers: int = 12,
     session: Optional[object] = None,
 ) -> SummarizationResult:
     """Run the full summarization pipeline for a single paper URL.

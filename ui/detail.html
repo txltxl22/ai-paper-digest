@@ -232,6 +232,7 @@
     <script src="{{ url_for('static_js', filename='paper-submission.js') }}"></script>
     <script src="{{ url_for('static_js', filename='visitor-stats-tracker.js') }}"></script>
     <script src="{{ url_for('static_js', filename='abstract-viewer.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='deep-read-status.js') }}"></script>
     
     <script>
       // URL configuration for Flask templates
@@ -353,8 +354,18 @@
             const data = await response.json();
             
             if (response.ok && data.success) {
-              // Reload page to show full summary
-              window.location.reload();
+              if (data.processing || data.already_processing) {
+                // Processing started, show status bar and keep loading
+                showToast('深度阅读生成已开始，请稍候');
+                if (window.deepReadStatusBar) {
+                  window.deepReadStatusBar.updateStatus();
+                }
+                // Don't reload yet - status bar will show progress
+                // User can manually reload or wait for completion
+              } else {
+                // Shouldn't happen with new async flow, but keep as fallback
+                window.location.reload();
+              }
             } else {
               loading.style.display = 'none';
               deepReadGenBtn.style.display = 'inline-block';

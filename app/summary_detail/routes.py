@@ -3,10 +3,13 @@ Summary detail routes for individual paper viewing.
 """
 from flask import Blueprint, request, render_template_string, abort, url_for, jsonify
 from .services import SummaryLoader, SummaryRenderer
+from .processing_tracker import ProcessingTracker
 from summary_service.paper_info_extractor import PaperInfoExtractor
 from summary_service.record_manager import save_summary_with_service_record, get_structured_summary
+from config_manager import get_llm_config, get_paper_processing_config
 from pathlib import Path
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,8 @@ def create_summary_detail_routes(
     summary_loader: SummaryLoader,
     summary_renderer: SummaryRenderer,
     detail_template: str,
-    summary_dir: Path
+    summary_dir: Path,
+    processing_tracker: ProcessingTracker
 ) -> Blueprint:
     """Create summary detail routes."""
     bp = Blueprint('summary_detail', __name__)
@@ -74,6 +78,14 @@ def create_summary_detail_routes(
             return jsonify({"error": "Login required", "message": "请先登录以使用深度阅读功能"}), 401
             
         try:
+            # Check if already processing
+            if processing_tracker.is_processing(arxiv_id, uid):
+                return jsonify({
+                    "success": True,
+                    "message": "深度阅读正在生成中，请稍候",
+                    "already_processing": True
+                })
+            
             # Load existing summary record
             record = summary_loader.load_summary(arxiv_id)
             if not record:
@@ -83,40 +95,142 @@ def create_summary_detail_routes(
             if not original_url:
                 # Try to construct arXiv URL
                 original_url = f"https://arxiv.org/abs/{arxiv_id}"
-                
-            # Trigger full summarization
-            # We import inside the function to avoid circular imports
-            import paper_summarizer as ps
             
-            # Ensure session exists
-            if not hasattr(ps, "SESSION") or ps.SESSION is None:
-                from summary_service.pdf_processor import build_session
-                ps.SESSION = build_session()
-                
-            result = ps.summarize_paper_url(
-                url=original_url,
-                abstract_only=False, # Force full deep read
-                extract_only=False,
-                local=False # Force re-process to get full content
-            )
+            # Start tracking
+            logger.info(f"Attempting to start processing for {arxiv_id} by user {uid}")
+            tracking_started = processing_tracker.start_processing(arxiv_id, uid)
+            logger.info(f"Tracking start result for {arxiv_id} by user {uid}: {tracking_started}")
             
-            if result.is_success:
+            if not tracking_started:
+                # Another request started processing just now
+                logger.info(f"Processing already started for {arxiv_id} by user {uid}")
                 return jsonify({
                     "success": True,
-                    "message": "深度阅读生成成功",
-                    "reload": True
+                    "message": "深度阅读正在生成中，请稍候",
+                    "already_processing": True
                 })
-            else:
-                return jsonify({
-                    "success": False,
-                    "message": "深度阅读生成失败"
-                }), 500
+            
+            # Verify the job was created
+            is_now_processing = processing_tracker.is_processing(arxiv_id, uid)
+            logger.info(f"Verification: is_processing({arxiv_id}, {uid}) = {is_now_processing}")
+            
+            # Run summarization in background thread
+            def process_in_background():
+                try:
+                    logger.info(f"[THREAD] Starting background deep read processing for {arxiv_id} by user {uid}")
+                    # We import inside the function to avoid circular imports
+                    import paper_summarizer as ps
+                    
+                    # Get config values
+                    llm_config = get_llm_config()
+                    paper_config = get_paper_processing_config()
+                    
+                    # Ensure session exists
+                    if not hasattr(ps, "SESSION") or ps.SESSION is None:
+                        from summary_service.pdf_processor import build_session
+                        ps.SESSION = build_session()
+                    
+                    logger.info(f"[THREAD] Calling summarize_paper_url for {arxiv_id}")
+                    result = ps.summarize_paper_url(
+                        url=original_url,
+                        abstract_only=False, # Force full deep read
+                        extract_only=False,
+                        local=False, # Force re-process to get full content
+                        max_input_char=llm_config.max_input_char,
+                        max_workers=paper_config.max_workers
+                    )
+                    
+                    logger.info(f"[THREAD] Summarization result for {arxiv_id}: success={result.is_success}")
+                    if result.is_success:
+                        processing_tracker.mark_completed(arxiv_id, uid)
+                        logger.info(f"[THREAD] Deep read completed for {arxiv_id} by user {uid}")
+                    else:
+                        error_msg = getattr(result, 'error', 'Summarization failed')
+                        processing_tracker.mark_failed(arxiv_id, uid, error_msg)
+                        logger.error(f"[THREAD] Deep read failed for {arxiv_id} by user {uid}: {error_msg}")
+                except Exception as e:
+                    error_msg = str(e)
+                    processing_tracker.mark_failed(arxiv_id, uid, error_msg)
+                    logger.exception(f"[THREAD] Error generating deep read for {arxiv_id} by user {uid}: {e}")
+            
+            # Start background thread (non-daemon so it completes)
+            thread = threading.Thread(target=process_in_background, daemon=False, name=f"DeepRead-{arxiv_id}-{uid}")
+            thread.start()
+            logger.info(f"Started background thread for deep read: {arxiv_id} by user {uid}, thread_id={thread.ident}")
+            
+            # Double-check the job is in the tracker
+            final_check = processing_tracker.is_processing(arxiv_id, uid)
+            logger.info(f"Final check: is_processing({arxiv_id}, {uid}) = {final_check}")
+            
+            return jsonify({
+                "success": True,
+                "message": "深度阅读生成已开始，请稍候",
+                "processing": True
+            })
                 
         except Exception as e:
-            logger.error(f"Error generating deep read for {arxiv_id}: {e}")
+            logger.error(f"Error starting deep read for {arxiv_id}: {e}")
+            # Try to mark as failed if we started tracking
+            try:
+                processing_tracker.mark_failed(arxiv_id, uid, str(e))
+            except:
+                pass
             return jsonify({
                 "error": "Internal server error",
                 "message": f"深度阅读生成出错: {str(e)}"
+            }), 500
+    
+    @bp.route("/api/deep_read/status", methods=["GET"])
+    def deep_read_status():
+        """Get processing status for current user's deep read jobs."""
+        uid = request.cookies.get("uid")
+        if not uid:
+            return jsonify({"error": "Login required"}), 401
+        
+        try:
+            processing_jobs = processing_tracker.get_processing_jobs(uid)
+            completed_jobs = processing_tracker.get_completed_jobs(uid, limit=10)
+            
+            logger.debug(f"Status request for user {uid}: {len(processing_jobs)} processing, {len(completed_jobs)} completed")
+            
+            return jsonify({
+                "processing": [
+                    {
+                        "arxiv_id": job.arxiv_id,
+                        "started_at": job.started_at.isoformat()
+                    }
+                    for job in processing_jobs
+                ],
+                "completed": [
+                    {
+                        "arxiv_id": job.arxiv_id,
+                        "completed_at": job.completed_at.isoformat() if job.completed_at else None
+                    }
+                    for job in completed_jobs
+                ]
+            })
+        except Exception as e:
+            logger.exception(f"Error getting deep read status for user {uid}: {e}")
+            return jsonify({
+                "error": "Internal server error",
+                "message": "Failed to get processing status"
+            }), 500
+    
+    @bp.route("/api/deep_read/<arxiv_id>/dismiss", methods=["POST"])
+    def dismiss_deep_read(arxiv_id):
+        """Dismiss a completed deep read job from status bar."""
+        uid = request.cookies.get("uid")
+        if not uid:
+            return jsonify({"error": "Login required"}), 401
+        
+        try:
+            processing_tracker.dismiss_job(arxiv_id, uid)
+            return jsonify({"success": True})
+        except Exception as e:
+            logger.error(f"Error dismissing job: {e}")
+            return jsonify({
+                "error": "Internal server error",
+                "message": "Failed to dismiss job"
             }), 500
     
     @bp.route("/api/abstract/<arxiv_id>")

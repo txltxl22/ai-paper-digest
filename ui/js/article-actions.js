@@ -167,53 +167,101 @@ class ArticleActions {
     // User can manually click the login form if they want
   }
 
-  triggerDeepReadFromIndex(button) {
+  async triggerDeepReadFromIndex(button) {
     const art = button.closest('article');
     const id = art.getAttribute('data-id') || button.getAttribute('data-id');
     if (!id) {
       return;
     }
 
+    // Check if already processing
+    try {
+      const statusResponse = await fetch('/api/deep_read/status');
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        const isProcessing = (statusData.processing || []).some(
+          item => item.arxiv_id === id
+        );
+        if (isProcessing) {
+          // Already processing, just show message and update button
+          button.textContent = '生成中...';
+          button.style.opacity = '0.7';
+          button.disabled = true;
+          showToast('深度阅读正在生成中，请稍候');
+          // Trigger status bar update
+          if (window.deepReadStatusBar) {
+            window.deepReadStatusBar.updateStatus();
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      // Ignore status check errors, proceed with request
+    }
+
     // Save original state and show loading
     const originalText = button.textContent;
     button.textContent = '生成中...';
     button.style.opacity = '0.7';
+    button.disabled = true;
 
-    fetch(`/api/summary/${id}/deep_read`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-      .then(async (r) => {
-        let data = {};
-        try {
-          data = await r.json();
-        } catch (_) {
-          // ignore JSON parse error
+    try {
+      const r = await fetch(`/api/summary/${id}/deep_read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         }
+      });
 
+      let data = {};
+      try {
+        data = await r.json();
+      } catch (_) {
+        // ignore JSON parse error
+      }
+
+      if (r.status === 401) {
         // Restore button state
         button.textContent = originalText;
         button.style.opacity = '';
-
-        if (r.status === 401) {
-          this.guideToLogin('使用深度阅读');
-        } else if (r.ok && data.success) {
-          showToast('深度阅读生成成功，正在打开详细页面...');
-          setTimeout(() => {
-            window.location.href = `/summary/${id}`;
-          }, 500);
+        button.disabled = false;
+        this.guideToLogin('使用深度阅读');
+      } else if (r.ok && data.success) {
+        // Keep button in "生成中" state
+        button.textContent = '生成中...';
+        button.style.opacity = '0.7';
+        button.disabled = true;
+        
+        if (data.already_processing) {
+          showToast('深度阅读正在生成中，请稍候');
         } else {
-          showToast(data.message || '深度阅读生成失败，请稍后重试');
+          showToast('深度阅读生成已开始，请稍候');
         }
-      })
-      .catch(() => {
+        
+        // Trigger status bar update immediately and then again after a short delay
+        if (window.deepReadStatusBar) {
+          window.deepReadStatusBar.updateStatus();
+          // Also update again after 1 second to ensure it shows
+          setTimeout(() => {
+            window.deepReadStatusBar.updateStatus();
+          }, 1000);
+        } else {
+          console.warn('Deep read status bar not available');
+        }
+      } else {
         // Restore button state on error
         button.textContent = originalText;
         button.style.opacity = '';
-        showToast('网络错误，无法触发深度阅读');
-      });
+        button.disabled = false;
+        showToast(data.message || '深度阅读生成失败，请稍后重试');
+      }
+    } catch (error) {
+      // Restore button state on error
+      button.textContent = originalText;
+      button.style.opacity = '';
+      button.disabled = false;
+      showToast('网络错误，无法触发深度阅读');
+    }
   }
 
   markRead(link) {

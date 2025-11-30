@@ -795,6 +795,9 @@
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .submission-header::after {
@@ -825,6 +828,8 @@
   align-items: center;
   gap: var(--spacing-sm);
   flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
 }
 
 .header-icon {
@@ -844,6 +849,9 @@
   font-weight: 600;
   cursor: pointer;
   transition: color 0.2s ease;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
 }
 
 .submission-header-title:hover {
@@ -1259,6 +1267,35 @@
 @media (max-width: 768px) {
   .paper-submission-panel {
     padding: var(--spacing-lg);
+  }
+  
+  .submission-header {
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+  
+  .header-left {
+    flex: 1;
+    min-width: 120px;
+    overflow: visible;
+    flex-wrap: nowrap;
+    display: flex;
+    align-items: center;
+  }
+  
+  .submission-header-title {
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    display: inline-block;
+    word-break: keep-all;
+    word-wrap: normal;
+  }
+  
+  .header-right {
+    flex-shrink: 0;
   }
   
   .quota-grid {

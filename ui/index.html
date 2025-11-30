@@ -123,11 +123,34 @@
     </div>
     {% endif %}
     {% include 'components/tag-filter.html' %}
-    {% if uid and read_total is not none and read_today is not none and unread_count is not none and not show_read %}
-    <div id="info-bar" style="margin-bottom:1.2rem;padding:0.6rem 1.2rem;background:var(--code-bg);border-radius:6px;font-size:1.08rem;display:flex;align-items:center;gap:1.5rem;justify-content:center;">
-      <span>未读论文 <strong>{{ unread_count }}</strong></span>
+    {% if not show_read and not show_favorites and not show_todo %}
+    <div id="info-bar" style="margin-bottom:1.5rem;padding:0.75rem 1rem;background:var(--card-bg);border:1px solid var(--divider);border-radius:var(--radius-md);box-shadow:var(--card-shadow);display:flex;align-items:center;gap:0.75rem;justify-content:center;flex-wrap:wrap;font-size:0.875rem;">
+      {% if uid and read_total is not none and read_today is not none and unread_count is not none %}
+      <span style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--code-bg);border-radius:var(--radius-sm);color:var(--text);">
+        <span style="color:var(--muted-text);font-size:0.8rem;">未读</span>
+        <strong style="color:var(--text);font-weight:600;font-size:0.9rem;">{{ unread_count }}</strong>
+      </span>
       {% if todo_count is not none %}
-      <span>已标记仍未读论文 <a href="{{ url_for('index_page.todo_papers') }}" style="text-decoration: none; color: inherit;"><strong>{{ todo_count }}</strong></a></span>
+      <a href="{{ url_for('index_page.todo_papers') }}" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--code-bg);border-radius:var(--radius-sm);color:var(--text);text-decoration:none;transition:background 0.2s;" onmouseover="this.style.background='var(--action-bg-hover)'" onmouseout="this.style.background='var(--code-bg)'">
+        <span style="color:var(--muted-text);font-size:0.8rem;">待读</span>
+        <strong style="color:var(--text);font-weight:600;font-size:0.9rem;">{{ todo_count }}</strong>
+      </a>
+      {% endif %}
+      {% endif %}
+      <span style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--primary-light);border-radius:var(--radius-sm);color:var(--text);">
+        <span style="color:var(--muted-text);font-size:0.8rem;">24小时内新更新论文</span>
+        <strong style="color:var(--primary);font-weight:600;font-size:0.9rem;">{{ papers_updated_24h }}</strong>
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--primary-light);border-radius:var(--radius-sm);color:var(--text);">
+        <span style="color:var(--muted-text);font-size:0.8rem;">72小时内新更新论文</span>
+        <strong style="color:var(--primary);font-weight:600;font-size:0.9rem;">{{ papers_updated_72h }}</strong>
+      </span>
+      {% if latest_paper %}
+      <span style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.375rem 0.625rem;background:var(--code-bg);border-radius:var(--radius-sm);color:var(--text);max-width:100%;">
+        <span style="color:var(--muted-text);font-size:0.8rem;white-space:nowrap;">最新更新:</span>
+        <a href="{{ url_for('summary_detail.view_summary', arxiv_id=latest_paper.id) }}" style="color:var(--primary);text-decoration:none;font-weight:500;font-size:0.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;display:block;" title="{{ latest_paper.title }}">{{ latest_paper.title }}</a>
+        <span style="color:var(--muted-text);font-size:0.8rem;white-space:nowrap;">{{ latest_paper.first_created_time.strftime('%m-%d %H:%M') if latest_paper.first_created_time else 'N/A' }}</span>
+      </span>
       {% endif %}
     </div>
     {% endif %}
@@ -174,7 +197,7 @@
       <div class="personalization-primary">
         <span class="personalization-pill">🎯 个性推荐</span>
         <p class="personalization-copy">
-          根据你感兴趣的论文主题智能推荐最新内容，发现你感兴趣的研究方向
+          根据你感兴趣的论文主题智能推荐最新内容
         </p>
       </div>
       <div class="personalization-cta">

@@ -3,6 +3,7 @@ Index page routes for main index and read pages.
 """
 from flask import Blueprint, request, render_template_string, make_response, redirect, url_for
 from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime, timedelta, timezone
 from .services import EntryScanner, EntryRenderer, EntryFilter
 from .models import TagCloud, Pagination
 from summary_service.recommendations import RecommendationContext, RecommendationEngine, RecommendationResponse
@@ -88,6 +89,9 @@ def create_index_routes(
         user_stats: Optional[Dict] = None,
         all_entries: Optional[List[Dict]] = None,
         personalization: Optional[Dict[str, Any]] = None,
+        papers_updated_24h: int = 0,
+        papers_updated_72h: int = 0,
+        latest_paper: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build the template context with all necessary data."""
         # Build tag clouds from all entries (not just filtered ones)
@@ -148,6 +152,13 @@ def create_index_routes(
                 'read_today': None,
                 'todo_count': None
             })
+        
+        # Add update statistics
+        context.update({
+            'papers_updated_24h': papers_updated_24h,
+            'papers_updated_72h': papers_updated_72h,
+            'latest_paper': latest_paper,
+        })
         
         return context
     
@@ -236,6 +247,43 @@ def create_index_routes(
         filters = _get_filter_params()
         pagination_params = _get_pagination_params()
         
+        # Calculate update statistics
+        now = datetime.now(timezone.utc)
+        cutoff_24h = now - timedelta(hours=24)
+        cutoff_72h = now - timedelta(hours=72)
+        
+        def normalize_datetime(dt):
+            """Normalize datetime to UTC for comparison."""
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                # Assume naive datetime is in UTC
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        
+        papers_updated_24h = len([
+            e for e in all_entries_meta 
+            if e.get("updated") and (normalized := normalize_datetime(e["updated"])) and normalized >= cutoff_24h
+        ])
+        papers_updated_72h = len([
+            e for e in all_entries_meta 
+            if e.get("updated") and (normalized := normalize_datetime(e["updated"])) and normalized >= cutoff_72h
+        ])
+        
+        # Find latest paper by first_created_time
+        latest_paper = None
+        if all_entries_meta:
+            latest_entry = max(
+                all_entries_meta,
+                key=lambda e: e.get("first_created_time") or datetime.min
+            )
+            if latest_entry.get("first_created_time"):
+                latest_paper = {
+                    'id': latest_entry.get("id"),
+                    'title': latest_entry.get("english_title") or latest_entry.get("id"),
+                    'first_created_time': latest_entry.get("first_created_time"),
+                }
+        
         # Get user data and stats
         user_stats = None
         personalization = {'active': False}
@@ -320,6 +368,9 @@ def create_index_routes(
             user_stats=user_stats,
             all_entries=all_entries_meta,
             personalization=personalization,
+            papers_updated_24h=papers_updated_24h,
+            papers_updated_72h=papers_updated_72h,
+            latest_paper=latest_paper,
         )
         return make_response(render_template_string(index_template, **context))
     

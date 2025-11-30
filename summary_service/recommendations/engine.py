@@ -26,6 +26,8 @@ class RecommendationContext:
     candidate_entries: Sequence[Dict[str, Any]]
     favorites_meta: Sequence[Dict[str, Any]]
     favorites_map: Dict[str, Optional[str]]
+    read_meta: Sequence[Dict[str, Any]] = field(default_factory=list)
+    read_map: Dict[str, Optional[str]] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -120,7 +122,7 @@ class RecommendationEngine:
 
 
 class TagPreferenceStrategy:
-    """Ranks entries based on overlap with the user's favorite tag profile."""
+    """Ranks entries based on overlap with user's tag preferences using both positive and negative signals."""
 
     name = "tag_preference"
 
@@ -130,33 +132,53 @@ class TagPreferenceStrategy:
         recency_half_life_days: int = 21,
         top_tag_multiplier: float = 1.0,
         detail_tag_multiplier: float = 1.5,
+        min_negative_samples: int = 200, # now the read list can not be taken as negative signal.
     ):
         self.now = now or datetime.now(timezone.utc)
         self.recency_half_life_days = max(1, recency_half_life_days)
         self.top_tag_multiplier = top_tag_multiplier
         self.detail_tag_multiplier = detail_tag_multiplier
+        self.min_negative_samples = max(1, min_negative_samples)
         self._profile: Dict[str, Any] = {}
 
     def score(self, context: RecommendationContext) -> Dict[str, StrategyScore]:
         favorites = list(context.favorites_meta or [])
-        if not favorites:
-            self._profile = {"top_tags": [], "tag_weights": {}}
-            return {}
-
-        tag_weights = self._build_tag_weights(
+        reads = list(context.read_meta or [])
+        
+        # Build positive and negative tag weights
+        positive_weights = self._build_positive_tag_weights(
             favorites=favorites, favorites_map=context.favorites_map
         )
-        if not tag_weights:
-            self._profile = {"top_tags": [], "tag_weights": {}}
+        negative_weights = self._build_negative_tag_weights(
+            reads=reads, read_map=context.read_map, favorites_map=context.favorites_map
+        )
+        
+        # Calculate net weights: positive - negative
+        net_weights: Dict[str, float] = {}
+        all_tags = set(positive_weights.keys()) | set(negative_weights.keys())
+        for tag in all_tags:
+            positive = positive_weights.get(tag, 0.0)
+            negative = negative_weights.get(tag, 0.0)
+            net_weights[tag] = positive - negative
+        
+        if not net_weights or all(w <= 0 for w in net_weights.values()):
+            self._profile = {
+                "top_tags": [],
+                "positive_tag_weights": positive_weights,
+                "negative_tag_weights": negative_weights,
+                "net_tag_weights": net_weights,
+            }
             return {}
 
-        ordered_tags = sorted(tag_weights.items(), key=lambda item: item[1], reverse=True)
+        ordered_tags = sorted(net_weights.items(), key=lambda item: item[1], reverse=True)
         self._profile = {
-            "top_tags": [tag for tag, _ in ordered_tags[:8]],
-            "tag_weights": tag_weights,
+            "top_tags": [tag for tag, _ in ordered_tags[:8] if net_weights[tag] > 0],
+            "positive_tag_weights": positive_weights,
+            "negative_tag_weights": negative_weights,
+            "net_tag_weights": net_weights,
         }
 
-        total_preference = sum(tag_weights.values()) or 1.0
+        total_preference = sum(w for w in net_weights.values() if w > 0) or 1.0
         k = 1 / math.log2(total_preference + 1.5)  # dampen large users
 
         scores: Dict[str, StrategyScore] = {}
@@ -171,12 +193,15 @@ class TagPreferenceStrategy:
             matched: List[Tuple[str, float]] = []
             score_value = 0.0
             for tag, tag_meta in entry_tags:
-                weight = tag_weights.get(tag)
-                if weight is None:
+                net_weight = net_weights.get(tag)
+                if net_weight is None:
                     continue
-                boosted = weight * (self.top_tag_multiplier if tag_meta["is_top"] else self.detail_tag_multiplier)
+                # Include both positive and negative net weights
+                # Negative weights will reduce the score
+                boosted = net_weight * (self.top_tag_multiplier if tag_meta["is_top"] else self.detail_tag_multiplier)
                 score_value += boosted
-                matched.append((tag, boosted))
+                if net_weight > 0:  # Only track positive matches for metadata
+                    matched.append((tag, boosted))
 
             if score_value <= 0:
                 continue
@@ -199,11 +224,12 @@ class TagPreferenceStrategy:
 
     # Internals ----------------------------------------------------------------
 
-    def _build_tag_weights(
+    def _build_positive_tag_weights(
         self,
         favorites: Sequence[Dict[str, Any]],
         favorites_map: Dict[str, Optional[str]],
     ) -> Dict[str, float]:
+        """Build positive tag weights from favorites with recency weighting."""
         weights: Dict[str, float] = {}
         for meta in favorites:
             entry_id = meta.get("id")
@@ -227,7 +253,57 @@ class TagPreferenceStrategy:
 
         return weights
 
+    def _build_negative_tag_weights(
+        self,
+        reads: Sequence[Dict[str, Any]],
+        read_map: Dict[str, Optional[str]],
+        favorites_map: Dict[str, Optional[str]],
+    ) -> Dict[str, float]:
+        """Build negative tag weights from read list with recency weighting and minimum samples check.
+        
+        Excludes favorite papers from negative weights since favorites are explicit positive signals.
+        """
+        # First pass: count occurrences and build raw weights
+        # Exclude papers that are also favorites (they're positive signals, not negative)
+        raw_weights: Dict[str, float] = {}
+        tag_counts: Dict[str, int] = {}
+        
+        for meta in reads:
+            entry_id = meta.get("id")
+            if not entry_id:
+                continue
+            # Skip if this paper is also a favorite (favorites are positive signals)
+            if entry_id in favorites_map:
+                continue
+                
+            recency = self._recency_weight(read_map.get(entry_id))
+            top_tags = meta.get("top_tags") or []
+            detail_tags = meta.get("detail_tags") or []
+
+            for tag in top_tags:
+                normalized = _normalize_tag(tag)
+                if not normalized:
+                    continue
+                raw_weights[normalized] = raw_weights.get(normalized, 0.0) + recency * self.top_tag_multiplier
+                tag_counts[normalized] = tag_counts.get(normalized, 0) + 1
+
+            for tag in detail_tags:
+                normalized = _normalize_tag(tag)
+                if not normalized:
+                    continue
+                raw_weights[normalized] = raw_weights.get(normalized, 0.0) + recency * self.detail_tag_multiplier
+                tag_counts[normalized] = tag_counts.get(normalized, 0) + 1
+
+        # Second pass: only include tags that meet minimum sample threshold
+        weights: Dict[str, float] = {}
+        for tag, weight in raw_weights.items():
+            if tag_counts.get(tag, 0) >= self.min_negative_samples:
+                weights[tag] = weight
+
+        return weights
+
     def _recency_weight(self, timestamp_str: Optional[str]) -> float:
+        """Calculate recency weight using exponential decay."""
         if not timestamp_str:
             return 1.0
         try:
@@ -238,7 +314,7 @@ class TagPreferenceStrategy:
             return 1.0
 
         delta_days = max((self.now - ts).days, 0)
-        # Exponential decay so older favorites still count but less strongly.
+        # Exponential decay so older signals still count but less strongly.
         return math.exp(-math.log(2) * (delta_days / self.recency_half_life_days)) + 0.5
 
 

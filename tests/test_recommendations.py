@@ -42,6 +42,8 @@ def test_tag_preference_strategy_prioritizes_detail_tags():
         candidate_entries=candidates,
         favorites_meta=favorites_meta,
         favorites_map=favorites_map,
+        read_meta=[],
+        read_map={},
         extra={},
     )
     scores = strategy.score(ctx)
@@ -76,6 +78,8 @@ def test_engine_combines_multiple_strategies_and_profiles():
         candidate_entries=candidates,
         favorites_meta=favorites,
         favorites_map=favorites_map,
+        read_meta=[],
+        read_map={},
         extra={},
     )
 
@@ -135,4 +139,220 @@ def test_route_sorting_prefers_recommended_entries():
     # "recent" (0 days ago) should come before "older" (2 days ago)
     assert ordered_ids[:2] == ["recent", "older"]
     assert ordered_ids[-1] == "unmatched"
+
+
+def test_negative_signal_reduces_score():
+    """Test that negative signals reduce recommendation scores."""
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    favorites_meta = [
+        _make_entry("fav1", detail=["vision", "diffusion"]),
+    ]
+    favorites_map = {"fav1": now.isoformat()}
+    read_meta = [
+        _make_entry("read1", detail=["vision"], days_ago=1),  # Not a favorite, so contributes to negative
+        _make_entry("read2", detail=["vision"], days_ago=2),  # Not a favorite, so contributes to negative
+    ]
+    read_map = {
+        "read1": (now - timedelta(days=1)).isoformat(),
+        "read2": (now - timedelta(days=2)).isoformat(),
+    }
+    candidates = [
+        _make_entry("paper-a", detail=["vision", "diffusion"]),  # Matches both positive and negative
+        _make_entry("paper-b", detail=["diffusion"]),  # Only matches positive
+    ]
+
+    strategy = TagPreferenceStrategy(now=now)
+    ctx = RecommendationContext(
+        candidate_entries=candidates,
+        favorites_meta=favorites_meta,
+        favorites_map=favorites_map,
+        read_meta=read_meta,
+        read_map=read_map,
+        extra={},
+    )
+    scores = strategy.score(ctx)
+
+    assert "paper-a" in scores
+    assert "paper-b" in scores
+    # paper-b should score higher because it doesn't have the negative "vision" tag
+    assert scores["paper-b"].value > scores["paper-a"].value
+
+
+def test_negative_signal_prevents_recommendation():
+    """Test that strong negative signals can prevent recommendations."""
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    favorites_meta = [
+        _make_entry("fav1", detail=["vision"]),
+    ]
+    favorites_map = {"fav1": (now - timedelta(days=10)).isoformat()}  # Older favorite
+    read_meta = [
+        _make_entry("read1", detail=["vision"], days_ago=1),  # Not a favorite
+        _make_entry("read2", detail=["vision"], days_ago=2),  # Not a favorite
+        _make_entry("read3", detail=["vision"], days_ago=3),  # Not a favorite
+    ]
+    read_map = {
+        "read1": (now - timedelta(days=1)).isoformat(),
+        "read2": (now - timedelta(days=2)).isoformat(),
+        "read3": (now - timedelta(days=3)).isoformat(),
+    }
+    candidates = [
+        _make_entry("paper-a", detail=["vision"]),  # Only matches negative (stronger)
+    ]
+
+    strategy = TagPreferenceStrategy(now=now)
+    ctx = RecommendationContext(
+        candidate_entries=candidates,
+        favorites_meta=favorites_meta,
+        favorites_map=favorites_map,
+        read_meta=read_meta,
+        read_map=read_map,
+        extra={},
+    )
+    scores = strategy.score(ctx)
+
+    # Should not be recommended because negative weight > positive weight
+    assert "paper-a" not in scores
+
+
+def test_minimum_negative_samples_threshold():
+    """Test that single negative example doesn't affect net weight."""
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    favorites_meta = [
+        _make_entry("fav1", detail=["vision"]),
+    ]
+    favorites_map = {"fav1": now.isoformat()}
+    read_meta = [
+        _make_entry("read1", detail=["vision"], days_ago=1),  # Only 1 negative example (not a favorite)
+    ]
+    read_map = {
+        "read1": (now - timedelta(days=1)).isoformat(),
+    }
+    candidates = [
+        _make_entry("paper-a", detail=["vision"]),
+    ]
+
+    strategy = TagPreferenceStrategy(now=now, min_negative_samples=2)
+    ctx = RecommendationContext(
+        candidate_entries=candidates,
+        favorites_meta=favorites_meta,
+        favorites_map=favorites_map,
+        read_meta=read_meta,
+        read_map=read_map,
+        extra={},
+    )
+    scores = strategy.score(ctx)
+
+    # Should be recommended because negative weight is ignored (only 1 sample < threshold of 2)
+    assert "paper-a" in scores
+
+
+def test_multiple_negative_examples_apply_penalty():
+    """Test that 2+ negative examples apply penalty."""
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    favorites_meta = [
+        _make_entry("fav1", detail=["vision"]),
+        _make_entry("fav2", detail=["vision"]),  # 2 favorites to make net weight positive
+    ]
+    favorites_map = {
+        "fav1": now.isoformat(),
+        "fav2": now.isoformat(),
+    }
+    read_meta = [
+        _make_entry("read1", detail=["vision"], days_ago=5),  # Older negative (less weight, not a favorite)
+        _make_entry("read2", detail=["vision"], days_ago=10),  # Older negative (less weight, not a favorite)
+    ]
+    read_map = {
+        "read1": (now - timedelta(days=5)).isoformat(),
+        "read2": (now - timedelta(days=10)).isoformat(),
+    }
+    candidates = [
+        _make_entry("paper-a", detail=["vision"]),
+    ]
+
+    strategy = TagPreferenceStrategy(now=now, min_negative_samples=2)
+    ctx = RecommendationContext(
+        candidate_entries=candidates,
+        favorites_meta=favorites_meta,
+        favorites_map=favorites_map,
+        read_meta=read_meta,
+        read_map=read_map,
+        extra={},
+    )
+    scores = strategy.score(ctx)
+
+    # Should still be recommended but with lower score due to negative penalty
+    assert "paper-a" in scores
+    # Score should be positive but lower than without negative signals
+    assert scores["paper-a"].value > 0
+
+
+def test_tag_conflict_resolution_net_weight():
+    """Test tag conflict resolution using net weight approach."""
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    favorites_meta = [
+        _make_entry("fav1", detail=["vision"]),
+        _make_entry("fav2", detail=["vision"]),
+    ]
+    favorites_map = {
+        "fav1": now.isoformat(),
+        "fav2": now.isoformat(),
+    }
+    read_meta = [
+        _make_entry("read1", detail=["vision"], days_ago=1),  # Not a favorite
+    ]
+    read_map = {
+        "read1": (now - timedelta(days=1)).isoformat(),
+    }
+    candidates = [
+        _make_entry("paper-a", detail=["vision"]),
+    ]
+
+    strategy = TagPreferenceStrategy(now=now, min_negative_samples=2)
+    ctx = RecommendationContext(
+        candidate_entries=candidates,
+        favorites_meta=favorites_meta,
+        favorites_map=favorites_map,
+        read_meta=read_meta,
+        read_map=read_map,
+        extra={},
+    )
+    scores = strategy.score(ctx)
+
+    # Should be recommended because positive weight (2 favorites) > negative weight (1 read, but below threshold)
+    assert "paper-a" in scores
+
+
+def test_recency_weighting_negative_signals():
+    """Test that recency weighting applies to negative signals."""
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    favorites_meta = [
+        _make_entry("fav1", detail=["vision"]),
+    ]
+    favorites_map = {"fav1": (now - timedelta(days=10)).isoformat()}  # Older favorite
+    read_meta = [
+        _make_entry("read1", detail=["vision"], days_ago=1),  # Recent negative (not a favorite)
+        _make_entry("read2", detail=["vision"], days_ago=2),  # Recent negative (not a favorite)
+    ]
+    read_map = {
+        "read1": (now - timedelta(days=1)).isoformat(),
+        "read2": (now - timedelta(days=2)).isoformat(),
+    }
+    candidates = [
+        _make_entry("paper-a", detail=["vision"]),
+    ]
+
+    strategy = TagPreferenceStrategy(now=now, min_negative_samples=2)
+    ctx = RecommendationContext(
+        candidate_entries=candidates,
+        favorites_meta=favorites_meta,
+        favorites_map=favorites_map,
+        read_meta=read_meta,
+        read_map=read_map,
+        extra={},
+    )
+    scores = strategy.score(ctx)
+
+    # Recent negative signals should have more weight than older positive signal
+    # Net weight should be negative, so no recommendation
+    assert "paper-a" not in scores
 

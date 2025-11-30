@@ -161,7 +161,6 @@ class TestEventTrackingIntegration:
                 {'type': 'mark_read', 'arxiv_id': '1234.5678'},
                 {'type': 'mark_read', 'arxiv_id': '1234.5679'},
                 {'type': 'open_pdf', 'arxiv_id': '1234.5680'},
-                {'type': 'read_more', 'arxiv_id': '1234.5681'},
                 {'type': 'logout'}
             ]
             
@@ -178,9 +177,8 @@ class TestEventTrackingIntegration:
             assert stats['login'] == 1
             assert stats['mark_read'] == 2
             assert stats['open_pdf'] == 1
-            assert stats['read_more'] == 1
             assert stats['logout'] == 1
-            assert len(stats) == 5
+            assert len(stats) == 4
         finally:
             # Clean up test data
             self._cleanup_user_data(test_user)
@@ -197,7 +195,6 @@ class TestEventTrackingIntegration:
                 'href': 'https://arxiv.org/pdf/1234.5678.pdf',
                 'user_agent': 'test-browser',
                 'page': 'index',
-                'collapsed': False,
                 'custom_field': 'custom_value'
             }
             
@@ -233,9 +230,9 @@ class TestEventTrackingIntegration:
             # Simulate browser request with headers
             res = client.post('/event', 
                 json={
-                    'type': 'read_more',
+                    'type': 'open_pdf',
                     'arxiv_id': '9999.8888',
-                    'meta': {'collapsed': False},
+                    'meta': {'href': 'https://arxiv.org/pdf/9999.8888.pdf'},
                     'ts': '2025-01-01T15:30:00Z',
                     'tz_offset_min': 480
                 },
@@ -253,9 +250,9 @@ class TestEventTrackingIntegration:
             assert len(events) == 1
             
             event = events[0]
-            assert event['type'] == 'read_more'
+            assert event['type'] == 'open_pdf'
             assert event['arxiv_id'] == '9999.8888'
-            assert event['meta']['collapsed'] == False
+            assert event['meta']['href'] == 'https://arxiv.org/pdf/9999.8888.pdf'
             assert 'Mozilla' in event['ua']  # User agent captured
             assert event['path'] == '/event'  # Path captured
         finally:
@@ -272,7 +269,7 @@ class TestEventTrackingIntegration:
             # All supported event types
             event_types = [
                 'login', 'logout', 'mark_read', 'unmark_read', 
-                'read_more', 'open_pdf', 'read_list', 'reset'
+                'open_pdf', 'read_list', 'reset'
             ]
             
             # Send one event of each type
@@ -280,14 +277,12 @@ class TestEventTrackingIntegration:
                 payload = {'type': event_type}
                 
                 # Add arxiv_id for paper-related events
-                if event_type in ['mark_read', 'unmark_read', 'read_more', 'open_pdf']:
+                if event_type in ['mark_read', 'unmark_read', 'open_pdf']:
                     payload['arxiv_id'] = f'1234.{5000 + i}'
                 
                 # Add metadata for specific events
                 if event_type == 'open_pdf':
                     payload['meta'] = {'href': f'https://arxiv.org/pdf/1234.{5000 + i}.pdf'}
-                elif event_type == 'read_more':
-                    payload['meta'] = {'collapsed': False}
                 
                 res = client.post('/event', json=payload)
                 assert res.status_code == 200
@@ -295,7 +290,7 @@ class TestEventTrackingIntegration:
             # Verify all events were saved
             res = client.get('/events')
             events = res.get_json()['events']
-            assert len(events) == 8
+            assert len(events) == 7
             
             # Check event types
             saved_types = [e['type'] for e in events]

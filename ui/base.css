@@ -931,18 +931,7 @@ article h2 {
 }
 
 .preview-html {
-    transition: max-height 0.2s ease-in-out;
     overflow: hidden;
-}
-
-.preview-html.collapsed {
-    max-height: 20rem;
-}
-
-.toggle-link {
-    cursor: pointer;
-    font-size: 0.9rem;
-    user-select: none;
 }
 
 .card-actions {

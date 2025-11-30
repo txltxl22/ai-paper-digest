@@ -13,7 +13,6 @@ class EventType(Enum):
     # Article-related events
     MARK_READ = "mark_read"
     UNMARK_READ = "unmark_read"
-    READ_MORE = "read_more"
     OPEN_PDF = "open_pdf"
     
     # User session events

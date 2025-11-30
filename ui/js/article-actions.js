@@ -60,11 +60,6 @@ class ArticleActions {
   }
 
   handleClick(ev) {
-    if (ev.target.matches('.toggle-link')) {
-      ev.preventDefault();
-      this.togglePreview(ev.target);
-    }
-    
     // Handle mark-read-link clicks
     let markReadElement = ev.target.closest('.mark-read-link');
     if (markReadElement) {
@@ -219,25 +214,6 @@ class ArticleActions {
         button.style.opacity = '';
         showToast('网络错误，无法触发深度阅读');
       });
-  }
-
-  togglePreview(link) {
-    const art = link.closest('article');
-    
-    // Save scroll position before toggle
-    this.saveScrollPosition(art);
-    
-    const prev = art.querySelector('.preview-html');
-    prev.classList.toggle('collapsed');
-    link.textContent = prev.classList.contains('collapsed') ? '展开' : '收起';
-    
-    // Restore scroll position after toggle
-    setTimeout(() => {
-      this.restoreScrollPosition();
-    }, 0);
-    
-    // Track event using centralized tracker
-    window.eventTracker.trackReadMore(art, prev.classList.contains('collapsed'));
   }
 
   markRead(link) {

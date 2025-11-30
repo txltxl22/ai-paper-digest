@@ -68,7 +68,7 @@
   <!-- Content Section -->
   <div class="content-section">
     <div class="summary-section">
-      <div class='preview-html collapsed'>{{ e.preview_html | safe }}</div>
+      <div class='preview-html'>{{ e.preview_html | safe }}</div>
     </div>
   </div>
   
@@ -82,15 +82,15 @@
       {% elif show_todo %}
         <a class='remove-todo-link action-btn secondary-btn'>从待读移除</a>
         {% if uid %}
-          <a class='mark-read-link action-btn secondary-btn'>✓ 标记为没兴趣</a>
+          <a class='mark-read-link action-btn secondary-btn'>👋 没兴趣</a>
         {% else %}
-          <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为没兴趣</a>
+          <a class='mark-read-link action-btn secondary-btn disabled'>👋 没兴趣</a>
         {% endif %}
       {% else %}
         {% if uid %}
-          <a class='mark-read-link action-btn secondary-btn'>✓ 标记为没兴趣</a>
+          <a class='mark-read-link action-btn secondary-btn'>👋 没兴趣</a>
         {% else %}
-          <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为没兴趣</a>
+          <a class='mark-read-link action-btn secondary-btn disabled'>👋 没兴趣</a>
         {% endif %}
       {% endif %}
       {% if uid and (not show_favorites) %}
@@ -109,7 +109,6 @@
       <button type="button" class='deep-read-link action-btn secondary-btn' data-id='{{ e.id }}' style="color: var(--primary-color); border-color: var(--primary-color);">
         <span>🤖</span> Deep Read
       </button>
-      <a class='toggle-link action-btn secondary-btn'>展开</a>
     </div>
     <div class="secondary-actions">
       <a target='_blank' href='https://arxiv.org/pdf/{{ e.id }}.pdf' class='action-btn'>

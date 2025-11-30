@@ -155,6 +155,8 @@ def create_index_routes(
         entries: List[Dict[str, Any]],
         favorites_meta: List[Dict[str, Any]],
         favorites_map: Dict[str, Optional[str]],
+        read_meta: List[Dict[str, Any]],
+        read_map: Dict[str, Optional[str]],
         uid: Optional[str],
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         if (
@@ -169,6 +171,8 @@ def create_index_routes(
             candidate_entries=entries,
             favorites_meta=favorites_meta,
             favorites_map=favorites_map,
+            read_meta=read_meta,
+            read_map=read_map,
             extra={'uid': uid} if uid else {},
         )
         response: RecommendationResponse = recommendation_engine.recommend(context)
@@ -271,10 +275,19 @@ def create_index_routes(
         if favorites_map:
             favorites_meta = [e for e in all_entries_meta if e["id"] in favorites_map]
             if favorites_meta:
+                # Build read_meta for negative signals
+                read_meta: List[Dict[str, Any]] = []
+                read_map: Dict[str, Optional[str]] = {}
+                if user_data:
+                    read_map = user_data.load_read_map()
+                    read_meta = [e for e in all_entries_meta if e["id"] in read_map]
+                
                 filtered_entries_meta, personalization = _apply_recommendations(
                     filtered_entries_meta,
                     favorites_meta,
                     favorites_map,
+                    read_meta,
+                    read_map,
                     uid,
                 )
             else:

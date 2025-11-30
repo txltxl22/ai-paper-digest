@@ -34,7 +34,7 @@ The event tracking system has been decoupled from the main application to provid
 
 #### Event Types Supported
 
-- **Article Events**: `mark_read`, `unmark_read`, `read_more`, `open_pdf`
+- **Article Events**: `mark_read`, `unmark_read`, `open_pdf`
 - **Session Events**: `login`, `logout`, `reset`
 - **Navigation Events**: `read_list`
 
@@ -48,7 +48,6 @@ The event tracking system has been decoupled from the main application to provid
 class EventType(Enum):
     MARK_READ = "mark_read"
     UNMARK_READ = "unmark_read"
-    READ_MORE = "read_more"
     OPEN_PDF = "open_pdf"
     LOGIN = "login"
     LOGOUT = "logout"
@@ -114,7 +113,7 @@ class EventTracker {
 
 The existing JS files have been updated to use the centralized tracker:
 
-- **`article-actions.js`**: Uses `window.eventTracker.trackReadMore()`, `trackMarkRead()`, etc.
+- **`article-actions.js`**: Uses `window.eventTracker.trackMarkRead()`, etc.
 - **`user-actions.js`**: Uses `window.eventTracker.trackLogout()`, etc.
 - **`detail.html`**: Uses `window.eventTracker.track()` for PDF clicks
 

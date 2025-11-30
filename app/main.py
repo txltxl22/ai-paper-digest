@@ -378,6 +378,30 @@ def sitemap_index_xml():
 
 
 # -----------------------------------------------------------------------------
+# Common Bot/Scanner Endpoints
+# -----------------------------------------------------------------------------
+
+@app.get("/actuator/health")
+def actuator_health():
+    """Health check endpoint for monitoring tools and cloud platforms."""
+    return jsonify({
+        "status": "UP",
+        "service": "ai-paper-digest"
+    }), 200
+
+
+@app.get("/.well-known/security.txt")
+def security_txt():
+    """Security policy file as per RFC 9116."""
+    security_content = """Contact: mailto:security@example.com
+Expires: 2026-12-31T23:59:59.000Z
+Preferred-Languages: en
+"""
+    response = make_response(security_content)
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    return response
+
+# -----------------------------------------------------------------------------
 # Entry point
 # -----------------------------------------------------------------------------
 

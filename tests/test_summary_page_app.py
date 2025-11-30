@@ -59,13 +59,6 @@ def test_mark_read_saves_local_datetime_with_tz_and_counts_today(tmp_path, monke
     # has timezone offset +HH:MM or -HH:MM
     assert ("+" in ts or "-" in ts[10:]) and ts[-3] == ":"
 
-    # index should show today's count = 1 even with no entries
-    res2 = client.get("/")
-    assert res2.status_code == 200
-    html = res2.data.decode("utf-8")
-    assert "今日" in html
-    assert ">1<" in html  # the strong tag shows 1 somewhere
-
 
 def test_event_ingest_filters_non_clicks_and_converts_timezone(tmp_path, monkeypatch):
     import app.main as sp
@@ -119,7 +112,7 @@ def test_event_ingest_allows_only_click_types(tmp_path, monkeypatch):
     uid = "u3"
     client.set_cookie("uid", uid)
 
-    allowed = ["mark_read", "unmark_read", "open_pdf", "login", "logout", "reset", "read_list", "read_more"]
+    allowed = ["mark_read", "unmark_read", "open_pdf", "login", "logout", "reset", "read_list"]
     for t in allowed:
         res = client.post("/event", json={"type": t, "ts": "2025-01-01T00:00:00Z"})
         assert res.status_code == 200

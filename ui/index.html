@@ -5,11 +5,97 @@
   <meta charset='utf-8'>
   <title>arXiv最新AI论文速览速学</title>
   <meta name='viewport' content='width=device-width,initial-scale=1'>
+  
+  <!-- Primary Meta Tags -->
+  <meta name="title" content="arXiv最新AI论文速览速学 - AI Papers Reader">
+  <meta name="description" content="Latest AI research papers from arXiv with intelligent summaries. Browse machine learning, deep learning, and artificial intelligence research papers with AI-powered summaries.">
+  <meta name="keywords" content="AI papers, machine learning, arXiv, research summaries, artificial intelligence, deep learning, neural networks, computer vision, NLP, natural language processing">
+  <meta name="author" content="AI Papers Reader">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English, Chinese">
+  <meta name="revisit-after" content="1 days">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta property="og:title" content="arXiv最新AI论文速览速学 - AI Papers Reader">
+  <meta property="og:description" content="Latest AI research papers from arXiv with intelligent summaries. Browse machine learning, deep learning, and artificial intelligence research papers.">
+  <meta property="og:image" content="{{ url_for('static_favicon_svg', _external=True) }}">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="zh_CN">
+  <meta property="og:site_name" content="AI Papers Reader">
+  
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="{{ request.url }}">
+  <meta property="twitter:title" content="arXiv最新AI论文速览速学 - AI Papers Reader">
+  <meta property="twitter:description" content="Latest AI research papers from arXiv with intelligent summaries. Browse machine learning, deep learning, and artificial intelligence research papers.">
+  <meta property="twitter:image" content="{{ url_for('static_favicon_svg', _external=True) }}">
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="{{ request.url }}">
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AI Papers">
+  
+  <!-- Stylesheets -->
   <link rel="stylesheet" href="{{ url_for('base_css') }}">
   <link rel="stylesheet" href="{{ url_for('static_css', filename='badges.css') }}">
   <link rel="stylesheet" href="{{ url_for('static_css', filename='components.css') }}">
   <link rel="stylesheet" href="{{ url_for('static_css', filename='modal.css') }}">
   <link rel="icon" href="{{ url_for('static_favicon_svg') }}" type="image/svg+xml">
+  
+  <!-- Structured Data - WebSite -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "AI Papers Reader",
+    "alternateName": "arXiv最新AI论文速览速学",
+    "url": "{{ request.url_root }}",
+    "description": "Latest AI research papers from arXiv with intelligent summaries and analysis",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "{{ request.url_root }}?search={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "AI Papers Reader"
+    }
+  }
+  </script>
+  
+  <!-- Structured Data - BreadcrumbList -->
+  {% if show_read or show_favorites or show_todo %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "{{ request.url_root }}"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "{% if show_read %}Read Papers{% elif show_favorites %}Favorite Papers{% elif show_todo %}Todo Papers{% endif %}",
+        "item": "{{ request.url }}"
+      }
+    ]
+  }
+  </script>
+  {% endif %}
 </head>
 
 <body>
@@ -20,13 +106,13 @@
     {% endif %}
     {% if show_read %}
     <div style="margin-bottom:0.7rem;text-align:center;">
-      <span style="font-size:1.1rem;">📖 我的已读论文</span>
+      <span style="font-size:1.1rem;">📖 我的没兴趣论文</span>
       <a href="{{ url_for('index_page.index') }}" style="margin-left:1.5rem;font-size:0.95rem;">← 返回首页</a>
     </div>
     {% endif %}
     {% if show_favorites %}
     <div style="margin-bottom:0.7rem;text-align:center;">
-      <span style="font-size:1.1rem;">⭐ 我的收藏论文</span>
+      <span style="font-size:1.1rem;">⭐ 我的感兴趣论文</span>
       <a href="{{ url_for('index_page.index') }}" style="margin-left:1.5rem;font-size:0.95rem;">← 返回首页</a>
     </div>
     {% endif %}
@@ -37,24 +123,99 @@
     </div>
     {% endif %}
     {% include 'components/tag-filter.html' %}
-    {% if uid and read_total is not none and read_today is not none and unread_count is not none and not show_read %}
-    <div id="info-bar" style="margin-bottom:1.2rem;padding:0.6rem 1.2rem;background:var(--code-bg);border-radius:6px;font-size:1.08rem;display:flex;align-items:center;gap:1.5rem;justify-content:center;">
-      <span>总计已读 <strong>{{ read_total }}</strong></span>
-      <span>今日已读 <strong>{{ read_today }}</strong></span>
-      <span>未读论文 <strong>{{ unread_count }}</strong></span>
+    {% if not show_read and not show_favorites and not show_todo %}
+    <div id="info-bar" style="margin-bottom:1.5rem;padding:0.75rem 1rem;background:var(--card-bg);border:1px solid var(--divider);border-radius:var(--radius-md);box-shadow:var(--card-shadow);display:flex;align-items:center;gap:0.75rem;justify-content:center;flex-wrap:wrap;font-size:0.875rem;">
+      {% if uid and read_total is not none and read_today is not none and unread_count is not none %}
+      <span style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--code-bg);border-radius:var(--radius-sm);color:var(--text);">
+        <span style="color:var(--muted-text);font-size:0.8rem;">未读</span>
+        <strong style="color:var(--text);font-weight:600;font-size:0.9rem;">{{ unread_count }}</strong>
+      </span>
       {% if todo_count is not none %}
-      <span>待读事项 <a href="{{ url_for('index_page.todo_papers') }}" style="text-decoration: none; color: inherit;"><strong>{{ todo_count }}</strong></a></span>
+      <a href="{{ url_for('index_page.todo_papers') }}" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--code-bg);border-radius:var(--radius-sm);color:var(--text);text-decoration:none;transition:background 0.2s;" onmouseover="this.style.background='var(--action-bg-hover)'" onmouseout="this.style.background='var(--code-bg)'">
+        <span style="color:var(--muted-text);font-size:0.8rem;">待读</span>
+        <strong style="color:var(--text);font-weight:600;font-size:0.9rem;">{{ todo_count }}</strong>
+      </a>
+      {% endif %}
+      {% endif %}
+      <span style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--primary-light);border-radius:var(--radius-sm);color:var(--text);">
+        <span style="color:var(--muted-text);font-size:0.8rem;">24小时内新更新论文</span>
+        <strong style="color:var(--primary);font-weight:600;font-size:0.9rem;">{{ papers_updated_24h }}</strong>
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.375rem 0.625rem;background:var(--primary-light);border-radius:var(--radius-sm);color:var(--text);">
+        <span style="color:var(--muted-text);font-size:0.8rem;">72小时内新更新论文</span>
+        <strong style="color:var(--primary);font-weight:600;font-size:0.9rem;">{{ papers_updated_72h }}</strong>
+      </span>
+      {% if latest_paper %}
+      <span style="display:inline-flex;align-items:center;gap:0.5rem;padding:0.375rem 0.625rem;background:var(--code-bg);border-radius:var(--radius-sm);color:var(--text);max-width:100%;">
+        <span style="color:var(--muted-text);font-size:0.8rem;white-space:nowrap;">最新更新:</span>
+        <a href="{{ url_for('summary_detail.view_summary', arxiv_id=latest_paper.id) }}" style="color:var(--primary);text-decoration:none;font-weight:500;font-size:0.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;display:block;" title="{{ latest_paper.title }}">{{ latest_paper.title }}</a>
+        <span style="color:var(--muted-text);font-size:0.8rem;white-space:nowrap;">{{ latest_paper.first_created_time.strftime('%m-%d %H:%M') if latest_paper.first_created_time else 'N/A' }}</span>
+      </span>
       {% endif %}
     </div>
+    {% endif %}
+    {% if personalization and personalization.active %}
+    <section class="personalization-banner">
+      <div class="personalization-primary">
+        <span class="personalization-pill">🎯 个性推荐</span>
+        <p class="personalization-copy">
+          根据你感兴趣的论文主题推荐最新内容
+        </p>
+      </div>
+      {% if personalization.top_tags %}
+      <div class="personalization-tags">
+        {% for tag in personalization.top_tags[:6] %}
+        <span class="match-chip">#{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+    {% elif personalization and personalization.has_favorites and not personalization.active %}
+    <section class="personalization-banner">
+      <div class="personalization-primary">
+        <span class="personalization-pill">🎯 个性推荐</span>
+        <p class="personalization-copy">
+          {% if personalization.no_favorites_in_summary %}
+          你感兴趣的论文暂时不在系统中，无法生成推荐。请等待系统处理这些论文。
+          {% elif personalization.top_tags %}
+          暂未找到与你的兴趣匹配的新论文。一些你感兴趣的主题：
+          {% else %}
+          暂未找到与你感兴趣论文匹配的新内容。请尝试标记更多感兴趣的论文以获得更好的推荐。
+          {% endif %}
+        </p>
+      </div>
+      {% if personalization.top_tags %}
+      <div class="personalization-tags">
+        {% for tag in personalization.top_tags[:6] %}
+        <span class="match-chip">#{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+    {% elif personalization and personalization.promotional %}
+    <section class="personalization-banner promotional">
+      <div class="personalization-primary">
+        <span class="personalization-pill">🎯 个性推荐</span>
+        <p class="personalization-copy">
+          根据你感兴趣的论文主题智能推荐最新内容
+        </p>
+      </div>
+      <div class="personalization-cta">
+        <a href="#login" class="login-cta-btn" id="promo-login-btn">
+          <span class="cta-icon">🔑</span>
+          <span class="cta-text">登录以启用个性推荐</span>
+        </a>
+      </div>
+    </section>
     {% endif %}
     {% for e in entries %}
       {% include 'components/article-card.html' %}
     {% else %}
       {% if show_read %}
-        <p>没有已读论文。</p>
+        <p>没有没兴趣论文。</p>
       {% endif %}
       {% if show_favorites %}
-        <p>没有收藏论文。</p>
+        <p>没有感兴趣论文。</p>
       {% endif %}
       {% if show_todo %}
         <p>没有待读论文。</p>
@@ -78,6 +239,7 @@
   <script src="{{ url_for('static_js', filename='search.js') }}"></script>
   <script src="{{ url_for('static_js', filename='password-manager.js') }}"></script>
   <script src="{{ url_for('static_js', filename='abstract-viewer.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='deep-read-status.js') }}"></script>
   
   <script>
     // URL configuration for Flask templates
@@ -93,8 +255,36 @@
       admin_fetch: '{{ admin_fetch_url }}'
     };
     
+    // Handle promotional login CTA button
+    document.addEventListener('DOMContentLoaded', function() {
+      const promoBtn = document.getElementById('promo-login-btn');
+      if (promoBtn) {
+        promoBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const input = document.querySelector('input[name="uid"]');
+          if (input) {
+            input.focus();
+            input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+      }
+    });
+    
     // Admin users configuration
     window.adminUsers = {{ admin_users | tojson }};
+    
+    // Service Worker Registration for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then((registration) => {
+            console.log('Service Worker registered:', registration.scope);
+          })
+          .catch((error) => {
+            console.log('Service Worker registration failed:', error);
+          });
+      });
+    }
   </script>
 </body>
 

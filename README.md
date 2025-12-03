@@ -15,7 +15,19 @@
 - **智能标签系统**：自动提取论文主题标签，支持多级分类
 - **并行处理**：多线程并发处理，批量生成摘要效率高
 
-### 🆕 最新更新 (v0.2.0+)
+### 🆕 最新更新 (v0.3.0+)
+- **智能推荐系统**：基于用户兴趣的个性化论文推荐
+  - 双信号推荐：结合"感兴趣"和"没兴趣"信号，精准匹配用户偏好
+  - 标签权重算法：基于标签重叠和时间衰减的智能评分
+  - 语义相似度推荐：支持本地嵌入模型（sentence-transformers）进行语义匹配
+- **用户个性化**：完整的用户数据管理和阅读跟踪
+  - 感兴趣列表：标记喜欢的论文，影响推荐结果
+  - 阅读历史：跟踪阅读进度，过滤已读内容
+  - 待读列表：管理计划阅读的论文
+- **调试工具**：完善的调试和性能分析工具
+  - 推荐系统调试：详细分析推荐算法计算过程
+  - 嵌入策略调试：可视化语义相似度计算
+  - 时间衰减分析：验证推荐权重计算的正确性
 - **OpenAI兼容API支持**：新增对任何OpenAI兼容API的完整支持
 - **DeepSeek API兼容性修复**：解决LangChain DeepSeek集成问题
 - **多提供商无缝切换**：支持OpenAI、DeepSeek、Anthropic等主流API
@@ -24,9 +36,10 @@
 ### 🌐 现代化Web界面
 - **响应式设计**：支持桌面和移动设备
 - **智能筛选**：基于标签和关键词的论文筛选
-- **阅读进度跟踪**：记录已读论文，统计阅读数据
+- **个性化推荐**：基于用户兴趣的智能论文推荐
 - **深色模式**：支持明暗主题切换
 - **实时搜索**：快速定位感兴趣的论文
+- **用户管理**：登录、阅读历史、感兴趣列表、待读列表
 
 ### 📚 结构化摘要内容
 - **一句话总结**：快速理解论文核心贡献
@@ -97,15 +110,27 @@ ai-paper-digest/
 ├── paper_summarizer.py                   # PDF下载、解析和AI摘要生成
 ├── summary_service/                      # 摘要服务包
 │   ├── __init__.py                       # 包初始化
-│   └── record_manager.py                 # 服务记录管理
+│   ├── record_manager.py                 # 服务记录管理
+│   ├── recommendations/                  # 推荐系统模块
+│   │   ├── engine.py                     # 推荐引擎和策略
+│   │   └── embedding_strategy_example.py # 嵌入推荐策略示例
+│   └── prompts/                          # AI摘要提示词模板
 ├── app/                                  # Web应用目录
 │   ├── __init__.py                       # Python包初始化
-│   └── main.py                          # Flask Web应用主程序
+│   ├── main.py                          # Flask Web应用主程序
+│   ├── index_page/                      # 首页和推荐逻辑
+│   ├── user_management/                 # 用户管理
+│   ├── summary_detail/                  # 论文详情页
+│   └── ...                              # 其他子系统
+├── debug/                                # 调试工具目录
+│   ├── debug_recommendations.py         # 推荐系统调试工具
+│   ├── debug_embedding_recommendations.py # 嵌入推荐调试工具
+│   └── README.md                         # 调试工具说明
 ├── run_app.py                           # 便捷启动脚本
-├── prompts/                              # AI摘要提示词模板
 ├── summary/                              # 生成的论文摘要
 ├── papers/                               # 下载的PDF论文
 ├── markdown/                             # 提取的Markdown文本
+├── user_data/                            # 用户数据存储
 └── ui/                                   # Web界面模板和样式
 ```
 
@@ -207,9 +232,17 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
 
 #### 个人管理
 - **用户登录**：设置个人ID，跟踪阅读进度
-- **已读列表**：查看已读论文，支持标签筛选
+- **感兴趣列表**：标记喜欢的论文，用于个性化推荐
+- **没兴趣列表**：标记不感兴趣的论文，优化推荐结果
+- **待读列表**：管理计划阅读的论文
 - **阅读统计**：显示总阅读量、今日阅读等数据
 - **进度重置**：清空阅读记录重新开始
+
+#### 个性化推荐
+- **智能推荐**：基于用户兴趣标签的个性化论文推荐
+- **双信号算法**：结合"感兴趣"和"没兴趣"信号，精准匹配
+- **时间衰减**：近期标记的论文权重更高
+- **语义匹配**：支持基于嵌入模型的语义相似度推荐（可选）
 
 #### 论文详情
 - **完整摘要**：结构化的论文总结内容
@@ -223,7 +256,11 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
 - **`paper_summarizer.py`**：PDF下载、解析和AI摘要生成
 - **`feed_paper_summarizer_service.py`**：服务编排和流程控制
 - **`summary_service/`**：摘要服务包（解耦的服务记录管理）
+  - **`recommendations/`**：推荐系统模块
+    - **`engine.py`**：推荐引擎和标签偏好策略
+    - **`embedding_strategy_example.py`**：嵌入推荐策略示例
 - **`app/main.py`**：Flask Web应用
+- **`debug/`**：调试和性能分析工具
 
 ### 🏗️ 解耦架构设计
 
@@ -306,11 +343,44 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
 
 
 
+### 推荐系统
+
+#### 标签偏好推荐（默认）
+- **双信号算法**：结合用户"感兴趣"和"没兴趣"信号
+- **标签权重计算**：
+  - 正权重：从用户感兴趣的论文中提取标签
+  - 负权重：从用户标记为"没兴趣"的论文中提取标签
+  - 净权重：正权重 - 负权重，用于最终评分
+- **时间衰减**：使用指数衰减函数，近期标记的论文权重更高
+  - 公式：`exp(-ln(2) * (delta_days / half_life_days)) + 0.5`
+  - 默认半衰期：21天
+- **标签类型权重**：顶级标签（1.0x）和详细标签（1.5x）不同权重
+- **最小样本阈值**：负信号需要至少2个样本才生效，避免误判
+
+#### 嵌入推荐（可选）
+- **语义相似度**：使用本地嵌入模型计算论文相似度
+- **支持的模型**：
+  - `all-MiniLM-L6-v2`：快速轻量（推荐）
+  - `all-mpnet-base-v2`：高质量
+  - `BAAI/bge-small-en-v1.5`：平衡选择
+- **安装**：`uv add sentence-transformers`
+- **使用**：参考 `summary_service/recommendations/embedding_strategy_example.py`
+
+#### 调试工具
+```bash
+# 调试标签推荐系统
+python debug/debug_recommendations.py <user_id>
+
+# 调试嵌入推荐系统
+python debug/debug_embedding_recommendations.py <user_id> [model_name]
+```
+
 ### 缓存策略
 - **PDF缓存**：避免重复下载
 - **Markdown缓存**：保存提取的文本
 - **摘要缓存**：避免重复生成
 - **标签缓存**：快速标签查询
+- **用户数据缓存**：用户偏好和阅读历史
 
 ## 🌟 应用场景
 
@@ -335,6 +405,8 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
 - **并发能力**：支持多线程并行处理
 - **缓存效率**：避免重复计算，提升响应速度
 - **内存优化**：分块处理大文档，控制内存使用
+- **推荐性能**：标签推荐实时计算，嵌入推荐支持缓存
+- **扩展性**：推荐策略可插拔，易于添加新算法
 
 ## 🔧 环境变量配置（若启动命令中未指定将使用环境变量）
 

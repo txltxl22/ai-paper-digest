@@ -122,14 +122,6 @@ class VisitorStatsTracker {
                 this.trackAction('unmark_read', this.currentPage, arxivId);
             }
             
-            // Read more button
-            if (target.classList.contains('read-more-btn') || 
-                target.closest('.read-more-btn')) {
-                const arxivId = target.dataset.arxivId || 
-                              target.closest('[data-arxiv-id]')?.dataset.arxivId;
-                this.trackAction('read_more', this.currentPage, arxivId);
-            }
-            
             // Open PDF button
             if (target.classList.contains('open-pdf-btn') || 
                 target.closest('.open-pdf-btn')) {

@@ -2,9 +2,11 @@
 Index page routes for main index and read pages.
 """
 from flask import Blueprint, request, render_template_string, make_response, redirect, url_for
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime, timedelta, timezone
 from .services import EntryScanner, EntryRenderer, EntryFilter
 from .models import TagCloud, Pagination
+from summary_service.recommendations import RecommendationContext, RecommendationEngine, RecommendationResponse
 
 
 def create_index_routes(
@@ -14,7 +16,8 @@ def create_index_routes(
     index_template: str,
     detail_template: str,
     paper_config=None,
-    search_service=None
+    search_service=None,
+    recommendation_engine: RecommendationEngine | None = None,
 ) -> Blueprint:
     """Create index page routes."""
     bp = Blueprint('index_page', __name__)
@@ -50,11 +53,12 @@ def create_index_routes(
     
     def _apply_filters(entries: List[Dict], filters: Dict[str, Any]) -> List[Dict]:
         """Apply all filters to entries."""
-        if filters['active_tag']:
-            entries = EntryFilter.filter_by_tag(entries, filters['active_tag'])
-        if filters['tag_query']:
+        active_tag = filters.get('active_tag')
+        if active_tag:
+            entries = EntryFilter.filter_by_tag(entries, active_tag)
+        if filters.get('tag_query'):
             entries = EntryFilter.filter_by_tag_query(entries, filters['tag_query'])
-        if filters['active_tops']:
+        if filters.get('active_tops'):
             entries = EntryFilter.filter_by_top_tags(entries, filters['active_tops'])
         
         # Apply search filter if search service is available
@@ -84,7 +88,11 @@ def create_index_routes(
         show_favorites: bool = False,
         show_todo: bool = False,
         user_stats: Optional[Dict] = None,
-        all_entries: Optional[List[Dict]] = None
+        all_entries: Optional[List[Dict]] = None,
+        personalization: Optional[Dict[str, Any]] = None,
+        papers_updated_24h: int = 0,
+        papers_updated_72h: int = 0,
+        latest_paper: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build the template context with all necessary data."""
         # Build tag clouds from all entries (not just filtered ones)
@@ -126,6 +134,7 @@ def create_index_routes(
             'mark_todo_url': url_for("user_management.mark_todo", arxiv_id="__ID__").replace("__ID__", ""),
             'unmark_todo_url': url_for("user_management.unmark_todo", arxiv_id="__ID__").replace("__ID__", ""),
             'reset_url': url_for("user_management.reset_read"),
+            'personalization': personalization or {'active': False},
             **pagination.to_dict()
         }
         
@@ -145,8 +154,92 @@ def create_index_routes(
                 'todo_count': None
             })
         
+        # Add update statistics
+        context.update({
+            'papers_updated_24h': papers_updated_24h,
+            'papers_updated_72h': papers_updated_72h,
+            'latest_paper': latest_paper,
+        })
+        
         return context
     
+    def _apply_recommendations(
+        entries: List[Dict[str, Any]],
+        favorites_meta: List[Dict[str, Any]],
+        favorites_map: Dict[str, Optional[str]],
+        read_meta: List[Dict[str, Any]],
+        read_map: Dict[str, Optional[str]],
+        uid: Optional[str],
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        if (
+            not recommendation_engine
+            or not favorites_meta
+            or not favorites_map
+            or not entries
+        ):
+            return entries, {'active': False}
+
+        context = RecommendationContext(
+            candidate_entries=entries,
+            favorites_meta=favorites_meta,
+            favorites_map=favorites_map,
+            read_meta=read_meta,
+            read_map=read_map,
+            extra={'uid': uid} if uid else {},
+        )
+        response: RecommendationResponse = recommendation_engine.recommend(context)
+        if not response.scores:
+            # User has favorites but no recommendations were generated
+            tag_profile = response.profiles.get("tag_preference") if response.profiles else {}
+            return entries, {
+                'active': False,
+                'has_favorites': True,  # Flag to indicate user has favorites but no matches
+                'profiles': response.profiles,
+                'top_tags': (tag_profile or {}).get("top_tags", []),
+                'generated_at': response.generated_at.isoformat(),
+            }
+
+        annotated: List[Dict[str, Any]] = []
+        for entry in entries:
+            entry_copy = dict(entry)
+            rec_score = response.scores.get(entry_copy.get("id"))
+            if rec_score:
+                entry_copy["recommendation"] = {
+                    "score": rec_score.score,
+                    "matched_tags": rec_score.matched_tags,
+                    "breakdown": rec_score.breakdown,
+                    "metadata": rec_score.metadata,
+                }
+            else:
+                entry_copy["recommendation"] = None
+            annotated.append(entry_copy)
+
+        def _sort_key(item: Dict[str, Any]) -> Tuple[int, float]:
+            rec = item.get("recommendation") or {}
+            score = float(rec.get("score") or 0.0)
+            has_reco = 0 if score > 0 else 1
+            # Use submission_time (creation date) for ordering within each group
+            submission = item.get("submission_time")
+            if submission and hasattr(submission, "timestamp"):
+                submission_ts = submission.timestamp()
+            else:
+                # Fallback to updated time if submission_time not available
+                updated = item.get("updated")
+                submission_ts = updated.timestamp() if hasattr(updated, "timestamp") else 0.0
+            # Sort by: 1) has recommendation (0=yes, 1=no), 2) creation time (newest first)
+            return (has_reco, -submission_ts)
+
+        annotated.sort(key=_sort_key)
+
+        tag_profile = response.profiles.get("tag_preference") if response.profiles else {}
+        personalization = {
+            'active': True,
+            'matched_entries': len(response.scores),
+            'top_tags': (tag_profile or {}).get("top_tags", []),
+            'generated_at': response.generated_at.isoformat(),
+        }
+        return annotated, personalization
+
     @bp.route("/", methods=["GET"])
     def index():
         """Main index page."""
@@ -155,10 +248,35 @@ def create_index_routes(
         filters = _get_filter_params()
         pagination_params = _get_pagination_params()
         
+        # Calculate update statistics
+        now = datetime.now(timezone.utc)
+        cutoff_24h = now - timedelta(hours=24)
+        cutoff_72h = now - timedelta(hours=72)
+        
+        def normalize_datetime(dt):
+            """Normalize datetime to UTC for comparison."""
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                # Assume naive datetime is in UTC
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        
+        papers_updated_24h = len([
+            e for e in all_entries_meta 
+            if e.get("updated") and (normalized := normalize_datetime(e["updated"])) and normalized >= cutoff_24h
+        ])
+        papers_updated_72h = len([
+            e for e in all_entries_meta 
+            if e.get("updated") and (normalized := normalize_datetime(e["updated"])) and normalized >= cutoff_72h
+        ])
+        
         # Get user data and stats
         user_stats = None
-        if uid:
-            user_data = user_service.get_user_data(uid)
+        personalization = {'active': False}
+        favorites_map: Dict[str, Optional[str]] = {}
+        user_data = user_service.get_user_data(uid) if uid else None
+        if user_data:
             read_map = user_data.load_read_map()
             favorites_map = user_data.load_favorites_map()
             todo_map = user_data.load_todo_map()
@@ -184,20 +302,78 @@ def create_index_routes(
             }
         else:
             entries_meta = all_entries_meta
+            favorites_map = {}
         
         # Apply filters
         filtered_entries_meta = _apply_filters(entries_meta, filters)
+        
+        # Find latest paper by first_created_time (use filtered entries if filter is active)
+        latest_paper = None
+        entries_for_latest = filtered_entries_meta if (filters.get('active_tag') or filters.get('tag_query') or filters.get('active_tops') or filters.get('search_query')) else all_entries_meta
+        if entries_for_latest:
+            latest_entry = max(
+                entries_for_latest,
+                key=lambda e: e.get("first_created_time") or datetime.min
+            )
+            if latest_entry.get("first_created_time"):
+                latest_paper = {
+                    'id': latest_entry.get("id"),
+                    'title': latest_entry.get("english_title") or latest_entry.get("id"),
+                    'first_created_time': latest_entry.get("first_created_time"),
+                }
+
+        if favorites_map:
+            favorites_meta = [e for e in all_entries_meta if e["id"] in favorites_map]
+            if favorites_meta:
+                # Build read_meta for negative signals
+                read_meta: List[Dict[str, Any]] = []
+                read_map: Dict[str, Optional[str]] = {}
+                if user_data:
+                    read_map = user_data.load_read_map()
+                    read_meta = [e for e in all_entries_meta if e["id"] in read_map]
+                
+                filtered_entries_meta, personalization = _apply_recommendations(
+                    filtered_entries_meta,
+                    favorites_meta,
+                    favorites_map,
+                    read_meta,
+                    read_map,
+                    uid,
+                )
+            else:
+                # User has favorites but they don't exist in summary directory
+                personalization = {
+                    'active': False,
+                    'has_favorites': True,
+                    'no_favorites_in_summary': True,  # Flag for missing favorite papers
+                }
+        elif not uid:
+            # Show promotional banner for non-logged-in users
+            personalization = {
+                'active': False,
+                'promotional': True,
+            }
         
         # Pagination
         pagination = Pagination(len(filtered_entries_meta), pagination_params['page'], pagination_params['per_page'])
         page_entries = pagination.get_page_items(filtered_entries_meta)
         
         # Render entries
-        user_data = user_service.get_user_data(uid) if uid else None
         entries = entry_renderer.render_page_entries(page_entries, user_data)
         
         # Build context and render - use all_entries_meta for tag cloud, filtered_entries_meta for display
-        context = _build_template_context(entries, uid, filters, pagination, user_stats=user_stats, all_entries=all_entries_meta)
+        context = _build_template_context(
+            entries,
+            uid,
+            filters,
+            pagination,
+            user_stats=user_stats,
+            all_entries=all_entries_meta,
+            personalization=personalization,
+            papers_updated_24h=papers_updated_24h,
+            papers_updated_72h=papers_updated_72h,
+            latest_paper=latest_paper,
+        )
         return make_response(render_template_string(index_template, **context))
     
     @bp.route("/read")
@@ -234,8 +410,8 @@ def create_index_routes(
         user_data = user_service.get_user_data(uid)
         entries = entry_renderer.render_page_entries(page_entries, user_data, show_read_time=True, show_favorite_time=True)
         
-        # Build context and render - use all_entries_meta for tag cloud
-        context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=all_entries_meta)
+        # Build context and render - use read_entries_meta for tag cloud (only tags from read papers)
+        context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=read_entries_meta)
         return render_template_string(index_template, **context)
     
     @bp.route("/favorites")
@@ -265,8 +441,8 @@ def create_index_routes(
         user_data = user_service.get_user_data(uid)
         entries = entry_renderer.render_page_entries(page_entries, user_data, show_favorite_time=True)
         
-        # Build context and render - use all_entries_meta for tag cloud
-        context = _build_template_context(entries, uid, filters, pagination, show_favorites=True, all_entries=all_entries_meta)
+        # Build context and render - use favorite_entries_meta for tag cloud (only tags from favorite papers)
+        context = _build_template_context(entries, uid, filters, pagination, show_favorites=True, all_entries=favorite_entries_meta)
         return render_template_string(index_template, **context)
     
     @bp.route("/todo")
@@ -296,8 +472,8 @@ def create_index_routes(
         user_data = user_service.get_user_data(uid)
         entries = entry_renderer.render_page_entries(page_entries, user_data, show_todo_time=True)
         
-        # Build context and render - use all_entries_meta for tag cloud
-        context = _build_template_context(entries, uid, filters, pagination, show_todo=True, all_entries=all_entries_meta)
+        # Build context and render - use todo_entries_meta for tag cloud (only tags from todo papers)
+        context = _build_template_context(entries, uid, filters, pagination, show_todo=True, all_entries=todo_entries_meta)
         return render_template_string(index_template, **context)
     
     return bp

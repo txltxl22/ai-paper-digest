@@ -18,7 +18,7 @@ class TestEventTypes:
     def test_valid_event_types(self):
         """Test that all expected event types are valid."""
         valid_types = [
-            "mark_read", "unmark_read", "read_more", "open_pdf",
+            "mark_read", "unmark_read", "open_pdf",
             "login", "logout", "reset", "read_list"
         ]
         
@@ -36,7 +36,7 @@ class TestEventTypes:
         """Test getting all allowed event types."""
         allowed = EventType.get_allowed_types()
         expected = {
-            "mark_read", "unmark_read", "read_more", "open_pdf",
+            "mark_read", "unmark_read", "open_pdf",
             "login", "logout", "reset", "read_list"
         }
         assert allowed == expected

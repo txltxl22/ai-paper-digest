@@ -45,7 +45,8 @@ SUMMARY_SCHEMA = {
             "type": "object",
             "properties": {
                 "title_zh": {"type": "string"},
-                "title_en": {"type": "string"}
+                "title_en": {"type": "string"},
+                "abstract": {"type": "string"}
             },
             "required": ["title_zh", "title_en"]
         },
@@ -83,7 +84,7 @@ SUMMARY_SCHEMA = {
             }
         }
     },
-    "required": ["paper_info", "one_sentence_summary", "innovations", "results", "terminology"]
+    "required": ["paper_info", "one_sentence_summary"]
 }
 
 TAGS_SCHEMA = {

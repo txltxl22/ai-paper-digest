@@ -1,0 +1,36 @@
+User-agent: *
+Allow: /
+Allow: /static/
+Allow: /api/abstract/
+Disallow: /api/admin/
+Disallow: /admin/
+Disallow: /test
+
+# Sitemap location
+Sitemap: https://ai-papers-reader.com/sitemap.xml
+Sitemap: https://ai-papers-reader.com/sitemap-index.xml
+
+# Crawl delay
+Crawl-delay: 1
+
+# Googlebot specific
+User-agent: Googlebot
+Allow: /
+Allow: /static/
+
+# Bingbot specific
+User-agent: Bingbot
+Allow: /
+Allow: /static/
+
+# Archive bots
+User-agent: ia_archiver
+Allow: /
+
+# Social media bots
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+

@@ -60,35 +60,73 @@ class UserActions {
   }
 
   initAdminPasswordCheck() {
-    const uidInput = document.querySelector('input[name="uid"]');
+    // Get all uid inputs (both desktop and mobile)
+    const uidInputs = document.querySelectorAll('input[name="uid"]');
     const passwordInput = document.getElementById('password-input');
+    const mobilePasswordInput = document.getElementById('mobile-password-input');
+    const mobilePasswordItem = document.getElementById('mobile-password-item');
     const adminUsers = window.adminUsers || [];
 
-    if (!uidInput || !passwordInput) return;
+    if (uidInputs.length === 0) return;
 
-    uidInput.addEventListener('input', async () => {
-      const uid = uidInput.value.trim();
-      const isAdmin = adminUsers.includes(uid);
+    const updatePasswordField = async (isAdmin, uid, passwordField, passwordContainer) => {
+      // Handle container display (for mobile)
+      if (passwordContainer) {
+        if (isAdmin) {
+          passwordContainer.style.display = 'flex';
+        } else if (uid) {
+          // Will be updated by checkUserPasswordStatus
+        } else {
+          passwordContainer.style.display = 'none';
+        }
+      }
+      
+      // Handle password field itself
+      if (!passwordField) return;
       
       if (isAdmin) {
         // Admin users always need password field
-        passwordInput.style.display = 'block';
-        passwordInput.required = true;
-        passwordInput.placeholder = '密码（管理员必填）';
+        if (!passwordContainer) {
+          passwordField.style.display = 'block';
+        }
+        passwordField.required = true;
+        passwordField.placeholder = '密码（管理员必填）';
       } else {
         // For non-admin users, check if they have a password
         if (uid) {
-          await this.checkUserPasswordStatus(uid, passwordInput);
+          await this.checkUserPasswordStatus(uid, passwordField, passwordContainer);
         } else {
-          passwordInput.style.display = 'none';
-          passwordInput.required = false;
-          passwordInput.value = '';
+          if (!passwordContainer) {
+            passwordField.style.display = 'none';
+          }
+          passwordField.required = false;
+          passwordField.value = '';
         }
+      }
+    };
+
+    const checkAndUpdate = async (inputElement) => {
+      const uid = inputElement.value.trim();
+      const isAdmin = adminUsers.includes(uid);
+      
+      // Update both desktop and mobile password fields to keep them in sync
+      // This ensures the password field shows regardless of which input is being used
+      updatePasswordField(isAdmin, uid, passwordInput, null);
+      updatePasswordField(isAdmin, uid, mobilePasswordInput, mobilePasswordItem);
+    };
+
+    // Attach event listeners to all uid inputs
+    uidInputs.forEach(uidInput => {
+      uidInput.addEventListener('input', () => checkAndUpdate(uidInput));
+      
+      // Also check on initial load in case there's a pre-filled value
+      if (uidInput.value.trim()) {
+        checkAndUpdate(uidInput);
       }
     });
   }
 
-  async checkUserPasswordStatus(uid, passwordInput) {
+  async checkUserPasswordStatus(uid, passwordInput, passwordContainer) {
     try {
       // Check if user has a password by calling the password status API
       const response = await fetch(`/password_status?uid=${encodeURIComponent(uid)}`);
@@ -96,25 +134,41 @@ class UserActions {
         const data = await response.json();
         if (data.has_password) {
           // User has a password, show password field
-          passwordInput.style.display = 'block';
+          if (passwordContainer) {
+            passwordContainer.style.display = 'flex';
+          } else {
+            passwordInput.style.display = 'block';
+          }
           passwordInput.required = true;
           passwordInput.placeholder = '密码（必填）';
         } else {
           // User doesn't have password, hide password field
-          passwordInput.style.display = 'none';
+          if (passwordContainer) {
+            passwordContainer.style.display = 'none';
+          } else {
+            passwordInput.style.display = 'none';
+          }
           passwordInput.required = false;
           passwordInput.value = '';
           passwordInput.placeholder = '密码（如已设置）';
         }
       } else {
         // On error, assume user might have password
-        passwordInput.style.display = 'block';
+        if (passwordContainer) {
+          passwordContainer.style.display = 'flex';
+        } else {
+          passwordInput.style.display = 'block';
+        }
         passwordInput.required = false;
         passwordInput.placeholder = '密码（如已设置）';
       }
     } catch (error) {
       // On error, assume user might have password
-      passwordInput.style.display = 'block';
+      if (passwordContainer) {
+        passwordContainer.style.display = 'flex';
+      } else {
+        passwordInput.style.display = 'block';
+      }
       passwordInput.required = false;
       passwordInput.placeholder = '密码（如已设置）';
     }
@@ -128,12 +182,21 @@ class UserActions {
     if (error === 'invalid_password') {
       this.showError('密码错误，请重新输入');
       
-      // Show password field for non-admin users
+      // Show password field for non-admin users (desktop)
       const passwordInput = document.getElementById('password-input');
       if (passwordInput) {
         passwordInput.style.display = 'block';
         passwordInput.required = true;
         passwordInput.focus();
+      }
+      
+      // Show password field for non-admin users (mobile)
+      const mobilePasswordInput = document.getElementById('mobile-password-input');
+      const mobilePasswordItem = document.getElementById('mobile-password-item');
+      if (mobilePasswordInput && mobilePasswordItem) {
+        mobilePasswordItem.style.display = 'flex';
+        mobilePasswordInput.required = true;
+        mobilePasswordInput.focus();
       }
       
       // Clean up URL

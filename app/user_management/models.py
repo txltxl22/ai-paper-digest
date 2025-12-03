@@ -194,13 +194,22 @@ class UserData:
                 data["favorites"] = favorites_map
             self.save(data)
     
-    def set_password(self, password: str) -> None:
-        """Set password for the user."""
+    def set_password(self, password: str, bcrypt_rounds: int = None) -> None:
+        """Set password for the user.
+        
+        Args:
+            password: The password to set
+            bcrypt_rounds: Optional bcrypt rounds (for testing). Default uses bcrypt default.
+        """
         if not password:
             raise ValueError("Password cannot be empty")
         
         # Hash the password using bcrypt
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        if bcrypt_rounds is not None:
+            salt = bcrypt.gensalt(rounds=bcrypt_rounds)
+        else:
+            salt = bcrypt.gensalt()
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), salt)
         
         data = self.load()
         data["password_hash"] = password_hash.decode('utf-8')

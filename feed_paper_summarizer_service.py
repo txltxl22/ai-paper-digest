@@ -47,6 +47,7 @@ from typing import List, Optional, Tuple
 from tqdm import tqdm
 import json
 
+from summary_service.models import SummarizationResult
 from summary_service.record_manager import (
     migrate_legacy_summaries_to_service_record,
 )
@@ -93,11 +94,11 @@ def _summarize_url(
     extract_only: bool = False,
     local: bool = False,
     max_workers: int = 1,
-) -> Tuple[Optional[Path], Optional[str], Optional[str]]:
+    abstract_only: bool = True,
+) -> SummarizationResult:
     """Run the full summarization pipeline for *url*.
 
-    Returns the Path to the generated summary markdown and the download url for the paper,
-    or *None* on failure. Delegates to paper_summarizer.summarize_paper_url.
+    Returns SummarizationResult object. Delegates to paper_summarizer.summarize_paper_url.
     """
     try:
         return ps.summarize_paper_url(
@@ -110,12 +111,13 @@ def _summarize_url(
             extract_only=extract_only,
             local=local,
             max_workers=max_workers,
+            abstract_only=abstract_only,
             session=ps.SESSION,  # type: ignore[attr-defined]
         )
     except Exception as exc:  # pylint: disable=broad-except
         _LOG.error("❌  %s – %s", url, exc)
         _LOG.exception(exc)
-        return None, None, None
+        return SummarizationResult.failure()
 
 
 # ---------------------------------------------------------------------------
@@ -444,6 +446,7 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
                 extract_only=args.extract_only,
                 local=args.local,
                 max_workers=args.workers,
+                abstract_only=True,  # Default to abstract-only (especially for local mode)
             ): idx
             for idx, link in enumerate(links)
         }

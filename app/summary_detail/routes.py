@@ -3,10 +3,13 @@ Summary detail routes for individual paper viewing.
 """
 from flask import Blueprint, request, render_template_string, abort, url_for, jsonify
 from .services import SummaryLoader, SummaryRenderer
+from .processing_tracker import ProcessingTracker
 from summary_service.paper_info_extractor import PaperInfoExtractor
-from summary_service.record_manager import save_summary_with_service_record
+from summary_service.record_manager import save_summary_with_service_record, get_structured_summary
+from config_manager import get_llm_config, get_paper_processing_config
 from pathlib import Path
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,8 @@ def create_summary_detail_routes(
     summary_loader: SummaryLoader,
     summary_renderer: SummaryRenderer,
     detail_template: str,
-    summary_dir: Path
+    summary_dir: Path,
+    processing_tracker: ProcessingTracker
 ) -> Blueprint:
     """Create summary detail routes."""
     bp = Blueprint('summary_detail', __name__)
@@ -28,20 +32,17 @@ def create_summary_detail_routes(
         if not record:
             abort(404)
         
-        summary_data = record["summary_data"]
-        service_data = record["service_data"]
+        # Render summary using SummaryRecord model
+        rendered = summary_renderer.render_summary(record)
         
-        # Render summary
-        rendered = summary_renderer.render_summary(summary_data, service_data)
+        # Extract English title from PaperInfo
+        structured_summary = record.summary_data.structured_content
+        english_title = structured_summary.paper_info.title_en if structured_summary else None
         
-        # Extract English title from service_data or structured_content as fallback
-        english_title = service_data.get("english_title")
-        if not english_title:
-            structured_content = summary_data.get("structured_content", {})
-            if isinstance(structured_content, dict) and "paper_info" in structured_content:
-                paper_info = structured_content.get("paper_info", {})
-                if isinstance(paper_info, dict):
-                    english_title = paper_info.get("title_en")
+        is_abstract_only = record.service_data.is_abstract_only
+        
+        # Get current logged-in user ID from cookies (for deep read feature)
+        current_user_id = request.cookies.get("uid")
         
         return render_template_string(
             detail_template,
@@ -51,16 +52,203 @@ def create_summary_detail_routes(
             detail_tags=rendered["detail_tags"],
             source_type=rendered["source_type"],
             user_id=rendered["user_id"],
+            current_user_id=current_user_id,
             original_url=rendered["original_url"],
             abstract=rendered["abstract"],
             english_title=english_title,
+            one_sentence_summary=rendered.get("one_sentence_summary", ""),
+            is_abstract_only=is_abstract_only,
+            created_at=record.service_data.created_at,
+            updated_at=record.summary_data.updated_at,
             # Add URL variables for JavaScript
             mark_read_url=url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
             unmark_read_url=url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
             reset_url=url_for("user_management.reset_read"),
             admin_fetch_url=url_for("fetch.admin_fetch_latest"),
-            admin_stream_url=url_for("fetch.admin_fetch_latest_stream")
+            admin_stream_url=url_for("fetch.admin_fetch_latest_stream"),
+            deep_read_url=url_for("summary_detail.deep_read", arxiv_id=arxiv_id)
         )
+
+    @bp.route("/api/summary/<arxiv_id>/deep_read", methods=["POST"])
+    def deep_read(arxiv_id):
+        """Trigger deep read (full summarization) for a paper."""
+        # Check user login
+        uid = request.cookies.get("uid")
+        if not uid:
+            return jsonify({"error": "Login required", "message": "请先登录以使用深度阅读功能"}), 401
+            
+        try:
+            # Check if already processing
+            if processing_tracker.is_processing(arxiv_id, uid):
+                return jsonify({
+                    "success": True,
+                    "message": "深度阅读正在生成中，请稍候",
+                    "already_processing": True
+                })
+            
+            # Load existing summary record
+            record = summary_loader.load_summary(arxiv_id)
+            if not record:
+                return jsonify({"error": "Paper not found"}), 404
+            
+            original_url = record.service_data.original_url
+            if not original_url:
+                # Try to construct arXiv URL
+                original_url = f"https://arxiv.org/abs/{arxiv_id}"
+            
+            # Start tracking
+            logger.info(f"Attempting to start processing for {arxiv_id} by user {uid}")
+            tracking_started = processing_tracker.start_processing(arxiv_id, uid)
+            logger.info(f"Tracking start result for {arxiv_id} by user {uid}: {tracking_started}")
+            
+            if not tracking_started:
+                # Another request started processing just now
+                logger.info(f"Processing already started for {arxiv_id} by user {uid}")
+                return jsonify({
+                    "success": True,
+                    "message": "深度阅读正在生成中，请稍候",
+                    "already_processing": True
+                })
+            
+            # Verify the job was created
+            is_now_processing = processing_tracker.is_processing(arxiv_id, uid)
+            logger.info(f"Verification: is_processing({arxiv_id}, {uid}) = {is_now_processing}")
+            
+            # Run summarization in background thread
+            def process_in_background():
+                try:
+                    logger.info(f"[THREAD] Starting background deep read processing for {arxiv_id} by user {uid}")
+                    # We import inside the function to avoid circular imports
+                    import paper_summarizer as ps
+                    
+                    # Get config values
+                    llm_config = get_llm_config()
+                    paper_config = get_paper_processing_config()
+                    
+                    # Ensure session exists
+                    if not hasattr(ps, "SESSION") or ps.SESSION is None:
+                        from summary_service.pdf_processor import build_session
+                        ps.SESSION = build_session()
+                    
+                    logger.info(f"[THREAD] Calling summarize_paper_url for {arxiv_id}")
+                    result = ps.summarize_paper_url(
+                        url=original_url,
+                        abstract_only=False, # Force full deep read
+                        extract_only=False,
+                        local=False, # Force re-process to get full content
+                        max_input_char=llm_config.max_input_char,
+                        max_workers=paper_config.max_workers
+                    )
+                    
+                    logger.info(f"[THREAD] Summarization result for {arxiv_id}: success={result.is_success}")
+                    if result.is_success:
+                        processing_tracker.mark_completed(arxiv_id, uid)
+                        logger.info(f"[THREAD] Deep read completed for {arxiv_id} by user {uid}")
+                    else:
+                        error_msg = getattr(result, 'error', 'Summarization failed')
+                        processing_tracker.mark_failed(arxiv_id, uid, error_msg)
+                        logger.error(f"[THREAD] Deep read failed for {arxiv_id} by user {uid}: {error_msg}")
+                except Exception as e:
+                    error_msg = str(e)
+                    processing_tracker.mark_failed(arxiv_id, uid, error_msg)
+                    logger.exception(f"[THREAD] Error generating deep read for {arxiv_id} by user {uid}: {e}")
+            
+            # Start background thread (non-daemon so it completes)
+            thread = threading.Thread(target=process_in_background, daemon=False, name=f"DeepRead-{arxiv_id}-{uid}")
+            thread.start()
+            logger.info(f"Started background thread for deep read: {arxiv_id} by user {uid}, thread_id={thread.ident}")
+            
+            # Double-check the job is in the tracker
+            final_check = processing_tracker.is_processing(arxiv_id, uid)
+            logger.info(f"Final check: is_processing({arxiv_id}, {uid}) = {final_check}")
+            
+            return jsonify({
+                "success": True,
+                "message": "深度阅读生成已开始，请稍候",
+                "processing": True
+            })
+                
+        except Exception as e:
+            logger.error(f"Error starting deep read for {arxiv_id}: {e}")
+            # Try to mark as failed if we started tracking
+            try:
+                processing_tracker.mark_failed(arxiv_id, uid, str(e))
+            except:
+                pass
+            return jsonify({
+                "error": "Internal server error",
+                "message": f"深度阅读生成出错: {str(e)}"
+            }), 500
+    
+    @bp.route("/api/deep_read/status", methods=["GET"])
+    def deep_read_status():
+        """Get processing status for current user's deep read jobs."""
+        uid = request.cookies.get("uid")
+        if not uid:
+            return jsonify({"error": "Login required"}), 401
+        
+        try:
+            processing_jobs = processing_tracker.get_processing_jobs(uid)
+            
+            # Verify processing jobs - check if summary is actually complete
+            verified_processing = []
+            for job in processing_jobs:
+                # Check if summary file exists and is not abstract-only
+                record = summary_loader.load_summary(job.arxiv_id)
+                if record:
+                    # If summary exists and is not abstract-only, it's actually complete
+                    if not record.service_data.is_abstract_only:
+                        # Summary is complete, mark it as completed
+                        processing_tracker.mark_completed(job.arxiv_id, uid)
+                        logger.info(f"Auto-marked {job.arxiv_id} as completed (summary file verified)")
+                    else:
+                        # Still abstract-only, keep as processing
+                        verified_processing.append(job)
+                else:
+                    # Summary doesn't exist yet, keep as processing
+                    verified_processing.append(job)
+            
+            completed_jobs = processing_tracker.get_completed_jobs(uid, limit=10)
+            logger.info(f"Completed jobs for user {uid}: {completed_jobs}")
+            return jsonify({
+                "processing": [
+                    {
+                        "arxiv_id": job.arxiv_id,
+                        "started_at": job.started_at.isoformat()
+                    }
+                    for job in verified_processing
+                ],
+                "completed": [
+                    {
+                        "arxiv_id": job.arxiv_id,
+                        "completed_at": job.completed_at.isoformat() if job.completed_at else None
+                    }
+                    for job in completed_jobs
+                ]
+            })
+        except Exception as e:
+            logger.exception(f"Error getting deep read status for user {uid}: {e}")
+            return jsonify({
+                "error": "Internal server error",
+                "message": "Failed to get processing status"
+            }), 500
+    
+    @bp.route("/api/deep_read/<arxiv_id>/dismiss", methods=["POST"])
+    def dismiss_deep_read(arxiv_id):
+        """Dismiss a completed deep read job from status bar."""
+        uid = request.cookies.get("uid")
+        if not uid:
+            return jsonify({"error": "Login required"}), 401
+        
+        try:
+            processing_tracker.dismiss_job(arxiv_id, uid)
+            return jsonify({"success": True})
+        except Exception as e:
+            logger.error(f"Error dismissing job: {e}")
+            return jsonify({
+                "error": "Internal server error",
+                "message": "Failed to dismiss job"
+            }), 500
     
     @bp.route("/api/abstract/<arxiv_id>")
     def get_abstract(arxiv_id):
@@ -71,29 +259,26 @@ def create_summary_detail_routes(
             if not record:
                 return jsonify({"error": "Paper not found"}), 404
             
-            service_data = record["service_data"]
-            summary_data = record["summary_data"]
-            
-            # Check if abstract is already cached
-            cached_abstract = service_data.get("abstract")
-            if cached_abstract:
+            # Get abstract from PaperInfo using helper function
+            from summary_service.record_manager import get_structured_summary
+            structured_summary = get_structured_summary(arxiv_id, summary_dir)
+            if structured_summary and structured_summary.paper_info.abstract:
                 return jsonify({
-                    "abstract": cached_abstract,
+                    "abstract": structured_summary.paper_info.abstract,
                     "cached": True
                 })
             
             # Fetch abstract on-demand
-            original_url = service_data.get("original_url")
+            original_url = record.service_data.original_url
             if not original_url:
-                # Try to construct arXiv URL
                 original_url = f"https://arxiv.org/abs/{arxiv_id}"
             
             extractor = PaperInfoExtractor()
             try:
                 paper_info = extractor.get_paper_info(original_url)
-                if paper_info.get("success") and paper_info.get("abstract"):
-                    abstract = paper_info["abstract"]
-                    english_title = paper_info.get("title")
+                if paper_info and paper_info.abstract:
+                    abstract = paper_info.abstract
+                    english_title = paper_info.title_en
                     
                     # Update abstract and English title in the existing record without overwriting summary content
                     from summary_service.record_manager import update_service_record_abstract

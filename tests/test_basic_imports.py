@@ -32,6 +32,6 @@ def test_summary_service_imports():
     assert callable(save_summary_with_service_record)
 
     # Test that classes can be instantiated
-    paper_info = PaperInfo(title_zh="测试", title_en="Test")
+    paper_info = PaperInfo(title_zh="测试", title_en="Test", abstract="Test Abstract")
     assert paper_info.title_zh == "测试"
     assert paper_info.title_en == "Test"

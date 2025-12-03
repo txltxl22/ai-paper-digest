@@ -8,7 +8,7 @@ structured summary data.
 from typing import Dict, Any
 import json
 from .summary_models import ChunkSummary, StructuredSummary, PaperInfo, Innovation, Results, TermDefinition
-from .tag_models import Tags
+from .tags import Tags
 from .schemas import CHUNK_SUMMARY_SCHEMA, SUMMARY_SCHEMA, TAGS_SCHEMA
 
 
@@ -91,105 +91,25 @@ def safe_parse_json(json_str: str, fallback_data: dict = None) -> dict:
 
 
 def parse_summary(json_str: str) -> StructuredSummary:
-    """Parse structured summary from JSON string."""
+    """Parse structured summary from JSON string using Pydantic validation."""
     try:
         cleaned_json = clean_json_response(json_str)
         data = json.loads(cleaned_json)
-        if not validate_json_schema(data, SUMMARY_SCHEMA):
-            raise ValueError("Invalid summary schema")
-        
-        return StructuredSummary(
-            paper_info=PaperInfo(
-                title_zh=data["paper_info"]["title_zh"],
-                title_en=data["paper_info"]["title_en"]
-            ),
-            one_sentence_summary=data["one_sentence_summary"],
-            innovations=[
-                Innovation(**innovation) for innovation in data["innovations"]
-            ],
-            results=Results(**data["results"]),
-            terminology=[
-                TermDefinition(**term) for term in data["terminology"]
-            ]
-        )
+
+        return StructuredSummary.model_validate(data)
     except Exception as e:
         raise ValueError(f"Failed to parse summary: {e}")
 
 
 def parse_tags(json_str: str) -> Tags:
-    """Parse tags from JSON string."""
+    """Parse tags from JSON string using Pydantic model validation."""
     try:
         # Clean up the response first
         cleaned_json = clean_json_response(json_str)
-        data = json.loads(cleaned_json)
-        if not validate_json_schema(data, TAGS_SCHEMA):
-            raise ValueError("Invalid tags schema")
         
-        return Tags(
-            top=data["top"],
-            tags=data["tags"]
-        )
+        # Use Pydantic's model_validate_json for better validation and error handling
+        return Tags.model_validate_json(cleaned_json)
     except Exception as e:
         raise ValueError(f"Failed to parse tags: {e}")
 
 
-def summary_to_dict(summary: StructuredSummary) -> Dict[str, Any]:
-    """Convert StructuredSummary to dictionary."""
-    return {
-        "paper_info": {
-            "title_zh": summary.paper_info.title_zh,
-            "title_en": summary.paper_info.title_en
-        },
-        "one_sentence_summary": summary.one_sentence_summary,
-        "innovations": [
-            {
-                "title": innovation.title,
-                "description": innovation.description,
-                "improvement": innovation.improvement,
-                "significance": innovation.significance
-            }
-            for innovation in summary.innovations
-        ],
-        "results": {
-            "experimental_highlights": summary.results.experimental_highlights,
-            "practical_value": summary.results.practical_value
-        },
-        "terminology": [
-            {
-                "term": term.term,
-                "definition": term.definition
-            }
-            for term in summary.terminology
-        ]
-    }
-
-
-def tags_to_dict(tags: Tags) -> Dict[str, Any]:
-    """Convert Tags to dictionary."""
-    return {
-        "top": tags.top,
-        "tags": tags.tags
-    }
-
-
-
-
-def export_schema_definitions() -> Dict[str, Any]:
-    """Export all schema definitions for external use."""
-    return {
-        "version": get_schema_version(),
-        "schemas": {
-            "chunk_summary": CHUNK_SUMMARY_SCHEMA,
-            "summary": SUMMARY_SCHEMA,
-            "tags": TAGS_SCHEMA
-        },
-        "dataclass_names": {
-            "ChunkSummary": "ChunkSummary",
-            "StructuredSummary": "StructuredSummary",
-            "Tags": "Tags",
-            "PaperInfo": "PaperInfo",
-            "Innovation": "Innovation",
-            "Results": "Results",
-            "TermDefinition": "TermDefinition"
-        }
-    }

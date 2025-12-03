@@ -222,15 +222,10 @@ class PaperSubmissionService:
                 arxiv_id = self._extract_arxiv_id_from_url(paper_url)
                 
                 # Check if this paper already exists to preserve first creation time
-                existing_summary_path = self.summary_dir / f"{arxiv_id}.json"
                 first_created_at = None
-                if existing_summary_path.exists():
-                    try:
-                        existing_data = json.loads(existing_summary_path.read_text(encoding="utf-8"))
-                        existing_service_data = existing_data.get("service_data", {})
-                        first_created_at = existing_service_data.get("first_created_at") or existing_service_data.get("created_at")
-                    except Exception:
-                        pass
+                existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
+                if existing_record:
+                    first_created_at = existing_record.service_data.first_created_at or existing_record.service_data.created_at
                     
                 # If paper already exists globally, update timestamp and save user's attempt
                 if already_processed:
@@ -239,13 +234,22 @@ class PaperSubmissionService:
                         from summary_service.record_manager import load_summary_with_service_record, save_summary_with_service_record
                         existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
                         if existing_record:
-                            # Update the updated_at timestamp
-                            existing_record["summary_data"]["updated_at"] = datetime.now().isoformat()
+                            # Update the updated_at timestamp using Pydantic model
+                            existing_record.summary_data.updated_at = datetime.now().isoformat()
                             
-                            # Save the updated record
-                            json_path = self.summary_dir / f"{arxiv_id}.json"
-                            with open(json_path, 'w', encoding='utf-8') as f:
-                                json.dump(existing_record, f, ensure_ascii=False, indent=2)
+                            # Save the updated record using save_summary_with_service_record
+                            save_summary_with_service_record(
+                                arxiv_id=arxiv_id,
+                                summary_content=existing_record.summary_data.structured_content,
+                                tags=existing_record.summary_data.tags,
+                                summary_dir=self.summary_dir,
+                                source_type=existing_record.service_data.source_type,
+                                user_id=existing_record.service_data.user_id,
+                                original_url=existing_record.service_data.original_url,
+                                ai_judgment=existing_record.service_data.ai_judgment,
+                                first_created_at=existing_record.service_data.first_created_at,
+                                is_abstract_only=existing_record.service_data.is_abstract_only
+                            )
                             
                             # Clear index page cache to force refresh
                             if self.index_page_module and hasattr(self.index_page_module.get("scanner"), "clear_cache"):
@@ -272,7 +276,7 @@ class PaperSubmissionService:
                     )
                 
                 # Process the paper
-                summary_path, _, paper_subject = fps._summarize_url(
+                result = fps._summarize_url(
                     paper_url,
                     api_key=self.llm_config.api_key,
                     base_url=self.llm_config.base_url,
@@ -281,80 +285,123 @@ class PaperSubmissionService:
                     max_input_char=self.llm_config.max_input_char,
                     extract_only=False,
                     local=False,
-                    max_workers=self.paper_config.max_workers
+                    max_workers=self.paper_config.max_workers,
+                    abstract_only=True  # Default to abstract only for all submissions, user can click "Deep Read" later
                 )
                 
                 self._update_progress(task_id, "summarizing", 95, "摘要生成完成")
                 
-                if summary_path:
+                if result.is_success:
+                    summary_path = result.summary_path
+                    paper_subject = result.paper_subject
                     # The paper summarizer should have created structured data
                     # Check if there's a structured summary JSON file
                     summary_json_path = self.summary_dir / f"{arxiv_id}.json"
-                    
-                    # Read the generated summary content (markdown for fallback)
-                    summary_content = summary_path.read_text(encoding="utf-8")
-                    
-                                        # If structured summary exists, use it instead of markdown
-                    if summary_json_path.exists():
-                        try:
-                            with open(summary_json_path, 'r', encoding='utf-8') as f:
-                                data = json.load(f)
-                            
-                            # Check if this is a service record format
-                            if 'summary_data' in data and 'structured_content' in data['summary_data']:
-                                structured_content = data['summary_data']['structured_content']
-                                if structured_content and isinstance(structured_content, dict) and 'paper_info' in structured_content:
-                                    from summary_service.models import parse_summary
-                                    # Parse the structured summary from the service record
-                                    structured_summary = parse_summary(json.dumps(structured_content))
-                                    summary_content = structured_summary
-                                    print(f"✅ Using structured summary from service record for {arxiv_id}")
-                                else:
-                                    summary_content = summary_path.read_text(encoding="utf-8")
-                            else:
-                                # Try to parse as raw structured data (legacy format)
-                                from summary_service.models import parse_summary
-                                structured_summary = parse_summary(json.dumps(data))
-                                summary_content = structured_summary
-                        except Exception as e:
-                            print(f"Error loading structured summary, using markdown: {e}")
-                            # Fallback to markdown if structured parsing fails
-                            summary_content = summary_path.read_text(encoding="utf-8")
-                    else:
-                        print(f"❌ No structured summary found at {summary_json_path}")
-                        summary_content = summary_path.read_text(encoding="utf-8")
-                    
-                    # Read the generated tags
-                    tags_path = self.summary_dir / f"{arxiv_id}.tags.json"
-                    tags = {"top": [], "tags": []}
-                    if tags_path.exists():
-                        try:
-                            tags = json.loads(tags_path.read_text(encoding="utf-8"))
-                        except Exception:
-                            pass
                     
                     # Create AI judgment data
                     ai_judgment = {
                         "is_ai": is_ai,
                         "confidence": confidence,
-                        "tags": tags
+                        "tags": {}  # Will be loaded from existing record if available
                     }
                     
-                    # Save with service record
-                    if self.save_summary_func:
-                        self.save_summary_func(
-                            arxiv_id=arxiv_id,
-                            summary_content=summary_content,
-                            tags=tags,
-                            source_type="user",
-                            user_id=uid,
-                            original_url=paper_url,
-                            ai_judgment=ai_judgment,
-                            first_created_at=first_created_at
-                        )
+                    # Update the existing service record to mark it as user submission
+                    if summary_json_path.exists():
+                        try:
+                            from summary_service.record_manager import load_summary_with_service_record
+                            existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
+                            
+                            if existing_record:
+                                # Update service_data to mark as user submission using Pydantic model
+                                existing_record.service_data.source_type = "user"
+                                existing_record.service_data.user_id = uid
+                                existing_record.service_data.original_url = paper_url
+                                existing_record.service_data.ai_judgment = ai_judgment
+                                # Always preserve first_created_at - use existing if available, otherwise use provided
+                                if existing_record.service_data.first_created_at:
+                                    # Keep existing first_created_at (never overwrite)
+                                    pass
+                                elif first_created_at:
+                                    existing_record.service_data.first_created_at = first_created_at
+                                
+                                # Update updated_at timestamp
+                                existing_record.summary_data.updated_at = datetime.now().isoformat()
+                                
+                                # Save the updated record using Pydantic
+                                from summary_service.record_manager import save_summary_with_service_record
+                                save_summary_with_service_record(
+                                    arxiv_id=arxiv_id,
+                                    summary_content=existing_record.summary_data.structured_content,
+                                    tags=existing_record.summary_data.tags,
+                                    summary_dir=self.summary_dir,
+                                    source_type=existing_record.service_data.source_type,
+                                    user_id=existing_record.service_data.user_id,
+                                    original_url=existing_record.service_data.original_url,
+                                    ai_judgment=existing_record.service_data.ai_judgment,
+                                    first_created_at=existing_record.service_data.first_created_at,
+                                    is_abstract_only=existing_record.service_data.is_abstract_only
+                                )
+                                
+                                print(f"✅ Updated service record for {arxiv_id} to mark as user submission")
+                            else:
+                                # Fallback: try to read and re-save
+                                raise Exception("Could not load existing record")
+                        except Exception as e:
+                            print(f"⚠️ Error updating existing record: {e}")
+                            # If we have a result with structured summary, use it
+                            if result.structured_summary:
+                                from summary_service.record_manager import save_summary_with_service_record, load_summary_with_service_record
+                                from summary_service.models import Tags
+                                # Try to load tags from existing record or use empty tags
+                                tags_obj = Tags(top=[], tags=[])
+                                try:
+                                    existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
+                                    if existing_record:
+                                        tags_obj = existing_record.summary_data.tags
+                                except Exception:
+                                    pass
+
+                                save_summary_with_service_record(
+                                    arxiv_id=arxiv_id,
+                                    summary_content=result.structured_summary,
+                                    tags=tags_obj,
+                                    summary_dir=self.summary_dir,
+                                    source_type="user",
+                                    user_id=uid,
+                                    original_url=paper_url,
+                                    ai_judgment=ai_judgment,
+                                    first_created_at=first_created_at
+                                )
+                            else:
+                                raise e
                     else:
-                        # Fallback: save directly
-                        summary_path.write_text(summary_content, encoding="utf-8")
+                        # No existing record, but we should have one from the summarization
+                        # Use the structured summary from the result
+                        if result.structured_summary:
+                            from summary_service.record_manager import save_summary_with_service_record, load_summary_with_service_record
+                            from summary_service.models import Tags
+                            # Try to load tags from the record that should have been created
+                            tags_obj = Tags(top=[], tags=[])
+                            try:
+                                existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
+                                if existing_record:
+                                    tags_obj = existing_record.summary_data.tags
+                            except Exception:
+                                pass
+                            
+                            save_summary_with_service_record(
+                                arxiv_id=arxiv_id,
+                                summary_content=result.structured_summary,
+                                tags=tags_obj,
+                                summary_dir=self.summary_dir,
+                                source_type="user",
+                                user_id=uid,
+                                original_url=paper_url,
+                                ai_judgment=ai_judgment,
+                                first_created_at=first_created_at
+                            )
+                        else:
+                            print(f"⚠️ No structured summary available for {arxiv_id}")
                     
                     # Save successful upload record
                     self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {

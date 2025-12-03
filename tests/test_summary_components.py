@@ -23,7 +23,8 @@ class TestSummaryDataStructure:
         structured_summary = StructuredSummary(
             paper_info=PaperInfo(
                 title_zh="测试论文",
-                title_en="Test Paper"
+                title_en="Test Paper",
+                abstract="Test Abstract"
             ),
             one_sentence_summary="Test summary.",
             innovations=[
@@ -79,37 +80,34 @@ class TestSummaryDataStructure:
         assert "content" not in summary_data, "Should not use old 'content' field"
     
     def test_index_page_field_handling(self, tmp_path):
-        """Test that index page correctly handles both 'content' and 'markdown_content' fields."""
+        """Test that index page correctly handles markdown_content field."""
         from app.index_page.services import EntryRenderer
+        from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+        from summary_service.record_manager import save_summary_with_service_record
         
         summary_dir = tmp_path / "summary"
         summary_dir.mkdir(parents=True, exist_ok=True)
         
-        # Test case 1: New format with 'markdown_content'
-        new_format_data = {
-            "service_data": {"arxiv_id": "new.12345", "source_type": "system"},
-            "summary_data": {
-                "markdown_content": "# New Format\n\nThis is new format content.",
-                "tags": {"top": ["new"], "tags": ["new", "format"]}
-            }
-        }
+        # Create properly formatted summary using the save function
+        structured_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="新格式", title_en="New Format", abstract="Test Abstract"),
+            one_sentence_summary="This is new format content.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
         
-        new_path = summary_dir / "new.12345.json"
-        new_path.write_text(json.dumps(new_format_data), encoding="utf-8")
+        tags = Tags(top=["new"], tags=["new", "format"])
         
-        # Test case 2: Legacy format with 'content'
-        legacy_format_data = {
-            "service_data": {"arxiv_id": "legacy.12345", "source_type": "system"},
-            "summary_data": {
-                "content": "# Legacy Format\n\nThis is legacy format content.",
-                "tags": {"top": ["legacy"], "tags": ["legacy", "format"]}
-            }
-        }
+        save_summary_with_service_record(
+            arxiv_id="new.12345",
+            summary_content=structured_summary,
+            tags=tags,
+            summary_dir=summary_dir,
+            source_type="system"
+        )
         
-        legacy_path = summary_dir / "legacy.12345.json"
-        legacy_path.write_text(json.dumps(legacy_format_data), encoding="utf-8")
-        
-        # Test rendering both formats
+        # Test rendering
         renderer = EntryRenderer(summary_dir)
         
         # Test new format
@@ -118,13 +116,6 @@ class TestSummaryDataStructure:
         assert len(new_rendered) == 1
         new_html = new_rendered[0].get("preview_html", "")
         assert "New Format" in new_html, "New format content should be rendered"
-        
-        # Test legacy format
-        legacy_entry = {"id": "legacy.12345"}
-        legacy_rendered = renderer.render_page_entries([legacy_entry])
-        assert len(legacy_rendered) == 1
-        legacy_html = legacy_rendered[0].get("preview_html", "")
-        assert "Legacy Format" in legacy_html, "Legacy format content should be rendered"
     
     def test_detail_page_field_handling(self, tmp_path):
         """Test that detail page correctly handles structured summary loading."""
@@ -135,32 +126,26 @@ class TestSummaryDataStructure:
         summary_dir.mkdir(parents=True, exist_ok=True)
         
         # Create a properly formatted summary
-        structured_data = {
-            "service_data": {
-                "arxiv_id": "test.12345",
-                "source_type": "system"
-            },
-            "summary_data": {
-                "structured_content": {
-                    "paper_info": {
-                        "title_zh": "测试论文",
-                        "title_en": "Test Paper"
-                    },
-                    "one_sentence_summary": "Test summary.",
-                    "innovations": [],
-                    "results": {
-                        "experimental_highlights": [],
-                        "practical_value": []
-                    },
-                    "terminology": []
-                },
-                "markdown_content": "# 测试论文\n# Test Paper\n\nTest content.",
-                "tags": {"top": ["test"], "tags": ["test", "unit"]}
-            }
-        }
+        from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+        from summary_service.record_manager import save_summary_with_service_record
         
-        json_path = summary_dir / "test.12345.json"
-        json_path.write_text(json.dumps(structured_data), encoding="utf-8")
+        structured_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试论文", title_en="Test Paper", abstract="Test Abstract"),
+            one_sentence_summary="Test summary.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        
+        tags = Tags(top=["test"], tags=["test", "unit"])
+        
+        save_summary_with_service_record(
+            arxiv_id="test.12345",
+            summary_content=structured_summary,
+            tags=tags,
+            summary_dir=summary_dir,
+            source_type="system"
+        )
         
         # Test that structured summary can be loaded
         structured_summary = get_structured_summary("test.12345", summary_dir)
@@ -176,10 +161,7 @@ class TestSummaryDataStructure:
         record = loader.load_summary("test.12345")
         assert record is not None
         
-        summary_data = record["summary_data"]
-        service_data = record["service_data"]
-        
-        rendered = renderer.render_summary(summary_data, service_data)
+        rendered = renderer.render_summary(record)
         
         assert "html_content" in rendered
         assert "paper_title" in rendered
@@ -194,35 +176,51 @@ class TestSummaryDataStructure:
         assert "unit" in rendered["detail_tags"]
     
     def test_tags_structure_handling(self, tmp_path):
-        """Test that tags are handled correctly in different formats."""
+        """Test that tags are handled correctly."""
         from app.index_page.services import EntryScanner
+        from summary_service.models import StructuredSummary, PaperInfo, Tags, Results
+        from summary_service.record_manager import save_summary_with_service_record
         
         summary_dir = tmp_path / "summary"
         summary_dir.mkdir(parents=True, exist_ok=True)
         
         # Test case 1: New format tags
-        new_tags_data = {
-            "service_data": {"arxiv_id": "new.12345", "source_type": "system"},
-            "summary_data": {
-                "markdown_content": "# Test\n\nContent.",
-                "tags": {"top": ["llm"], "tags": ["machine learning", "ai"]}
-            }
-        }
+        new_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试", title_en="Test", abstract="Test Abstract"),
+            one_sentence_summary="Content.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
         
-        new_path = summary_dir / "new.12345.json"
-        new_path.write_text(json.dumps(new_tags_data), encoding="utf-8")
+        new_tags = Tags(top=["llm"], tags=["machine learning", "ai"])
         
-        # Test case 2: Legacy format tags
-        legacy_tags_data = {
-            "service_data": {"arxiv_id": "legacy.12345", "source_type": "system"},
-            "summary_data": {
-                "content": "# Test\n\nContent.",
-                "tags": {"top": ["cv"], "tags": ["computer vision", "deep learning"]}
-            }
-        }
+        save_summary_with_service_record(
+            arxiv_id="new.12345",
+            summary_content=new_summary,
+            tags=new_tags,
+            summary_dir=summary_dir,
+            source_type="system"
+        )
         
-        legacy_path = summary_dir / "legacy.12345.json"
-        legacy_path.write_text(json.dumps(legacy_tags_data), encoding="utf-8")
+        # Test case 2: Another entry with different tags
+        cv_summary = StructuredSummary(
+            paper_info=PaperInfo(title_zh="测试", title_en="Test", abstract="Test Abstract"),
+            one_sentence_summary="Content.",
+            innovations=[],
+            results=Results(experimental_highlights=[], practical_value=[]),
+            terminology=[]
+        )
+        
+        cv_tags = Tags(top=["cv"], tags=["computer vision", "deep learning"])
+        
+        save_summary_with_service_record(
+            arxiv_id="cv.12345",
+            summary_content=cv_summary,
+            tags=cv_tags,
+            summary_dir=summary_dir,
+            source_type="system"
+        )
         
         # Test scanning
         scanner = EntryScanner(summary_dir)
@@ -230,25 +228,25 @@ class TestSummaryDataStructure:
         
         # Find entries
         new_entry = None
-        legacy_entry = None
+        cv_entry = None
         
         for entry in entries_meta:
             if entry["id"] == "new.12345":
                 new_entry = entry
-            elif entry["id"] == "legacy.12345":
-                legacy_entry = entry
+            elif entry["id"] == "cv.12345":
+                cv_entry = entry
         
         assert new_entry is not None
-        assert legacy_entry is not None
+        assert cv_entry is not None
         
         # Verify tags are parsed correctly
         assert "llm" in new_entry["top_tags"]
         assert "machine learning" in new_entry["detail_tags"]
         assert "ai" in new_entry["detail_tags"]
         
-        assert "cv" in legacy_entry["top_tags"]
-        assert "computer vision" in legacy_entry["detail_tags"]
-        assert "deep learning" in legacy_entry["detail_tags"]
+        assert "cv" in cv_entry["top_tags"]
+        assert "computer vision" in cv_entry["detail_tags"]
+        assert "deep learning" in cv_entry["detail_tags"]
 
 
 class TestSummaryServiceRecordManager:
@@ -264,7 +262,7 @@ class TestSummaryServiceRecordManager:
         
         # Create test data
         summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="测试", title_en="Test"),
+            paper_info=PaperInfo(title_zh="测试", title_en="Test", abstract="Test Abstract"),
             one_sentence_summary="Test summary.",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),
@@ -326,7 +324,7 @@ class TestSummaryServiceRecordManager:
         
         # Create and save test data
         summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="测试", title_en="Test"),
+            paper_info=PaperInfo(title_zh="测试", title_en="Test", abstract="Test Abstract"),
             one_sentence_summary="Test summary.",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),
@@ -347,17 +345,14 @@ class TestSummaryServiceRecordManager:
         record = load_summary_with_service_record("test.12345", summary_dir)
         assert record is not None
         
-        service_data = record["service_data"]
-        summary_data = record["summary_data"]
-        
-        assert service_data["arxiv_id"] == "test.12345"
-        assert service_data["source_type"] == "system"
-        assert "markdown_content" in summary_data
-        assert "tags" in summary_data
+        assert record.service_data.arxiv_id == "test.12345"
+        assert record.service_data.source_type == "system"
+        assert record.summary_data.markdown_content is not None
+        assert record.summary_data.tags is not None
         
         # Verify tags structure
-        tags_data = summary_data["tags"]
-        assert "top" in tags_data
-        assert "tags" in tags_data
-        assert "test" in tags_data["top"]
-        assert "unit" in tags_data["tags"]
+        tags_obj = record.summary_data.tags
+        assert tags_obj.top is not None
+        assert tags_obj.tags is not None
+        assert "test" in tags_obj.top
+        assert "unit" in tags_obj.tags

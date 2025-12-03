@@ -1,4 +1,4 @@
-You are an expert research assistant specializing in Artificial Intelligence (AI). Your task is to generate topic tags for the following paper SUMMARY (not the original paper). Assume the domain is AI and prefer AI-relevant vocabulary.
+You are an expert research assistant specializing in Artificial Intelligence (AI). Your task is to generate topic tags for the following paper SUMMARY (not the original paper).
 
 Requirements:
 - Produce two levels of tags:

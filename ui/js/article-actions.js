@@ -60,11 +60,6 @@ class ArticleActions {
   }
 
   handleClick(ev) {
-    if (ev.target.matches('.toggle-link')) {
-      ev.preventDefault();
-      this.togglePreview(ev.target);
-    }
-    
     // Handle mark-read-link clicks
     let markReadElement = ev.target.closest('.mark-read-link');
     if (markReadElement) {
@@ -72,7 +67,7 @@ class ArticleActions {
       ev.stopPropagation();
       
       if (markReadElement.classList.contains('disabled')) {
-        this.guideToLogin('标记为已读');
+        this.guideToLogin('标记为没兴趣');
       } else {
         this.markRead(markReadElement);
       }
@@ -92,7 +87,7 @@ class ArticleActions {
       ev.stopPropagation();
       
       if (favoriteElement.classList.contains('disabled')) {
-        this.guideToLogin('收藏');
+        this.guideToLogin('感兴趣');
       } else {
         this.toggleFavorite(favoriteElement);
       }
@@ -130,33 +125,141 @@ class ArticleActions {
       ev.preventDefault();
       this.removeFromTodo(ev.target);
     }
+
+    // Handle Deep Read button on index cards
+    let deepReadElement = ev.target.closest('.deep-read-link');
+    if (!deepReadElement && ev.target.classList && ev.target.classList.contains('deep-read-link')) {
+      deepReadElement = ev.target;
+    }
+    
+    if (deepReadElement) {
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const art = deepReadElement.closest('article');
+      const isAbstractOnly = art && art.getAttribute('data-abstract-only') === 'true';
+      
+      // If complete summary exists, navigate directly (no login needed)
+      if (!isAbstractOnly) {
+        const id = art.getAttribute('data-id') || deepReadElement.getAttribute('data-id');
+        if (id) {
+          window.location.href = `/summary/${id}`;
+        }
+        return;
+      }
+      
+      // If abstract-only, trigger generation (backend will check login)
+      this.triggerDeepReadFromIndex(deepReadElement);
+      return;
+    }
   }
 
   guideToLogin(action) {
     // Show informative toast message
-    showToast(`需要登录才能${action}，\n请在页面顶部输入任意用户名登陆`);
+    if (typeof showToast === 'function') {
+      showToast(`需要登录才能${action}，\n请在页面顶部输入任意用户名登陆`);
+    } else {
+      // Fallback if showToast is not available
+      alert(`需要登录才能${action}，请在页面顶部输入任意用户名登陆`);
+    }
     
     // Just show toast, no focus behavior to avoid scrolling
     // User can manually click the login form if they want
   }
 
-  togglePreview(link) {
-    const art = link.closest('article');
-    
-    // Save scroll position before toggle
-    this.saveScrollPosition(art);
-    
-    const prev = art.querySelector('.preview-html');
-    prev.classList.toggle('collapsed');
-    link.textContent = prev.classList.contains('collapsed') ? '展开' : '收起';
-    
-    // Restore scroll position after toggle
-    setTimeout(() => {
-      this.restoreScrollPosition();
-    }, 0);
-    
-    // Track event using centralized tracker
-    window.eventTracker.trackReadMore(art, prev.classList.contains('collapsed'));
+  async triggerDeepReadFromIndex(button) {
+    const art = button.closest('article');
+    const id = art.getAttribute('data-id') || button.getAttribute('data-id');
+    if (!id) {
+      return;
+    }
+
+    // Check if already processing
+    try {
+      const statusResponse = await fetch('/api/deep_read/status');
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        const isProcessing = (statusData.processing || []).some(
+          item => item.arxiv_id === id
+        );
+        if (isProcessing) {
+          // Already processing, just show message and update button
+          button.textContent = '生成中...';
+          button.style.opacity = '0.7';
+          button.disabled = true;
+          showToast('深度阅读正在生成中，请稍候');
+          // Trigger status bar update
+          if (window.deepReadStatusBar) {
+            window.deepReadStatusBar.updateStatus();
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      // Ignore status check errors, proceed with request
+    }
+
+    // Save original state and show loading
+    const originalText = button.textContent;
+    button.textContent = '生成中...';
+    button.style.opacity = '0.7';
+    button.disabled = true;
+
+    try {
+      const r = await fetch(`/api/summary/${id}/deep_read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+      });
+
+        let data = {};
+        try {
+          data = await r.json();
+        } catch (_) {
+          // ignore JSON parse error
+        }
+
+      if (r.status === 401) {
+        // Restore button state
+        button.textContent = originalText;
+        button.style.opacity = '';
+        button.disabled = false;
+          this.guideToLogin('使用深度阅读');
+        } else if (r.ok && data.success) {
+        // Keep button in "生成中" state
+        button.textContent = '生成中...';
+        button.style.opacity = '0.7';
+        button.disabled = true;
+        
+        if (data.already_processing) {
+          showToast('深度阅读正在生成中，请稍候');
+        } else {
+          showToast('深度阅读生成已开始，请稍候');
+        }
+        
+        // Trigger status bar update and start polling
+        if (window.deepReadStatusBar) {
+          // Update status and start polling (will check if already polling)
+          window.deepReadStatusBar.updateStatus().then(() => {
+            // Start polling to track the new job
+            window.deepReadStatusBar.startPolling();
+          });
+        }
+      } else {
+        // Restore button state on error
+        button.textContent = originalText;
+        button.style.opacity = '';
+        button.disabled = false;
+        showToast(data.message || '深度阅读生成失败，请稍后重试');
+      }
+    } catch (error) {
+      // Restore button state on error
+      button.textContent = originalText;
+      button.style.opacity = '';
+      button.disabled = false;
+        showToast('网络错误，无法触发深度阅读');
+    }
   }
 
   markRead(link) {
@@ -221,7 +324,7 @@ class ArticleActions {
     
     // Add loading state
     const originalText = link.textContent;
-    link.textContent = isFavorited ? '取消中...' : '收藏中...';
+    link.textContent = isFavorited ? '取消中...' : '感兴趣中...';
     link.style.opacity = '0.6';
     link.style.pointerEvents = 'none';
     
@@ -253,13 +356,13 @@ class ArticleActions {
         } else {
           // Update button state (no removal from page)
           link.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
-          link.textContent = newFavorited ? '取消收藏' : '收藏';
+          link.textContent = newFavorited ? '取消感兴趣' : '感兴趣';
           link.style.opacity = '';
           link.style.pointerEvents = '';
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');
+        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
         window.eventTracker.trackFavorite(art, newFavorited);
@@ -331,7 +434,7 @@ class ArticleActions {
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到收藏 ⭐' : '已从收藏移除');
+        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
         window.eventTracker.trackFavorite(art, newFavorited);

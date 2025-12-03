@@ -19,6 +19,8 @@ from .llm_utils import llm_invoke
 from .models import (
     ChunkSummary,
     StructuredSummary,
+    PaperInfo,
+    Results,
     Innovation,
     TermDefinition,
     Tags,
@@ -31,6 +33,9 @@ _LOG = logging.getLogger("summary_generator")
 
 # Default configuration
 DEFAULT_LLM_PROVIDER = "deepseek"
+
+# Get prompts directory path relative to this module
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 def progressive_summary(
@@ -77,7 +82,7 @@ def progressive_summary(
     def _summarize_one(idx: int, chunk: str) -> Tuple[int, ChunkSummary]:
         msg = HumanMessage(
             PromptTemplate.from_file(
-                os.path.join("prompts", "chunk_summary.json.md"), encoding="utf-8"
+                _PROMPTS_DIR / "chunk_summary.json.md", encoding="utf-8"
             ).format(chunk_content=chunk)
         )
         resp = llm_invoke(
@@ -158,7 +163,7 @@ def progressive_summary(
 
     # Generate final structured summary
     prompt_template = PromptTemplate.from_file(
-        os.path.join("prompts", "summary.json.md"), encoding="utf-8"
+        _PROMPTS_DIR / "summary.json.md", encoding="utf-8"
     )
     
     # Create the complete prompt with chunk summaries
@@ -215,27 +220,52 @@ def progressive_summary(
         _LOG.error(f"LLM response was: {final_msg.content}")
         return None, chunk_summaries  # type: ignore
 
+def generate_abstract_summary(
+    abstract_text: str,
+    title: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    provider: str = DEFAULT_LLM_PROVIDER,
+    model: str = None,
+) -> StructuredSummary:
+    """Generate a one-sentence summary from the abstract using LLM."""
+    user_prompt = PromptTemplate.from_file(
+        _PROMPTS_DIR / "abstract_summary.json.md", encoding="utf-8"
+    ).format(title=title, abstract=abstract_text)
 
-def generate_tags_from_summary(
-    summary_text: str,
+    resp = llm_invoke(
+        [HumanMessage(content=user_prompt)],
+        api_key=api_key,
+        base_url=base_url,
+        provider=provider,
+        model=model
+    )
+
+    try:
+        summary = parse_summary(resp.content)
+        return summary
+    except Exception as e:
+        _LOG.error(f"Failed to parse abstract summary: {e}")
+        _LOG.error(f"LLM response was: {resp.content}")
+        return None 
+
+def generate_tags_from_abstract(
+    title: str,
+    abstract_text: str,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
     provider: str = DEFAULT_LLM_PROVIDER,
     model: str = None,
     max_tags: int = 8,
 ) -> Tags:
-    """Generate AI-aware top-level and detailed tags using the LLM.
-
-    Reads prompt from prompts/tags.json.md. Returns a Tags object.
-    """
-    # Use top-level imports
-
-    tmpl = PromptTemplate.from_file(
-        os.path.join("prompts", "tags.json.md"), encoding="utf-8"
-    ).format(summary_content=summary_text)
+    """Generate a one-sentence summary from the abstract using LLM."""
+    
+    user_prompt = PromptTemplate.from_file(
+        _PROMPTS_DIR / "tags_from_abstract.json.md", encoding="utf-8"
+    ).format(title=title, abstract=abstract_text)
 
     resp = llm_invoke(
-        [HumanMessage(content=tmpl)],
+        [HumanMessage(content=user_prompt)],
         api_key=api_key,
         base_url=base_url,
         provider=provider,
@@ -280,25 +310,91 @@ def generate_tags_from_summary(
                     break
             normalized_tags.extend(extras)
 
-        # normalize top-level too and ensure subset of allowed set
-        allowed_top = {
-            "llm",
-            "nlp",
-            "cv",
-            "ml",
-            "rl",
-            "agents",
-            "systems",
-            "theory",
-            "robotics",
-            "audio",
-            "multimodal",
-        }
         top_norm: List[str] = []
         seen_top = set()
         for t in tags.top:
             k = " ".join(str(t).split()).lower()
-            if k in allowed_top and k not in seen_top:
+            if k not in seen_top:
+                seen_top.add(k)
+                top_norm.append(k)
+
+        return Tags(top=top_norm, tags=normalized_tags)
+
+    except Exception as e:
+        _LOG.error(f"Failed to parse tags: {e}")
+        # Return default tags
+        return Tags(top=[], tags=[])
+
+
+def generate_tags_from_summary(
+    summary_text: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    provider: str = DEFAULT_LLM_PROVIDER,
+    model: str = None,
+    max_tags: int = 8,
+) -> Tags:
+    """Generate AI-aware top-level and detailed tags using the LLM.
+
+    Reads prompt from summary_service/prompts/tags.json.md. Returns a Tags object.
+    """
+    # Use top-level imports
+
+    user_prompt = PromptTemplate.from_file(
+        _PROMPTS_DIR / "tags.json.md", encoding="utf-8"
+    ).format(summary_content=summary_text)
+
+    resp = llm_invoke(
+        [HumanMessage(content=user_prompt)],
+        api_key=api_key,
+        base_url=base_url,
+        provider=provider,
+        model=model,
+    )
+    raw = (resp.content or "").strip()
+
+    # Clean up any <think> tags that might appear in Ollama output
+    if provider.lower() == "ollama":
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
+
+    # Strip fenced code blocks if present, e.g., ```json ... ``` or ``` ... ```
+    fenced_match = re.search(r"```(?:json|\w+)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+    if fenced_match:
+        raw = fenced_match.group(1).strip()
+
+    try:
+        tags = parse_tags(raw)
+
+        # Normalize and cap
+        normalized_tags: List[str] = []
+        seen = set()
+        for t in tags.tags:
+            norm = " ".join(t.split()).lower()
+            if norm and norm not in seen:
+                seen.add(norm)
+                normalized_tags.append(norm)
+            if len(normalized_tags) >= max_tags:
+                break
+
+        # Ensure a minimum of 3 tags if possible by splitting slashes etc.
+        if len(normalized_tags) < 3:
+            extras: List[str] = []
+            for t in normalized_tags:
+                for part in t.replace("/", " ").split():
+                    if part and part not in seen:
+                        seen.add(part)
+                        extras.append(part)
+                    if len(normalized_tags) + len(extras) >= 3:
+                        break
+                if len(normalized_tags) + len(extras) >= 3:
+                    break
+            normalized_tags.extend(extras)
+
+        top_norm: List[str] = []
+        seen_top = set()
+        for t in tags.top:
+            k = " ".join(str(t).split()).lower()
+            if k not in seen_top:
                 seen_top.add(k)
                 top_norm.append(k)
 
@@ -347,6 +443,21 @@ class SummaryGenerator:
             max_workers=self.max_workers,
             use_summary_cache=use_summary_cache,
             use_chunk_summary_cache=use_chunk_summary_cache,
+        )
+
+    def generate_abstract_summary(
+        self,
+        abstract_text: str,
+        title: str,
+    ) -> StructuredSummary:
+        """Generate abstract-only summary using instance configuration."""
+        return generate_abstract_summary(
+            abstract_text=abstract_text,
+            title=title,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            provider=self.provider,
+            model=self.model,
         )
 
 

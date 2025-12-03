@@ -4,12 +4,119 @@
 <head>
     <meta charset='utf-8'>
     <meta name='viewport' content='width=device-width,initial-scale=1'>
-    <title>{{ arxiv_id }} – Summary</title>
+    
+    <!-- Dynamic Title -->
+    <title>{% if english_title %}{{ english_title }}{% else %}{{ arxiv_id }}{% endif %} – AI Paper Summary</title>
+    
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="{% if english_title %}{{ english_title }}{% else %}{{ arxiv_id }}{% endif %} – AI Paper Summary">
+    <meta name="description" content="{% if abstract %}{{ abstract[:200] }}{% elif one_sentence_summary %}{{ one_sentence_summary[:200] }}{% else %}AI research paper summary and analysis for {{ arxiv_id }}{% endif %}">
+    <meta name="keywords" content="{% if top_tags %}{{ top_tags|join(', ') }}{% endif %}{% if detail_tags %}, {{ detail_tags|join(', ') }}{% endif %}, AI research, machine learning, arXiv paper, {{ arxiv_id }}">
+    <meta name="author" content="AI Papers Reader">
+    <meta name="robots" content="index, follow">
+    <meta name="article:published_time" content="{{ created_at if created_at else '' }}">
+    <meta name="article:section" content="AI Research">
+    {% if top_tags %}
+    <meta name="article:tag" content="{{ top_tags|join(', ') }}">
+    {% endif %}
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:title" content="{% if english_title %}{{ english_title }}{% else %}{{ arxiv_id }}{% endif %}">
+    <meta property="og:description" content="{% if abstract %}{{ abstract[:300] }}{% elif one_sentence_summary %}{{ one_sentence_summary[:300] }}{% else %}AI research paper summary and analysis{% endif %}">
+    <meta property="og:image" content="https://arxiv.org/pdf/{{ arxiv_id }}.pdf">
+    <meta property="og:site_name" content="AI Papers Reader">
+    <meta property="article:published_time" content="{{ service_data.get('created_at', '') if service_data else '' }}">
+    {% if top_tags %}
+    {% for tag in top_tags %}
+    <meta property="article:tag" content="{{ tag }}">
+    {% endfor %}
+    {% endif %}
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="{{ request.url }}">
+    <meta property="twitter:title" content="{% if english_title %}{{ english_title }}{% else %}{{ arxiv_id }}{% endif %}">
+    <meta property="twitter:description" content="{% if abstract %}{{ abstract[:200] }}{% elif one_sentence_summary %}{{ one_sentence_summary[:200] }}{% else %}AI research paper summary{% endif %}">
+    <meta property="twitter:image" content="https://arxiv.org/pdf/{{ arxiv_id }}.pdf">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="{{ request.url }}">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="AI Papers">
+    
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="{{ url_for('base_css') }}">
     <link rel="stylesheet" href="{{ url_for('static_css', filename='badges.css') }}">
     <link rel="stylesheet" href="{{ url_for('static_css', filename='components.css') }}">
     <link rel="stylesheet" href="{{ url_for('static_css', filename='modal.css') }}">
     <link rel="icon" href="{{ url_for('static_favicon_svg') }}?v=2" type="image/svg+xml">
+    
+    <!-- Structured Data - ScholarlyArticle -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ScholarlyArticle",
+      "headline": "{% if english_title %}{{ english_title }}{% else %}{{ arxiv_id }}{% endif %}",
+      "description": "{% if abstract %}{{ abstract[:500] }}{% elif one_sentence_summary %}{{ one_sentence_summary[:500] }}{% else %}AI research paper summary and analysis{% endif %}",
+      "identifier": "{{ arxiv_id }}",
+      "url": "{{ request.url }}",
+      "sameAs": "https://arxiv.org/abs/{{ arxiv_id }}",
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "{{ request.url }}"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "AI Papers Reader",
+        "url": "{{ request.url_root }}"
+      },
+      "datePublished": "{{ created_at if created_at else '' }}",
+      "dateModified": "{{ updated_at if updated_at else (created_at if created_at else '') }}",
+      "inLanguage": ["en", "zh"],
+      "keywords": "{% if top_tags %}{{ top_tags|join(', ') }}{% endif %}{% if detail_tags %}, {{ detail_tags|join(', ') }}{% endif %}",
+      "about": [
+        {% if top_tags %}
+        {% for tag in top_tags %}"{{ tag }}"{% if not loop.last %},{% endif %}{% endfor %}
+        {% endif %}
+      ],
+      "mentions": [
+        {
+          "@type": "Thing",
+          "name": "arXiv",
+          "url": "https://arxiv.org"
+        }
+      ]
+    }
+    </script>
+    
+    <!-- Structured Data - BreadcrumbList -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "{{ request.url_root }}"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "{% if english_title %}{{ english_title[:50] }}{% else %}{{ arxiv_id }}{% endif %}",
+          "item": "{{ request.url }}"
+        }
+      ]
+    }
+    </script>
 </head>
 
 <body>
@@ -74,10 +181,42 @@
           <button type="submit" class="topbar-btn">筛选</button>
         </form>
         {% endif %}
+        
+        <!-- Deep Read Control Section -->
+        <div class="deep-read-control" style="text-align:center; padding: var(--spacing-2xl) 0; display: none;" id="deep-read-control-container">
+            <div class="deep-read-card" style="background: var(--card-bg); border: 1px solid var(--btn-border); border-radius: var(--radius-md); padding: var(--spacing-xl); max-width: 600px; margin: 0 auto;">
+                <h3 style="margin-top: 0;">🤖 AI 深度阅读</h3>
+                
+                <!-- Case 1: Generate (Abstract Only) -->
+                <div id="deep-read-generate-ui" style="display: none;">
+                    <p style="color: var(--muted-text);">当前仅显示摘要总结。如需获取详细的论文深度解读（包含创新点、实验结果、术语解释等），请点击下方按钮。</p>
+                    
+                    {% if current_user_id %}
+                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: 1.1rem; padding: var(--spacing-lg) var(--spacing-xl); margin-top: var(--spacing-lg);">
+                        <span>📚</span> 生成深度解读
+                    </button>
+                    <div id="deep-read-loading" style="display: none; margin-top: var(--spacing-lg);">
+                        <div class="loading-spinner" style="display: inline-block; margin-right: var(--spacing-sm);"></div>
+                        <span>AI正在深入阅读并生成详细报告，请稍候... (约30-60秒)</span>
+                    </div>
+                    <div id="deep-read-error" style="display: none; margin-top: var(--spacing-lg); color: var(--danger);"></div>
+                    {% else %}
+                    <div style="margin-top: var(--spacing-lg);">
+                        <a href="/#login" class="login-cta-btn" style="display: inline-block; text-decoration: none;">
+                            <span class="cta-icon">🔑</span>
+                            <span class="cta-text">登录以启用深度阅读</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+
         <article class='markdown-body'>
             {{ content | safe }}
         </article>
-        <p style='text-align:center;margin-top:2rem;'>
+        <p style='text-align:center;margin-top:var(--spacing-2xl);'>
             <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf'>📄 打开原文 PDF</a>
         </p>
     </main>
@@ -93,6 +232,7 @@
     <script src="{{ url_for('static_js', filename='paper-submission.js') }}"></script>
     <script src="{{ url_for('static_js', filename='visitor-stats-tracker.js') }}"></script>
     <script src="{{ url_for('static_js', filename='abstract-viewer.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='deep-read-status.js') }}"></script>
     
     <script>
       // URL configuration for Flask templates
@@ -109,6 +249,19 @@
         const href = ev.currentTarget.getAttribute('href');
         window.eventTracker.track('open_pdf', '{{ arxiv_id }}', { href });
       });
+      
+      // Service Worker Registration for PWA
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+              console.log('Service Worker registered:', registration.scope);
+            })
+            .catch((error) => {
+              console.log('Service Worker registration failed:', error);
+            });
+        });
+      }
       
       // Abstract fetching function for detail page
       async function fetchAbstract(arxivId) {
@@ -167,6 +320,71 @@
           `;
         }
       }
+
+      // Deep Read handling - only show section for abstract-only summaries
+      const isAbstractOnly = '{{ is_abstract_only | string | lower }}' === 'true';
+      
+      if (isAbstractOnly) {
+        const controlContainer = document.getElementById('deep-read-control-container');
+        const generateUI = document.getElementById('deep-read-generate-ui');
+        controlContainer.style.display = 'block';
+        generateUI.style.display = 'block';
+      }
+      // If complete summary exists, it's shown directly (no section needed)
+
+      // Generate Button Logic
+      const deepReadGenBtn = document.getElementById('deep-read-gen-btn');
+      if (deepReadGenBtn) {
+        deepReadGenBtn.addEventListener('click', async () => {
+          const loading = document.getElementById('deep-read-loading');
+          const error = document.getElementById('deep-read-error');
+          
+          deepReadGenBtn.style.display = 'none';
+          loading.style.display = 'block';
+          error.style.display = 'none';
+          
+          try {
+            const response = await fetch('{{ deep_read_url }}', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+              if (data.processing || data.already_processing) {
+                // Processing started, show status bar and keep loading
+                showToast('深度阅读生成已开始，请稍候');
+                if (window.deepReadStatusBar) {
+                  window.deepReadStatusBar.updateStatus().then(() => {
+                    // Start polling to track the new job
+                    window.deepReadStatusBar.startPolling();
+                  });
+                }
+                // Don't reload yet - status bar will show progress
+                // User can manually reload or wait for completion
+              } else {
+                // Shouldn't happen with new async flow, but keep as fallback
+              window.location.reload();
+              }
+            } else {
+              loading.style.display = 'none';
+              deepReadGenBtn.style.display = 'inline-block';
+              error.textContent = data.message || '生成失败，请稍后重试';
+              error.style.display = 'block';
+            }
+          } catch (err) {
+            console.error('Deep read error:', err);
+            loading.style.display = 'none';
+            deepReadGenBtn.style.display = 'inline-block';
+            error.textContent = '网络错误，请稍后重试';
+            error.style.display = 'block';
+          }
+        });
+      }
+      
     </script>
 
 </body>

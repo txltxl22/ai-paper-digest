@@ -60,8 +60,8 @@
 /* Summary header styles for detail page */
 .summary-header {
     margin-bottom: 1rem;
-    padding: 0.75rem;
-    border-radius: 6px;
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
 }
 
 .source-info {

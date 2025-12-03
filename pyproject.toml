@@ -22,6 +22,8 @@ dependencies = [
     "pytest>=8.4.0",
     "requests[socks]>=2.32.3",
     "tqdm>=4.67.1",
+    "numpy>=2.2.6",
+    "sentence-transformers>=5.1.2",
 ]
 
 [[tool.uv.index]]

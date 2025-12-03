@@ -1,5 +1,5 @@
 <!-- Modern Article Card Component -->
-<article data-id='{{ e.id }}'>
+<article data-id='{{ e.id }}' data-abstract-only='{{ 'true' if e.is_abstract_only else 'false' }}'>
   <!-- Header Section -->
   <div class="article-header">
     <div class="header-left">
@@ -10,7 +10,7 @@
           <span class="abstract-trigger-icon">📝</span>
         </button>
         {% if uid %}
-          <button class="favorite-star-btn" title="{{ '已收藏 - 点击取消' if e.is_favorited else '收藏这篇论文' }}" data-id="{{ e.id }}" data-favorited="{{ 'true' if e.is_favorited else 'false' }}">
+          <button class="favorite-star-btn" title="{{ '已感兴趣 - 点击取消' if e.is_favorited else '感兴趣这篇论文' }}" data-id="{{ e.id }}" data-favorited="{{ 'true' if e.is_favorited else 'false' }}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="{{ '#fbbf24' if e.is_favorited else 'none' }}" stroke="currentColor" stroke-width="2">
               <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26 12,2"/>
             </svg>
@@ -26,9 +26,20 @@
           <span class="user-chip" title="系统自动处理">🤖 系统</span>
         {% endif %}
       </div>
-      <div class="update-time">{{ e.updated.strftime('%m-%d %H:%M') }}</div>
+      <div class="update-time">{{ e.submission_time.strftime('%m-%d %H:%M') }}</div>
     </div>
   </div>
+  {% if e.recommendation %}
+  <div class="recommendation-row">
+    <span class="personalization-pill small">🎯 为你推荐</span>
+    {% if e.recommendation.matched_tags %}
+    <span class="recommendation-note">匹配标签:</span>
+    {% for tag in e.recommendation.matched_tags[:4] %}
+      <span class="match-chip">#{{ tag }}</span>
+    {% endfor %}
+    {% endif %}
+  </div>
+  {% endif %}
   
   <!-- Tags Section -->
   {% if e.top_tags and e.top_tags|length %}
@@ -57,7 +68,7 @@
   <!-- Content Section -->
   <div class="content-section">
     <div class="summary-section">
-      <div class='preview-html collapsed'>{{ e.preview_html | safe }}</div>
+      <div class='preview-html'>{{ e.preview_html | safe }}</div>
     </div>
   </div>
   
@@ -65,36 +76,39 @@
   <div class='card-actions'>
     <div class="primary-actions">
       {% if show_read %}
-        <a class='remove-read-link action-btn secondary-btn'>从已读列表移除</a>
+        <a class='remove-read-link action-btn secondary-btn'>从没兴趣列表移除</a>
       {% elif show_favorites %}
-        <a class='remove-favorite-link action-btn secondary-btn'>从收藏列表移除</a>
+        <a class='remove-favorite-link action-btn secondary-btn'>从感兴趣列表移除</a>
       {% elif show_todo %}
         <a class='remove-todo-link action-btn secondary-btn'>从待读移除</a>
         {% if uid %}
-          <a class='mark-read-link action-btn secondary-btn'>✓ 标记为已读</a>
+          <a class='mark-read-link action-btn secondary-btn'>👋 没兴趣</a>
         {% else %}
-          <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为已读</a>
+          <a class='mark-read-link action-btn secondary-btn disabled'>👋 没兴趣</a>
         {% endif %}
       {% else %}
         {% if uid %}
-          <a class='mark-read-link action-btn secondary-btn'>✓ 标记为已读</a>
+          <a class='mark-read-link action-btn secondary-btn'>👋 没兴趣</a>
         {% else %}
-          <a class='mark-read-link action-btn secondary-btn disabled'>✓ 标记为已读</a>
+          <a class='mark-read-link action-btn secondary-btn disabled'>👋 没兴趣</a>
         {% endif %}
       {% endif %}
       {% if uid and (not show_favorites) %}
         <a class='favorite-link action-btn secondary-btn' data-favorited='{{ 'true' if e.is_favorited else 'false' }}'>
-          {% if e.is_favorited %}⭐ 取消收藏{% else %}☆ 收藏{% endif %}
+          {% if e.is_favorited %}⭐ 取消感兴趣{% else %}☆ 感兴趣{% endif %}
         </a>
       {% elif not uid and (not show_favorites) %}
-        <a class='favorite-link action-btn secondary-btn disabled'>☆ 收藏</a>
+        <a class='favorite-link action-btn secondary-btn disabled'>☆ 感兴趣</a>
       {% endif %}
       {% if uid and (not show_favorites) and (not show_todo) and (not show_read) %}
         <a class='add-todo-link action-btn secondary-btn'>📌 待读</a>
       {% elif not uid and (not show_favorites) and (not show_todo) and (not show_read) %}
         <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
       {% endif %}
-      <a class='toggle-link action-btn secondary-btn'>展开</a>
+
+      <button type="button" class='deep-read-link action-btn secondary-btn' data-id='{{ e.id }}' style="color: var(--primary); border-color: var(--primary);">
+        <span>🤖</span> Deep Read
+      </button>
     </div>
     <div class="secondary-actions">
       <a target='_blank' href='https://arxiv.org/pdf/{{ e.id }}.pdf' class='action-btn'>
@@ -112,7 +126,7 @@
       <div class='metadata-item read'>
         <span class='metadata-icon'>📖</span>
         <div class='metadata-content'>
-          <span class='metadata-label'>已读</span>
+          <span class='metadata-label'>没兴趣</span>
           <span class='metadata-value'>{{ e.read_time[5:10] }} {{ e.read_time[11:16] }}</span>
         </div>
       </div>
@@ -121,7 +135,7 @@
       <div class='metadata-item favorite'>
         <span class='metadata-icon'>⭐</span>
         <div class='metadata-content'>
-          <span class='metadata-label'>收藏</span>
+          <span class='metadata-label'>感兴趣</span>
           <span class='metadata-value'>{{ e.favorite_time[5:10] }} {{ e.favorite_time[11:16] }}</span>
         </div>
       </div>

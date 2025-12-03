@@ -49,10 +49,10 @@ class TestPaperInfoExtractor:
             assert mock_get.call_count == 1, "Should fetch content only once"
             
             # Verify that both title and abstract were extracted
-            assert result["title"] is not None, "Title should be extracted"
-            assert result["abstract"] is not None, "Abstract should be extracted"
-            assert "Test Paper" in result["title"], "Title should contain expected text"
-            assert "test abstract" in result["abstract"].lower(), "Abstract should contain expected text"
+            assert result.title_en is not None, "Title should be extracted"
+            assert result.abstract is not None, "Abstract should be extracted"
+            assert "Test Paper" in result.title_en, "Title should contain expected text"
+            assert "test abstract" in result.abstract.lower(), "Abstract should contain expected text"
             
         extractor.close()
     
@@ -122,12 +122,16 @@ class TestPaperInfoExtractor:
         """
         
         with patch('summary_service.paper_info_extractor.PaperInfoExtractor') as MockExtractor:
+            from summary_service.models import PaperInfo
             mock_instance = Mock()
-            mock_instance.get_paper_info.return_value = {
-                "title": "Convenience Test Paper",
-                "abstract": "This is a convenience test abstract with sufficient length to be extracted properly.",
-                "success": True
-            }
+            mock_paper_info = PaperInfo(
+                title_en="Convenience Test Paper",
+                abstract="This is a convenience test abstract with sufficient length to be extracted properly.",
+                arxiv_id="2508.15144",
+                url="https://arxiv.org/abs/2508.15144",
+                source="arxiv"
+            )
+            mock_instance.get_paper_info.return_value = mock_paper_info
             MockExtractor.return_value = mock_instance
             
             # Test extract_title
@@ -145,7 +149,9 @@ class TestPaperInfoExtractor:
     
     def test_get_paper_info_handles_fetch_failure(self):
         """Test that get_paper_info handles content fetch failures gracefully."""
-        extractor = PaperInfoExtractor(timeout=10)
+        from summary_service.models import PaperInfo
+        # Use a small retry delay for faster tests
+        extractor = PaperInfoExtractor(timeout=10, retry_delay=0.01)
         
         with patch.object(extractor.session, 'get') as mock_get:
             # Simulate fetch failure
@@ -153,11 +159,11 @@ class TestPaperInfoExtractor:
             
             result = extractor.get_paper_info("https://arxiv.org/abs/2508.15144")
             
-            # Should return error info but not crash
-            assert result["success"] is False
-            assert result["error"] is not None
-            assert result["title"] is None
-            assert result["abstract"] is None
+            # Should return PaperInfo object with empty/default values but not crash
+            assert result is not None
+            assert isinstance(result, PaperInfo)
+            assert result.title_en == "" or result.title_en is None
+            assert result.abstract == "" or result.abstract is None
         
         extractor.close()
     
@@ -223,15 +229,18 @@ class TestPaperInfoExtractor:
             
             result = extractor.get_paper_info("https://arxiv.org/abs/2508.15144")
             
-            # Verify all expected keys are present
-            required_keys = ["url", "title", "abstract", "arxiv_id", "source", "success", "error"]
-            for key in required_keys:
-                assert key in result, f"Missing key: {key}"
+            # Verify result is a PaperInfo object with expected attributes
+            assert result is not None
+            assert hasattr(result, "url")
+            assert hasattr(result, "title_en")
+            assert hasattr(result, "abstract")
+            assert hasattr(result, "arxiv_id")
+            assert hasattr(result, "source")
             
             # Verify source is correctly identified
-            assert result["source"] == "arxiv"
-            assert result["arxiv_id"] == "2508.15144"
-            assert result["url"] == "https://arxiv.org/abs/2508.15144"
+            assert result.source == "arxiv"
+            assert result.arxiv_id == "2508.15144"
+            assert result.url == "https://arxiv.org/abs/2508.15144"
         
         extractor.close()
 

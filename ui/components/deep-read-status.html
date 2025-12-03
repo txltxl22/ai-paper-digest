@@ -1,0 +1,25 @@
+<!-- Deep Read Status Bar -->
+{% if uid %}
+<div id="deep-read-status-bar" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--card-bg); border: 1px solid var(--divider); border-radius: var(--radius-md); box-shadow: var(--card-shadow);">
+  <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+    <span style="font-weight: 600; color: var(--text); font-size: 0.9rem;">🤖 深度阅读状态:</span>
+    
+    <!-- Processing Section -->
+    <div id="deep-read-processing" style="display: none; flex: 1; min-width: 200px;">
+      <span style="color: var(--muted-text); font-size: 0.85rem; margin-right: 0.5rem;">生成中:</span>
+      <div id="deep-read-processing-list" style="display: inline-flex; flex-wrap: wrap; gap: 0.5rem;">
+        <!-- Processing items will be inserted here -->
+      </div>
+    </div>
+    
+    <!-- Completed Section -->
+    <div id="deep-read-completed" style="display: none; flex: 1; min-width: 200px;">
+      <span style="color: var(--muted-text); font-size: 0.85rem; margin-right: 0.5rem;">已完成:</span>
+      <div id="deep-read-completed-list" style="display: inline-flex; flex-wrap: wrap; gap: 0.5rem;">
+        <!-- Completed items will be inserted here -->
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+

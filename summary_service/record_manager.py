@@ -12,15 +12,16 @@ from datetime import datetime
 from typing import Dict, Optional, Any, Union
 
 from .models import (
-    StructuredSummary, Tags, ServiceRecord, SummaryRecord,
-    parse_summary, parse_tags, summary_to_dict, tags_to_dict,
+    StructuredSummary, Tags, ServiceRecord, SummaryRecord, SummaryData,
+    parse_tags,
 )
 
 
 def create_service_record(arxiv_id: str, source_type: str = "system", user_id: str = None, 
                          original_url: str = None, ai_judgment: dict = None, 
-                         first_created_at: str = None, abstract: str = None) -> dict:
-    """Create a service record for a paper summary.
+                         first_created_at: str = None,
+                         is_abstract_only: bool = False) -> ServiceRecord:
+    """Create a service record for a paper summary using Pydantic model.
     
     Args:
         arxiv_id: The arXiv ID of the paper
@@ -29,41 +30,36 @@ def create_service_record(arxiv_id: str, source_type: str = "system", user_id: s
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
         first_created_at: The original creation time (for resubmissions)
-        abstract: The paper abstract if available
+        is_abstract_only: Whether this is an abstract-only summary
     
     Returns:
-        Service record dictionary
+        ServiceRecord Pydantic model object
     """
     current_time = datetime.now().isoformat()
     
-    record = {
-        "service_data": {
-            "arxiv_id": arxiv_id,
-            "source_type": source_type,  # "system" or "user"
-            "created_at": current_time,  # Current submission time
-            "first_created_at": first_created_at or current_time,  # Original creation time
-            "original_url": original_url,
-            "ai_judgment": ai_judgment or {},
-            "abstract": abstract
-        }
-    }
-    
-    if source_type == "user" and user_id:
-        record["service_data"]["user_id"] = user_id
-    
-    return record
+    return ServiceRecord(
+        arxiv_id=arxiv_id,
+        source_type=source_type,
+        created_at=current_time,
+        first_created_at=first_created_at or current_time,
+        original_url=original_url,
+        user_id=user_id if source_type == "user" else None,
+        ai_judgment=ai_judgment or None,
+        is_abstract_only=is_abstract_only
+    )
 
 
-def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, StructuredSummary], 
+def save_summary_with_service_record(arxiv_id: str, summary_content: StructuredSummary, 
                                    tags: Union[dict, Tags], summary_dir: Path, 
                                    source_type: str = "system", user_id: str = None, 
                                    original_url: str = None, ai_judgment: dict = None, 
-                                   first_created_at: str = None, abstract: str = None):
+                                   first_created_at: str = None,
+                                   is_abstract_only: bool = False):
     """Save a summary with its service record in JSON format.
     
     Args:
         arxiv_id: The arXiv ID of the paper
-        summary_content: The summary content (markdown string or StructuredSummary object)
+        summary_content: The StructuredSummary object (contains PaperInfo with abstract)
         tags: Tags dictionary or Tags object
         summary_dir: Directory where summaries are stored
         source_type: Either "system" or "user"
@@ -71,41 +67,39 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, 
         original_url: The original URL of the paper
         ai_judgment: AI judgment data if available
         first_created_at: The original creation time (for resubmissions)
-        abstract: The paper abstract if available
+        is_abstract_only: Whether this is an abstract-only summary
     """
-    # Create the combined record
-    record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment, first_created_at, abstract)
+    # Create the service record using Pydantic model
+    # Abstract is stored in summary_content.paper_info.abstract, not in ServiceRecord
+    service_record = create_service_record(arxiv_id, source_type, user_id, original_url, ai_judgment, first_created_at, is_abstract_only)
     
-    # Handle different input types
-    if isinstance(summary_content, StructuredSummary):
-        summary_dict = summary_to_dict(summary_content)
-        markdown_content = summary_content.to_markdown()
-    else:
-        # Assume it's a markdown string - try to parse as structured JSON first
-        try:
-            summary_dict = json.loads(summary_content)
-            markdown_content = summary_content  # Keep original for backward compatibility
-        except (json.JSONDecodeError, ValueError):
-            # It's plain markdown - don't put markdown in structured_content
-            summary_dict = {}  # Empty structured content for legacy markdown
-            markdown_content = summary_content
-    
+    # Convert tags to Tags object if needed
     if isinstance(tags, Tags):
-        tags_dict = tags_to_dict(tags)
+        tags_obj = tags
     else:
-        tags_dict = tags
+        tags_obj = Tags.model_validate(tags)
     
-    record["summary_data"] = {
-        "structured_content": summary_dict,
-        "markdown_content": markdown_content,
-        "tags": tags_dict,
-        "updated_at": datetime.now().isoformat()
-    }
+    # Generate markdown content
+    markdown_content = summary_content.to_markdown()
     
-    # Save as JSON file
+    # Build SummaryData using Pydantic models
+    summary_data = SummaryData(
+        structured_content=summary_content,  # StructuredSummary as Pydantic model
+        markdown_content=markdown_content,
+        tags=tags_obj,
+        updated_at=datetime.now().isoformat()
+    )
+    
+    # Build SummaryRecord
+    record = SummaryRecord(
+        service_data=service_record,
+        summary_data=summary_data
+    )
+    
+    # Save as JSON file using Pydantic's model_dump
     json_path = summary_dir / f"{arxiv_id}.json"
     with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(record, f, ensure_ascii=False, indent=2)
+        json.dump(record.model_dump(mode='json'), f, ensure_ascii=False, indent=2)
     
     # Also save the legacy .md and .tags.json files for backward compatibility
     md_path = summary_dir / f"{arxiv_id}.md"
@@ -114,81 +108,79 @@ def save_summary_with_service_record(arxiv_id: str, summary_content: Union[str, 
     
     tags_path = summary_dir / f"{arxiv_id}.tags.json"
     with open(tags_path, 'w', encoding='utf-8') as f:
-        json.dump(tags_dict, f, ensure_ascii=False, indent=2)
+        json.dump(tags_obj.model_dump(mode='json'), f, ensure_ascii=False, indent=2)
 
 
-def load_summary_with_service_record(arxiv_id: str, summary_dir: Path) -> Optional[Dict[str, Any]]:
-    """Load a summary with its service record.
+def load_summary_with_service_record(arxiv_id: str, summary_dir: Path) -> Optional[SummaryRecord]:
+    """Load a summary with its service record as a Pydantic model.
+    
+    The model matches the saved JSON format exactly, so no conversion is needed.
     
     Args:
         arxiv_id: The arXiv ID of the paper
         summary_dir: Directory where summaries are stored
     
     Returns:
-        Dictionary containing service_data and summary_data, or None if not found
+        SummaryRecord object or None if not found
     """
     json_path = summary_dir / f"{arxiv_id}.json"
-    if json_path.exists():
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                record = json.load(f)
-                
-            # Handle new structured format
-            if "summary_data" in record and "structured_content" in record["summary_data"]:
-                return record
-            
-            # Handle legacy format
-            return record
-        except Exception as e:
-            print(f"Error loading service record for {arxiv_id}: {e}")
-    
-    # Fallback to legacy format
-    return load_legacy_summary(arxiv_id, summary_dir)
-
-
-def load_legacy_summary(arxiv_id: str, summary_dir: Path) -> Optional[Dict[str, Any]]:
-    """Load a summary in legacy format (separate .md and .tags.json files).
-    
-    Args:
-        arxiv_id: The arXiv ID of the paper
-        summary_dir: Directory where summaries are stored
-    
-    Returns:
-        Dictionary with service_data and summary_data, defaulting to system source
-    """
-    md_path = summary_dir / f"{arxiv_id}.md"
-    tags_path = summary_dir / f"{arxiv_id}.tags.json"
-    
-    if not md_path.exists():
+    if not json_path.exists():
         return None
     
     try:
-        # Load summary content
-        summary_content = md_path.read_text(encoding='utf-8')
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
         
-        # Load tags
-        tags = {"top": [], "tags": []}
-        if tags_path.exists():
-            try:
-                tags = json.loads(tags_path.read_text(encoding='utf-8'))
-            except Exception:
-                pass
-        
-        # Create service record with default system source
-        service_record = create_service_record(arxiv_id, "system")
-        
-        return {
-            "service_data": service_record["service_data"],
-            "summary_data": {
-                "structured_content": {"content": summary_content},
-                "markdown_content": summary_content,
-                "tags": tags,
-                "updated_at": datetime.fromtimestamp(md_path.stat().st_mtime).isoformat()
-            }
-        }
+        # Use Pydantic's model_validate - the saved format matches SummaryRecord exactly
+        return SummaryRecord.model_validate(data)
     except Exception as e:
-        print(f"Error loading legacy summary for {arxiv_id}: {e}")
+        print(f"Error loading service record for {arxiv_id}: {e}")
         return None
+
+
+def load_service_record(arxiv_id: str, summary_dir: Path) -> Optional[ServiceRecord]:
+    """Load a ServiceRecord object from JSON file using Pydantic validation.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+        summary_dir: Directory where summaries are stored
+    
+    Returns:
+        ServiceRecord object or None if not found
+    """
+    record = load_summary_with_service_record(arxiv_id, summary_dir)
+    if not record:
+        return None
+    
+    return record.service_data
+
+
+def load_summary_record(arxiv_id: str, summary_dir: Path) -> Optional[SummaryRecord]:
+    """Load a SummaryRecord object from JSON file using Pydantic validation.
+    
+    Note: This requires the JSON structure to match SummaryRecord exactly.
+    The current saved format may not match exactly, so this is for future use.
+    
+    Args:
+        arxiv_id: The arXiv ID of the paper
+        summary_dir: Directory where summaries are stored
+    
+    Returns:
+        SummaryRecord object or None if not found/invalid
+    """
+    json_path = summary_dir / f"{arxiv_id}.json"
+    if not json_path.exists():
+        return None
+    
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Use Pydantic's model_validate_json for type-safe loading
+        return SummaryRecord.model_validate(data)
+    except Exception as e:
+        print(f"Error parsing SummaryRecord for {arxiv_id}: {e}")
+    return None
 
 
 def get_structured_summary(arxiv_id: str, summary_dir: Path) -> Optional[StructuredSummary]:
@@ -202,29 +194,10 @@ def get_structured_summary(arxiv_id: str, summary_dir: Path) -> Optional[Structu
         StructuredSummary object or None if not found
     """
     record = load_summary_with_service_record(arxiv_id, summary_dir)
-    if not record or "summary_data" not in record:
+    if not record:
         return None
     
-    summary_data = record["summary_data"]
-    
-    # Try to parse structured content
-    if "structured_content" in summary_data:
-        structured_content = summary_data["structured_content"]
-        
-        # Check if it's already a structured summary
-        if isinstance(structured_content, dict) and "paper_info" in structured_content:
-            try:
-                return parse_summary(json.dumps(structured_content))
-            except Exception:
-                pass
-    
-    # Fallback to markdown content
-    if "markdown_content" in summary_data:
-        # For now, return None since we can't easily parse markdown back to structured format
-        # In the future, we could implement markdown to structured conversion
-        return None
-    
-    return None
+    return record.summary_data.structured_content
 
 
 def get_tags(arxiv_id: str, summary_dir: Path) -> Optional[Tags]:
@@ -238,18 +211,13 @@ def get_tags(arxiv_id: str, summary_dir: Path) -> Optional[Tags]:
         Tags object or None if not found
     """
     record = load_summary_with_service_record(arxiv_id, summary_dir)
-    if not record or "summary_data" not in record:
+    if not record:
         return None
     
-    summary_data = record["summary_data"]
-    
-    if "tags" in summary_data:
-        try:
-            return parse_tags(json.dumps(summary_data["tags"]))
-        except Exception:
-            pass
-    
-    return None
+    try:
+        return Tags.model_validate(record.summary_data.tags)
+    except Exception:
+        return None
 
 
 def migrate_legacy_summaries_to_service_record(summary_dir: Path) -> Dict[str, Any]:
@@ -311,7 +279,7 @@ def migrate_legacy_summaries_to_service_record(summary_dir: Path) -> Dict[str, A
             file_creation_time = datetime.fromtimestamp(md_path.stat().st_mtime)
             
             record = {
-                "service_data": service_record["service_data"],
+                "service_data": service_record.model_dump(),
                 "summary_data": {
                     "structured_content": {"content": summary_content},
                     "markdown_content": summary_content,
@@ -342,13 +310,15 @@ def migrate_legacy_summaries_to_service_record(summary_dir: Path) -> Dict[str, A
 
 
 def update_service_record_abstract(arxiv_id: str, abstract: str, summary_dir: Path, english_title: str = None) -> bool:
-    """Update the abstract and optionally English title fields in an existing service record.
+    """Update the abstract and optionally English title in PaperInfo within summary_data.
+    
+    Uses Pydantic models to load, update, and save the record.
     
     Args:
         arxiv_id: The arXiv ID of the paper
-        abstract: The abstract text to save
+        abstract: The abstract text to save (updates PaperInfo in summary_data)
         summary_dir: Directory where summaries are stored
-        english_title: The English title to save (optional)
+        english_title: The English title to save (optional, updates PaperInfo)
     
     Returns:
         True if successful, False otherwise
@@ -360,18 +330,32 @@ def update_service_record_abstract(arxiv_id: str, abstract: str, summary_dir: Pa
     
     try:
         # Load existing record
-        record = json.loads(json_path.read_text(encoding="utf-8"))
+        record = load_summary_with_service_record(arxiv_id, summary_dir)
+        if not record:
+            return False
         
-        # Update abstract and optionally English title in service_data
-        if "service_data" not in record:
-            record["service_data"] = {}
-        
-        record["service_data"]["abstract"] = abstract
+        # Update StructuredSummary directly (it's already a Pydantic model)
+        structured_summary = record.summary_data.structured_content
+        structured_summary.paper_info.abstract = abstract
         if english_title:
-            record["service_data"]["english_title"] = english_title
+            structured_summary.paper_info.title_en = english_title
         
-        # Save back to file
-        json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Get tags (already a Tags object)
+        tags = record.summary_data.tags
+        
+        # Re-save with updated data
+        save_summary_with_service_record(
+            arxiv_id=arxiv_id,
+            summary_content=structured_summary,
+            tags=tags,
+            summary_dir=summary_dir,
+            source_type=record.service_data.source_type,
+            user_id=record.service_data.user_id,
+            original_url=record.service_data.original_url,
+            ai_judgment=record.service_data.ai_judgment,
+            first_created_at=record.service_data.first_created_at,
+            is_abstract_only=record.service_data.is_abstract_only
+        )
         
         return True
     except Exception as e:

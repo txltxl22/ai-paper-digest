@@ -96,15 +96,6 @@ class EventTracker {
   }
 
   /**
-   * Track read more/less toggle
-   */
-  trackReadMore(articleElement, isCollapsed) {
-    this.trackArticleEvent('read_more', articleElement, { 
-      collapsed: isCollapsed 
-    });
-  }
-
-  /**
    * Track mark as read
    */
   trackMarkRead(articleElement) {

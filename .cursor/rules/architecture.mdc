@@ -25,9 +25,9 @@ AI-powered research paper summarization system: RSS feeds → PDF download → t
 **Delegates**: Single URL processing to `paper_summarizer.py`
 
 ### 3. Summary Service (`summary_service/`)
-**Modular components**: PDF processing, text extraction, LLM integration, record management
-**Key modules**: `pdf_processor.py`, `markdown_processor.py`, `text_processor.py`, `llm_utils.py`, `summary_generator.py`, `record_manager.py`
-**Shared utilities**: Used by both `paper_summarizer.py` and `feed_paper_summarizer_service.py`
+**Modular components**: PDF processing, text extraction, LLM integration, record management, personalization utilities
+**Key modules**: `pdf_processor.py`, `markdown_processor.py`, `text_processor.py`, `llm_utils.py`, `summary_generator.py`, `record_manager.py`, `recommendations/`
+**Shared utilities**: Used by both `paper_summarizer.py` and `feed_paper_summarizer_service.py`, as well as the Flask web layer for personalization
 
 ### 4. Web App (`app/main.py`)
 **Flask server**: User interface and API endpoints
@@ -53,7 +53,8 @@ RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → summar
 │   ├── text_processor.py           # Text chunking
 │   ├── llm_utils.py                # LLM provider integration
 │   ├── summary_generator.py        # Progressive summarization
-│   └── record_manager.py           # Service record management
+│   ├── record_manager.py           # Service record management
+│   └── recommendations/            # Personalization engine (tag strategy + future LLM strategies)
 ├── config_manager.py                # Configuration management
 ├── app/                             # Web application
 │   ├── main.py                      # Flask app entry point
@@ -102,6 +103,7 @@ RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → summar
 4. **Configuration**: Use `ConfigManager` consistently
 5. **Logging**: Use thread-safe patterns
 6. **Delegation**: Feed service delegates to paper summarizer for single URL processing
+7. **Personalization**: The web index builds a `RecommendationContext` and calls `summary_service.recommendations` for ordering; keep engines strategy-based to support future LLM-backed recommenders.
 
 ### Running
 - **Dev**: `uv run python run_app.py` (foreground)

@@ -13,7 +13,7 @@ summary_service/
 ├── models/                # Organized data models package
 │   ├── __init__.py        # Package exports - imports all classes
 │   ├── summary_models.py  # Summary-related dataclasses
-│   ├── tag_models.py      # Tag-related dataclasses  
+│   ├── tags.py            # Tag-related Pydantic models  
 │   ├── service_models.py  # Service-related dataclasses
 │   ├── schemas.py         # JSON schema definitions
 │   └── utils.py           # Utility functions
@@ -32,14 +32,14 @@ Contains all summary-related dataclasses:
 - `ChunkSummary`: Structure for individual chunk summaries
 - `StructuredSummary`: Complete structured summary
 
-### 2. `tag_models.py`
-Contains tag-related dataclasses:
-- `Tags`: Tag structure for paper categorization
+### 2. `tags.py`
+Contains tag-related Pydantic models:
+- `Tags`: Tag structure for paper categorization (Pydantic v2 BaseModel)
 
 ### 3. `service_models.py`
-Contains service-related dataclasses:
-- `ServiceRecord`: Service metadata record
-- `SummaryRecord`: Complete summary record with service data
+Contains service-related Pydantic models:
+- `ServiceRecord`: Service metadata record (Pydantic v2 BaseModel)
+- `SummaryRecord`: Complete summary record with service data (Pydantic v2 BaseModel)
 
 ### 4. `schemas.py`
 Contains JSON schema definitions:
@@ -52,9 +52,8 @@ Contains utility functions:
 - `get_schema_version()`: Schema version tracking
 - `validate_json_schema()`: Schema validation
 - `parse_*()`: JSON parsing functions
-- `*_to_dict()`: Conversion functions
-- `summary_to_markdown()`: Markdown conversion
-- `export_schema_definitions()`: Schema export
+- `summary_to_dict()`: Conversion functions
+- `clean_json_response()`: JSON response cleaning
 
 ### 6. `__init__.py`
 Package exports that make all classes available from `summary_service.models`:
@@ -110,14 +109,14 @@ from summary_service.models import (
 ### Direct Module Imports (Optional)
 ```python
 from summary_service.models.summary_models import StructuredSummary
-from summary_service.models.tag_models import Tags
+from summary_service.models.tags import Tags
 from summary_service.models.utils import parse_summary
 ```
 
 ## Development Workflow
 
 1. **Add New Summary Fields**: Edit `summary_service/models/summary_models.py`
-2. **Add New Tags**: Edit `summary_service/models/tag_models.py`
+2. **Add New Tags**: Edit `summary_service/models/tags.py`
 3. **Add New Service Data**: Edit `summary_service/models/service_models.py`
 4. **Update Schemas**: Edit `summary_service/models/schemas.py`
 5. **Add Utilities**: Edit `summary_service/models/utils.py`

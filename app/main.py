@@ -233,6 +233,43 @@ app.register_blueprint(search_module["blueprint"])
 BASE_CSS = open(os.path.join('ui', 'base.css'), 'r', encoding='utf-8').read()
 
 # -----------------------------------------------------------------------------
+# Template Context Processors (for cache busting)
+# -----------------------------------------------------------------------------
+
+def get_file_version(filepath: str) -> str:
+    """Get version string based on file modification time for cache busting."""
+    try:
+        full_path = Path(__file__).parent.parent / filepath
+        if full_path.exists():
+            mtime = full_path.stat().st_mtime
+            # Use modification time as version (hex format for shorter URLs)
+            return hex(int(mtime))[2:]
+    except Exception:
+        pass
+    # Fallback to timestamp if file doesn't exist
+    return hex(int(datetime.now().timestamp()))[2:]
+
+@app.context_processor
+def inject_versioned_urls():
+    """Inject versioned URL helpers into template context."""
+    def static_css_versioned(filename: str) -> str:
+        """Generate versioned URL for CSS files."""
+        base_url = url_for('static_css', filename=filename)
+        version = get_file_version(f'ui/css/{filename}')
+        return f"{base_url}?v={version}"
+    
+    def base_css_versioned() -> str:
+        """Generate versioned URL for base.css."""
+        base_url = url_for('base_css')
+        version = get_file_version('ui/base.css')
+        return f"{base_url}?v={version}"
+    
+    return {
+        'static_css_versioned': static_css_versioned,
+        'base_css_versioned': base_css_versioned,
+    }
+
+# -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
 
@@ -251,13 +288,20 @@ def test_endpoint():
 
 @app.get("/assets/base.css")
 def base_css():
-    return Response(BASE_CSS, mimetype="text/css")
+    """Serve base.css with cache control headers."""
+    response = Response(BASE_CSS, mimetype="text/css")
+    # Set cache headers - allow caching but with validation
+    response.headers['Cache-Control'] = 'public, max-age=31536000, must-revalidate'
+    return response
 
 # Unified static file routes for consistent url_for usage
 @app.get("/static/css/<path:filename>")
 def static_css(filename):
-    """Serve CSS files from the ui/css directory."""
-    return send_from_directory('../ui/css', filename, mimetype="text/css")
+    """Serve CSS files from the ui/css directory with cache control headers."""
+    response = send_from_directory('../ui/css', filename, mimetype="text/css")
+    # Set cache headers - allow caching but with validation
+    response.headers['Cache-Control'] = 'public, max-age=31536000, must-revalidate'
+    return response
 
 
 @app.get("/static/js/<path:filename>")

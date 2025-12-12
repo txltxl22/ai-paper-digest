@@ -52,10 +52,10 @@
     <meta name="apple-mobile-web-app-title" content="AI Papers">
     
     <!-- Stylesheets -->
-    <link rel="stylesheet" href="{{ url_for('base_css') }}">
-    <link rel="stylesheet" href="{{ url_for('static_css', filename='badges.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static_css', filename='components.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static_css', filename='modal.css') }}">
+    <link rel="stylesheet" href="{{ base_css_versioned() }}">
+    <link rel="stylesheet" href="{{ static_css_versioned('badges.css') }}">
+    <link rel="stylesheet" href="{{ static_css_versioned('components.css') }}">
+    <link rel="stylesheet" href="{{ static_css_versioned('modal.css') }}">
     <link rel="icon" href="{{ url_for('static_favicon_svg') }}?v=2" type="image/svg+xml">
     
     <!-- Structured Data - ScholarlyArticle -->

@@ -26,7 +26,9 @@
           <span class="user-chip" title="系统自动处理">🤖 系统</span>
         {% endif %}
       </div>
-      <div class="update-time">{{ e.submission_time.strftime('%m-%d %H:%M') }}</div>
+      {% if e.submission_time %}
+      <div class="update-time" title="arXiv提交日期">{{ e.submission_time.strftime('%Y-%m-%d') }}</div>
+      {% endif %}
     </div>
   </div>
   {% if e.recommendation %}

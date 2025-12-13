@@ -18,6 +18,7 @@ class PaperInfo(BaseModel):
     url: Optional[str] = Field(default=None, description="Original paper URL")
     arxiv_id: Optional[str] = Field(default=None, description="arXiv ID")
     source: Optional[str] = Field(default=None, description="Source (arxiv, huggingface, unknown)")
+    submission_date: Optional[str] = Field(default=None, description="Paper submission date in ISO format (YYYY-MM-DD)")
 
 
 class Innovation(BaseModel):

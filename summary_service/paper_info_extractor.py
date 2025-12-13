@@ -293,6 +293,126 @@ class PaperInfoExtractor:
             logger.error(f"Error extracting Hugging Face abstract from {url}: {e}")
             return None
     
+    def _extract_arxiv_submission_date(self, url: str, content: Optional[str] = None) -> Optional[str]:
+        """Extract submission date from arXiv URL.
+        
+        Args:
+            url: arXiv URL
+            content: Optional HTML content (if None, will be fetched)
+            
+        Returns:
+            Extracted submission date in ISO format (YYYY-MM-DD) or None
+        """
+        try:
+            if content is None:
+                content = self._fetch_url_content(url)
+                if content is None:
+                    return None
+            
+            # Try multiple patterns for arXiv submission date extraction
+            # Priority: Most reliable patterns first
+            date_patterns = [
+                # "[Submitted on 28 Aug 2025]" - most common arXiv format
+                r'\[Submitted\s+on\s+(\d{1,2}\s+\w+\s+\d{4})\]',
+                # "Submitted on 28 Aug 2025" (without brackets)
+                r'Submitted\s+on\s+(\d{1,2}\s+\w+\s+\d{4})',
+                # Meta tag with citation_date (YYYY/MM/DD format)
+                r'<meta[^>]*name="citation_date"[^>]*content="([^"]+)"',
+                # Submission history format: "[v1] Thu, 28 Aug 2025 06:00:39 UTC"
+                r'\[v\d+\]\s+\w+,\s+(\d{1,2}\s+\w+\s+\d{4})',
+            ]
+            
+            for pattern in date_patterns:
+                match = re.search(pattern, content, re.IGNORECASE)
+                if match:
+                    date_str = match.group(1).strip()
+                    # Try to parse and normalize to ISO format
+                    parsed_date = self._parse_date_to_iso(date_str)
+                    if parsed_date:
+                        return parsed_date
+            
+            logger.warning(f"Could not extract submission date from arXiv URL: {url}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error extracting arXiv submission date from {url}: {e}")
+            return None
+    
+    def _parse_date_to_iso(self, date_str: str) -> Optional[str]:
+        """Parse various date formats to ISO format (YYYY-MM-DD).
+        
+        Args:
+            date_str: Date string in various formats
+            
+        Returns:
+            ISO format date string (YYYY-MM-DD) or None
+        """
+        try:
+            from datetime import datetime
+            
+            # First, try to extract just the date part if time is included
+            # Handle formats like "2024-01-15T12:00:00" or "2024-01-15 12:00:00"
+            date_only = date_str.split('T')[0].split(' ')[0].strip()
+            
+            # Try common date formats
+            date_formats = [
+                '%Y-%m-%d',  # ISO format
+                '%Y/%m/%d',  # ISO with slashes (arXiv meta tag format)
+                '%d %B %Y',  # "15 January 2024"
+                '%d %b %Y',  # "15 Jan 2024"
+                '%B %d, %Y',  # "January 15, 2024"
+                '%b %d, %Y',  # "Jan 15, 2024"
+                '%m/%d/%Y',  # "01/15/2024"
+                '%d/%m/%Y',  # "15/01/2024"
+            ]
+            
+            # Try parsing the date-only string first
+            for fmt in date_formats:
+                try:
+                    dt = datetime.strptime(date_only, fmt)
+                    return dt.strftime('%Y-%m-%d')
+                except ValueError:
+                    continue
+            
+            # If date_only didn't work, try the original string
+            for fmt in date_formats:
+                try:
+                    dt = datetime.strptime(date_str, fmt)
+                    return dt.strftime('%Y-%m-%d')
+                except ValueError:
+                    continue
+            
+            # If no format matched, return None
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error parsing date '{date_str}': {e}")
+            return None
+    
+    def _extract_submission_date_from_url(self, url: str, content: Optional[str] = None) -> Optional[str]:
+        """Extract submission date from a URL.
+        
+        Args:
+            url: The URL to extract submission date from
+            content: Optional HTML content (if None, will be fetched)
+            
+        Returns:
+            Extracted submission date in ISO format (YYYY-MM-DD) or None if extraction fails
+        """
+        try:
+            parsed_url = urlparse(url)
+            
+            if "arxiv.org" in parsed_url.netloc:
+                return self._extract_arxiv_submission_date(url, content)
+            # Hugging Face and other sources don't typically have submission dates
+            # so we return None for them
+            else:
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error extracting submission date from {url}: {e}")
+            return None
+    
     def _clean_title(self, title: str) -> str:
         """Clean and normalize extracted title.
         
@@ -415,6 +535,11 @@ class PaperInfoExtractor:
             else:
                 paper_info.source = "unknown"
 
+            # If no valid arxiv_id, return early with empty info
+            if not arxiv_id:
+                logger.warning(f"No valid arXiv ID found in URL: {url}")
+                return paper_info
+
             # Convert url to abs url
             abs_url = f"https://arxiv.org/abs/{arxiv_id}"
             
@@ -430,6 +555,10 @@ class PaperInfoExtractor:
             
             abstract = self._extract_abstract_from_url(abs_url, content)
             paper_info.abstract = abstract or ""
+            
+            # Extract submission date using the same content
+            submission_date = self._extract_submission_date_from_url(abs_url, content)
+            paper_info.submission_date = submission_date
                 
         except Exception as e:
             logger.error(f"Error getting paper info from {url}: {e}")

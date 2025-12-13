@@ -95,23 +95,23 @@ class EntryScanner:
                 else:
                     updated = datetime.fromtimestamp(json_path.stat().st_mtime)
                 
-                # Parse submission/creation time
-                submission_time = updated  # Default to updated time
-                created_str = record.service_data.created_at
-                if created_str:
+                # Parse submission time - use arXiv submission date only
+                submission_time = None
+                if paper_info.submission_date:
                     try:
-                        submission_time = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+                        # Parse ISO date format (YYYY-MM-DD) to datetime
+                        submission_time = datetime.strptime(paper_info.submission_date, '%Y-%m-%d')
                     except Exception:
-                        submission_time = updated
+                        pass  # Keep as None if parsing fails
                 
                 # Parse first creation time (original processing time)
-                first_created_time = submission_time  # Default to submission time
+                first_created_time = updated  # Default to updated time
                 first_created_str = record.service_data.first_created_at
                 if first_created_str:
                     try:
                         first_created_time = datetime.fromisoformat(first_created_str.replace('Z', '+00:00'))
                     except Exception:
-                        first_created_time = submission_time
+                        first_created_time = updated
                 
                 entries_meta.append({
                     "id": arxiv_id,
@@ -133,8 +133,12 @@ class EntryScanner:
                 print(f"Error processing JSON file {json_path}: {e}")
                 continue
         
-        # Sort by updated time (newest first), then by submission time as secondary sort
-        entries_meta.sort(key=lambda e: (e["updated"], e["submission_time"]), reverse=True)
+        # Sort by submission time (arXiv date) if available, otherwise by updated time
+        # None submission_time entries are sorted to the end
+        entries_meta.sort(
+            key=lambda e: (e["submission_time"] or datetime.min, e["updated"]),
+            reverse=True
+        )
         self._cache["meta"] = list(entries_meta)
         self._cache["count"] = count
         self._cache["latest_mtime"] = latest_mtime

@@ -153,7 +153,8 @@ index_page_module = create_index_page_module(
 summary_detail_module = create_summary_detail_module(
     summary_dir=SUMMARY_DIR,
     detail_template=DETAIL_TEMPLATE,
-    data_dir=DATA_DIR
+    data_dir=DATA_DIR,
+    user_service=user_management_module["service"]
 )
 
 fetch_module = create_fetch_module(

@@ -19,7 +19,8 @@ def create_summary_detail_routes(
     summary_renderer: SummaryRenderer,
     detail_template: str,
     summary_dir: Path,
-    processing_tracker: ProcessingTracker
+    processing_tracker: ProcessingTracker,
+    user_service=None
 ) -> Blueprint:
     """Create summary detail routes."""
     bp = Blueprint('summary_detail', __name__)
@@ -44,6 +45,18 @@ def create_summary_detail_routes(
         # Get current logged-in user ID from cookies (for deep read feature)
         current_user_id = request.cookies.get("uid")
         
+        # Check user favorite/read status if user is logged in
+        is_favorited = False
+        is_read = False
+        uid = None
+        if current_user_id and user_service:
+            uid = current_user_id
+            user_data = user_service.get_user_data(uid)
+            favorites_map = user_data.load_favorites_map()
+            read_map = user_data.load_read_map()
+            is_favorited = arxiv_id in favorites_map
+            is_read = arxiv_id in read_map
+        
         return render_template_string(
             detail_template,
             content=rendered["html_content"],
@@ -53,6 +66,9 @@ def create_summary_detail_routes(
             source_type=rendered["source_type"],
             user_id=rendered["user_id"],
             current_user_id=current_user_id,
+            uid=uid,
+            is_favorited=is_favorited,
+            is_read=is_read,
             original_url=rendered["original_url"],
             abstract=rendered["abstract"],
             english_title=english_title,
@@ -63,6 +79,10 @@ def create_summary_detail_routes(
             # Add URL variables for JavaScript
             mark_read_url=url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
             unmark_read_url=url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),
+            mark_favorite_url=url_for("user_management.mark_favorite", arxiv_id="__ID__").replace("__ID__", ""),
+            unmark_favorite_url=url_for("user_management.unmark_favorite", arxiv_id="__ID__").replace("__ID__", ""),
+            mark_todo_url=url_for("user_management.mark_todo", arxiv_id="__ID__").replace("__ID__", ""),
+            unmark_todo_url=url_for("user_management.unmark_todo", arxiv_id="__ID__").replace("__ID__", ""),
             reset_url=url_for("user_management.reset_read"),
             admin_fetch_url=url_for("fetch.admin_fetch_latest"),
             admin_stream_url=url_for("fetch.admin_fetch_latest_stream"),

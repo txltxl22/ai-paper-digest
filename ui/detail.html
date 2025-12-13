@@ -216,6 +216,34 @@
         <article class='markdown-body'>
             {{ content | safe }}
         </article>
+        
+        <!-- Action Buttons Section -->
+        <div class="card-actions" style="margin: 2rem 0 1.5rem 0; padding: 1.5rem 0; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider);">
+            <div class="primary-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;">
+                {% if is_read %}
+                    <a class='remove-read-link action-btn secondary-btn'>从没兴趣列表移除</a>
+                {% else %}
+                    {% if uid %}
+                        <a class='mark-read-link action-btn secondary-btn'>👋 没兴趣</a>
+                    {% else %}
+                        <a class='mark-read-link action-btn secondary-btn disabled'>👋 没兴趣</a>
+                    {% endif %}
+                {% endif %}
+                {% if uid %}
+                    <a class='favorite-link action-btn secondary-btn' data-favorited='{{ 'true' if is_favorited else 'false' }}'>
+                        {% if is_favorited %}⭐ 取消感兴趣{% else %}☆ 感兴趣{% endif %}
+                    </a>
+                {% else %}
+                    <a class='favorite-link action-btn secondary-btn disabled'>☆ 感兴趣</a>
+                {% endif %}
+                {% if uid %}
+                    <a class='add-todo-link action-btn secondary-btn'>📌 待读</a>
+                {% else %}
+                    <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
+                {% endif %}
+            </div>
+        </div>
+        
         <p style='text-align:center;margin-top:var(--spacing-2xl);'>
             <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf'>📄 打开原文 PDF</a>
         </p>
@@ -239,6 +267,10 @@
       window.appUrls = {
         mark_read: '{{ mark_read_url }}',
         unmark_read: '{{ unmark_read_url }}',
+        mark_favorite: '{{ mark_favorite_url }}',
+        unmark_favorite: '{{ unmark_favorite_url }}',
+        mark_todo: '{{ mark_todo_url }}',
+        unmark_todo: '{{ unmark_todo_url }}',
         reset: '{{ reset_url }}',
         admin_stream: '{{ admin_stream_url }}',
         admin_fetch: '{{ admin_fetch_url }}'
@@ -358,13 +390,15 @@
                 // Processing started, show status bar and keep loading
                 showToast('深度阅读生成已开始，请稍候');
                 if (window.deepReadStatusBar) {
+                  // Register this job so we can detect when it completes
+                  window.deepReadStatusBar.registerProcessingJob('{{ arxiv_id }}');
                   window.deepReadStatusBar.updateStatus().then(() => {
                     // Start polling to track the new job
                     window.deepReadStatusBar.startPolling();
                   });
                 }
                 // Don't reload yet - status bar will show progress
-                // User can manually reload or wait for completion
+                // Page will auto-refresh when deep read completes
               } else {
                 // Shouldn't happen with new async flow, but keep as fallback
               window.location.reload();

@@ -11,6 +11,8 @@ class DeepReadStatusBar {
     // Recommended range: 2000-5000ms (2-5 seconds)
     this.pollIntervalMs = 5000; // Poll every 5 seconds
     this.dismissedItems = new Set(); // Track dismissed items
+    this.previousProcessing = new Set(); // Track previously processing items to detect completion
+    this.notifiedCompletions = new Set(); // Track already notified completions
     this.init();
   }
 
@@ -65,6 +67,13 @@ class DeepReadStatusBar {
     }, this.pollIntervalMs);
   }
 
+  // Register a new processing job to track for completion
+  registerProcessingJob(arxivId) {
+    this.previousProcessing.add(arxivId);
+    // Clear from notified in case it was previously notified
+    this.notifiedCompletions.delete(arxivId);
+  }
+
   stopPolling() {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
@@ -106,6 +115,22 @@ class DeepReadStatusBar {
       item => !this.dismissedItems.has(`completed-${item.arxiv_id}`)
     );
 
+    // Detect newly completed items (were processing, now in completed)
+    const currentProcessingIds = new Set(processing.map(p => p.arxiv_id));
+    const currentCompletedIds = new Set(completed.map(c => c.arxiv_id));
+    
+    // Find items that were previously processing but are now completed
+    for (const arxivId of this.previousProcessing) {
+      if (currentCompletedIds.has(arxivId) && !this.notifiedCompletions.has(arxivId)) {
+        // This item just completed!
+        this.notifiedCompletions.add(arxivId);
+        this.onJobCompleted(arxivId);
+      }
+    }
+    
+    // Update previous processing set for next comparison
+    this.previousProcessing = currentProcessingIds;
+
     // Show/hide processing section
     const processingSection = document.getElementById('deep-read-processing');
     if (processing.length > 0) {
@@ -135,6 +160,86 @@ class DeepReadStatusBar {
     // (Completed jobs don't need polling, user can dismiss them)
     if (processing.length === 0) {
       this.stopPolling();
+    }
+  }
+
+  // Called when a deep read job completes
+  onJobCompleted(arxivId) {
+    // Check if we're on the detail page for this paper
+    const currentPath = window.location.pathname;
+    const isOnDetailPage = currentPath === `/summary/${arxivId}`;
+    
+    if (isOnDetailPage) {
+      // We're on the detail page for this paper - auto refresh after showing notification
+      this.showCompletionNotification(arxivId, true);
+    } else {
+      // We're on another page - show notification with link
+      this.showCompletionNotification(arxivId, false);
+    }
+  }
+
+  // Show a beautiful completion notification
+  showCompletionNotification(arxivId, autoRefresh = false) {
+    // Remove any existing notification
+    const existingNotification = document.getElementById('deep-read-notification');
+    if (existingNotification) {
+      existingNotification.remove();
+    }
+
+    // Create the notification element
+    const notification = document.createElement('div');
+    notification.id = 'deep-read-notification';
+    notification.className = 'deep-read-notification';
+    
+    if (autoRefresh) {
+      notification.innerHTML = `
+        <div class="notification-content">
+          <div class="notification-icon">🎉</div>
+          <div class="notification-text">
+            <div class="notification-title">深度阅读完成！</div>
+            <div class="notification-subtitle">论文 ${arxivId} 的详细解读已生成</div>
+            <div class="notification-action">页面将自动刷新...</div>
+          </div>
+        </div>
+        <div class="notification-progress"></div>
+      `;
+    } else {
+      notification.innerHTML = `
+        <div class="notification-content">
+          <div class="notification-icon">🎉</div>
+          <div class="notification-text">
+            <div class="notification-title">深度阅读完成！</div>
+            <div class="notification-subtitle">论文 ${arxivId} 的详细解读已生成</div>
+          </div>
+          <a href="/summary/${arxivId}" class="notification-btn">
+            <span>查看详情</span>
+            <span>→</span>
+          </a>
+          <button class="notification-close" onclick="this.closest('.deep-read-notification').remove()">×</button>
+        </div>
+      `;
+    }
+
+    document.body.appendChild(notification);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+      notification.classList.add('show');
+    });
+
+    if (autoRefresh) {
+      // Auto refresh the page after 2 seconds
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } else {
+      // Auto hide after 10 seconds if not clicked
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.classList.remove('show');
+          setTimeout(() => notification.remove(), 300);
+        }
+      }, 10000);
     }
   }
 

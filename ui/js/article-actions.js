@@ -240,6 +240,8 @@ class ArticleActions {
         
         // Trigger status bar update and start polling
         if (window.deepReadStatusBar) {
+          // Register this job so we can detect when it completes
+          window.deepReadStatusBar.registerProcessingJob(id);
           // Update status and start polling (will check if already polling)
           window.deepReadStatusBar.updateStatus().then(() => {
             // Start polling to track the new job

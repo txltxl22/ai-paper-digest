@@ -383,7 +383,18 @@
               }
             });
             
-            const data = await response.json();
+            // Try to parse JSON, but handle failures gracefully
+            let data = {};
+            try {
+              data = await response.json();
+            } catch (jsonError) {
+              console.warn('Failed to parse response as JSON:', jsonError);
+              // If response is OK but JSON parsing failed, treat as success
+              // (the backend might have returned empty body)
+              if (response.ok) {
+                data = { success: true, processing: true };
+              }
+            }
             
             if (response.ok && data.success) {
               if (data.processing || data.already_processing) {
@@ -401,9 +412,19 @@
                 // Page will auto-refresh when deep read completes
               } else {
                 // Shouldn't happen with new async flow, but keep as fallback
-              window.location.reload();
+                window.location.reload();
+              }
+            } else if (response.ok) {
+              // Response OK but success not explicitly true - still treat as processing started
+              showToast('深度阅读生成已开始，请稍候');
+              if (window.deepReadStatusBar) {
+                window.deepReadStatusBar.registerProcessingJob('{{ arxiv_id }}');
+                window.deepReadStatusBar.updateStatus().then(() => {
+                  window.deepReadStatusBar.startPolling();
+                });
               }
             } else {
+              // Response not OK - show error
               loading.style.display = 'none';
               deepReadGenBtn.style.display = 'inline-block';
               error.textContent = data.message || '生成失败，请稍后重试';

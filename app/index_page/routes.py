@@ -281,16 +281,19 @@ def create_index_routes(
             favorites_map = user_data.load_favorites_map()
             todo_map = user_data.load_todo_map()
             
-            # For index page: filter out read papers and todo papers
-            read_ids = set(read_map.keys())
+            # For index page: filter out read (not interested), favorites (interested), and todo papers
+            read_ids = set(read_map.keys())  # "not interested" papers
+            favorite_ids = set(favorites_map.keys())  # "interested" papers
             todo_ids = set(todo_map.keys())
             
-            # Filter out read entries and todo entries
+            # Filter out read, favorite, and todo entries from main index
             entries_meta = EntryFilter.filter_by_read_status(all_entries_meta, read_ids, show_read=False)
+            entries_meta = [e for e in entries_meta if e["id"] not in favorite_ids]  # Also exclude favorites
             entries_meta = [e for e in entries_meta if e["id"] not in todo_ids]
             
-            # Calculate stats - separate read, favorite, and todo counts
-            unread_count = len([e for e in all_entries_meta if e["id"] not in read_ids])
+            # Calculate stats - unread excludes read, favorites, and todo
+            processed_ids = read_ids.union(favorite_ids)  # Both "interested" and "not interested" are processed
+            unread_count = len([e for e in all_entries_meta if e["id"] not in processed_ids and e["id"] not in todo_ids])
             todo_count = len(todo_ids)
             stats = user_data.get_read_stats()
             
@@ -383,18 +386,19 @@ def create_index_routes(
         if not isinstance(uid, str):
             return uid  # This will be a redirect response
         
-        # Get read entries (include both explicitly read and favorited papers)
+        # Get read entries (only explicitly marked as "not interested", exclude favorites)
         user_data = user_service.get_user_data(uid)
         read_map = user_data.load_read_map()
         favorites_map = user_data.load_favorites_map()
         
-        # Combine read and favorite IDs (favorites are considered read)
+        # Only show papers that are explicitly read but NOT favorited
+        # (favorites are "interested", read-only are "not interested")
         read_ids = set(read_map.keys())
         favorite_ids = set(favorites_map.keys())
-        all_read_ids = read_ids.union(favorite_ids)
+        not_interested_ids = read_ids - favorite_ids  # Exclude favorites from read list
         
         all_entries_meta = entry_scanner.scan_entries_meta()
-        read_entries_meta = [e for e in all_entries_meta if e["id"] in all_read_ids]
+        read_entries_meta = [e for e in all_entries_meta if e["id"] in not_interested_ids]
         
         # Apply filters
         filters = _get_filter_params()
@@ -406,9 +410,9 @@ def create_index_routes(
         pagination = Pagination(len(filtered_read_entries_meta), pagination_params['page'], pagination_params['per_page'])
         page_entries = pagination.get_page_items(filtered_read_entries_meta)
         
-        # Render entries (show both read and favorite timestamps in read list)
+        # Render entries (show read timestamps for "not interested" list)
         user_data = user_service.get_user_data(uid)
-        entries = entry_renderer.render_page_entries(page_entries, user_data, show_read_time=True, show_favorite_time=True)
+        entries = entry_renderer.render_page_entries(page_entries, user_data, show_read_time=True)
         
         # Build context and render - use read_entries_meta for tag cloud (only tags from read papers)
         context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=read_entries_meta)

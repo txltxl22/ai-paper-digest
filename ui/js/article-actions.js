@@ -318,38 +318,54 @@ class ArticleActions {
   toggleFavorite(link) {
     const art = link.closest('article');
     const id = art.getAttribute('data-id');
-    const isFavorited = link.getAttribute('data-favorited') === 'true';
+    const isInterested = link.getAttribute('data-favorited') === 'true';
     
-    // Check if we're on todo page (marking as favorite removes from todo)
+    // Check page context to determine behavior
     const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
-    const isMarkingFavorite = !isFavorited;
+    const isOnInterestedPage = window.location.pathname.includes('/favorites');
+    const isOnNotInterestedPage = window.location.pathname.includes('/read');
+    const isMarkingInterested = !isInterested;
+    
+    console.log('[toggleFavorite] id:', id, 'isInterested:', isInterested, 'isMarkingInterested:', isMarkingInterested, 'pathname:', window.location.pathname);
+    
+    // Should remove card: when marking interested on main/todo page, or unmarking on interested page
+    const shouldRemoveCard = (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
+                             (!isMarkingInterested && isOnInterestedPage);
+    
+    console.log('[toggleFavorite] shouldRemoveCard:', shouldRemoveCard, 'isOnInterestedPage:', isOnInterestedPage, 'isOnNotInterestedPage:', isOnNotInterestedPage);
     
     // Add loading state
     const originalText = link.textContent;
-    link.textContent = isFavorited ? '取消中...' : '感兴趣中...';
+    link.textContent = isInterested ? '取消中...' : '感兴趣中...';
     link.style.opacity = '0.6';
     link.style.pointerEvents = 'none';
     
-    const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
+    const url = isInterested ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
     
     // Save scroll position before potential removal
-    if (isOnTodoPage && isMarkingFavorite) {
+    if (shouldRemoveCard) {
       this.saveScrollPosition(art);
     }
     
     // Capture next card reference before potential removal
-    const nextCard = isOnTodoPage && isMarkingFavorite ? art.nextElementSibling : null;
+    const nextCard = shouldRemoveCard ? art.nextElementSibling : null;
     
     fetch(url + id, { method: 'POST' }).then(r => {
+      console.log('[toggleFavorite] fetch response ok:', r.ok, 'shouldRemoveCard:', shouldRemoveCard);
       if (r.ok) {
-        const newFavorited = !isFavorited;
+        const newInterested = !isInterested;
         
-        // If on todo page and marking as favorite, remove card (backend removes from todo)
-        if (isOnTodoPage && isMarkingFavorite) {
+        // Remove card from page when appropriate
+        if (shouldRemoveCard) {
+          console.log('[toggleFavorite] Removing card from page');
           art.remove();
           
-          // Update todo count in info bar
-          this.updateInfoBarCounts(0, 0, -1);
+          // Update counts based on page context
+          if (isOnTodoPage) {
+            this.updateInfoBarCounts(0, 0, -1);  // Decrease todo count
+          } else if (!isOnInterestedPage && !isOnNotInterestedPage) {
+            this.updateInfoBarCounts(-1, 0);  // Decrease unread count on main page
+          }
           
           // Scroll to next card after removal
           setTimeout(() => {
@@ -357,17 +373,18 @@ class ArticleActions {
           }, 0);
         } else {
           // Update button state (no removal from page)
-          link.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
-          link.textContent = newFavorited ? '取消感兴趣' : '感兴趣';
+          console.log('[toggleFavorite] Updating button state, not removing');
+          link.setAttribute('data-favorited', newInterested ? 'true' : 'false');
+          link.textContent = newInterested ? '取消感兴趣' : '感兴趣';
           link.style.opacity = '';
           link.style.pointerEvents = '';
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
+        showToast(newInterested ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
-        window.eventTracker.trackFavorite(art, newFavorited);
+        window.eventTracker.trackFavorite(art, newInterested);
       } else {
         // Restore original state on error
         link.textContent = originalText;
@@ -387,37 +404,53 @@ class ArticleActions {
   toggleFavoriteStar(button) {
     const art = button.closest('article');
     const id = button.getAttribute('data-id') || art.getAttribute('data-id');
-    const isFavorited = button.getAttribute('data-favorited') === 'true';
+    const isInterested = button.getAttribute('data-favorited') === 'true';
     
-    // Check if we're on todo page (marking as favorite removes from todo)
+    // Check page context to determine behavior
     const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
-    const isMarkingFavorite = !isFavorited;
+    const isOnInterestedPage = window.location.pathname.includes('/favorites');
+    const isOnNotInterestedPage = window.location.pathname.includes('/read');
+    const isMarkingInterested = !isInterested;
+    
+    console.log('[toggleFavoriteStar] id:', id, 'isInterested:', isInterested, 'isMarkingInterested:', isMarkingInterested);
+    
+    // Should remove card: when marking interested on main/todo page, or unmarking on interested page
+    const shouldRemoveCard = (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
+                             (!isMarkingInterested && isOnInterestedPage);
+    
+    console.log('[toggleFavoriteStar] shouldRemoveCard:', shouldRemoveCard);
     
     // Add loading state with animation
     button.style.opacity = '0.5';
     button.style.pointerEvents = 'none';
     button.style.transform = 'scale(0.9)';
     
-    const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
+    const url = isInterested ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
     
     // Save scroll position before potential removal
-    if (isOnTodoPage && isMarkingFavorite) {
+    if (shouldRemoveCard) {
       this.saveScrollPosition(art);
     }
     
     // Capture next card reference before potential removal
-    const nextCard = isOnTodoPage && isMarkingFavorite ? art.nextElementSibling : null;
+    const nextCard = shouldRemoveCard ? art.nextElementSibling : null;
     
     fetch(url + id, { method: 'POST' }).then(r => {
+      console.log('[toggleFavoriteStar] fetch response ok:', r.ok, 'shouldRemoveCard:', shouldRemoveCard);
       if (r.ok) {
-        const newFavorited = !isFavorited;
+        const newInterested = !isInterested;
         
-        // If on todo page and marking as favorite, remove card (backend removes from todo)
-        if (isOnTodoPage && isMarkingFavorite) {
+        // Remove card from page when appropriate
+        if (shouldRemoveCard) {
+          console.log('[toggleFavoriteStar] Removing card from page');
           art.remove();
           
-          // Update todo count in info bar
-          this.updateInfoBarCounts(0, 0, -1);
+          // Update counts based on page context
+          if (isOnTodoPage) {
+            this.updateInfoBarCounts(0, 0, -1);  // Decrease todo count
+          } else if (!isOnInterestedPage && !isOnNotInterestedPage) {
+            this.updateInfoBarCounts(-1, 0);  // Decrease unread count on main page
+          }
           
           // Scroll to next card after removal
           setTimeout(() => {
@@ -425,21 +458,22 @@ class ArticleActions {
           }, 0);
         } else {
           // Update button state (no removal from page)
-          button.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
+          console.log('[toggleFavoriteStar] Updating button state, not removing');
+          button.setAttribute('data-favorited', newInterested ? 'true' : 'false');
           const svg = button.querySelector('svg');
           if (svg) {
-            svg.style.fill = newFavorited ? '#fbbf24' : 'none';
+            svg.style.fill = newInterested ? '#fbbf24' : 'none';
           }
-          button.style.opacity = newFavorited ? '1' : '0.6';
+          button.style.opacity = newInterested ? '1' : '0.6';
           button.style.pointerEvents = '';
           button.style.transform = '';
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
+        showToast(newInterested ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
-        window.eventTracker.trackFavorite(art, newFavorited);
+        window.eventTracker.trackFavorite(art, newInterested);
       } else {
         // Restore original state on error
         button.style.opacity = '';

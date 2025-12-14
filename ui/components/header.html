@@ -1,18 +1,18 @@
 <!-- Mobile-Responsive Header -->
 <header>
   <div class="header-main-row">
-    <div class="header-left">
-      <h1>
-        {% if show_back_link %}
-          <a href='{{ url_for("index_page.index") }}'>← 返回列表</a>
-        {% else %}
-          <a href='{{ url_for("index_page.index") }}'>📚 arXiv最新AI论文速览速学</a>
-        {% endif %}
-      </h1>
-    </div>
-    
-    <!-- Desktop Navigation -->
-    <div class="page-header-right desktop-nav">
+  <div class="header-left">
+    <h1>
+      {% if show_back_link %}
+        <a href='{{ url_for("index_page.index") }}'>← 返回列表</a>
+      {% else %}
+        <a href='{{ url_for("index_page.index") }}'>📚 arXiv最新AI论文速览速学</a>
+      {% endif %}
+    </h1>
+  </div>
+  
+  <!-- Desktop Navigation -->
+  <div class="page-header-right desktop-nav">
     {% if uid and not show_back_link %}
       <a href="{{ url_for('index_page.read_papers') }}" class="nav-btn">没兴趣论文</a>
       <a href="{{ url_for('index_page.favorite_papers') }}" class="nav-btn">感兴趣论文</a>
@@ -31,15 +31,15 @@
       </form>
     {% endif %}
     
-      <button id="theme-toggle" class="theme-btn" type="button" aria-label="切换主题" title="切换主题" data-icon-light="🌙" data-icon-dark="☀️">🌙</button>
-    </div>
+    <button id="theme-toggle" class="theme-btn" type="button" aria-label="切换主题" title="切换主题" data-icon-light="🌙" data-icon-dark="☀️">🌙</button>
+  </div>
 
-    <!-- Mobile Menu Button -->
-    <button id="mobile-menu-toggle" class="mobile-menu-btn" aria-label="打开菜单" title="打开菜单">
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-    </button>
+  <!-- Mobile Menu Button -->
+  <button id="mobile-menu-toggle" class="mobile-menu-btn" aria-label="打开菜单" title="打开菜单">
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+  </button>
   </div>
   
   <!-- Deep Read Status Bar (inside header) -->

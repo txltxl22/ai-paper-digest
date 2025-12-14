@@ -1,11 +1,8 @@
 // Article Actions Module
 class ArticleActions {
   constructor() {
-    this.init();
-  }
-
-  init() {
-    document.addEventListener('click', this.handleClick.bind(this));
+    this.boundHandleClick = this.handleClick.bind(this);
+    document.addEventListener('click', this.boundHandleClick);
   }
 
   // Save current scroll position relative to the target element
@@ -711,4 +708,20 @@ class ArticleActions {
 }
 
 // Initialize article actions
-new ArticleActions();
+(function() {
+  let instance = null;
+  
+  function init() {
+    // Remove old handler if exists
+    if (instance) {
+      document.removeEventListener('click', instance.boundHandleClick);
+    }
+    instance = new ArticleActions();
+  }
+  
+  // Initialize now
+  init();
+  
+  // Re-initialize on pageshow to handle bfcache (back/forward navigation)
+  window.addEventListener('pageshow', init);
+})();

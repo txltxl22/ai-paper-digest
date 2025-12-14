@@ -1,7 +1,7 @@
 // Service Worker for AI Papers Reader PWA
-const CACHE_NAME = 'ai-papers-reader-v1';
-const STATIC_CACHE_NAME = 'ai-papers-reader-static-v1';
-const DYNAMIC_CACHE_NAME = 'ai-papers-reader-dynamic-v1';
+const CACHE_NAME = 'ai-papers-reader-v2';
+const STATIC_CACHE_NAME = 'ai-papers-reader-static-v2';
+const DYNAMIC_CACHE_NAME = 'ai-papers-reader-dynamic-v2';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -65,7 +65,29 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Strategy: Cache First for static assets, Network First for pages
+  // Use Network First for JavaScript files to ensure fresh code
+  if (url.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (!response || response.status !== 200 || response.type !== 'basic') {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(STATIC_CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          // Network failed, try cache as fallback
+          return caches.match(request);
+        })
+    );
+    return;
+  }
+
+  // Strategy: Cache First for other static assets, Network First for pages
   if (
     url.pathname.startsWith('/static/') ||
     url.pathname.startsWith('/assets/') ||
@@ -73,7 +95,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname === '/favicon.svg' ||
     url.pathname === '/favicon.ico'
   ) {
-    // Cache First for static assets
+    // Cache First for non-JS static assets (CSS, images, etc.)
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
         if (cachedResponse) {

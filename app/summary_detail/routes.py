@@ -96,6 +96,17 @@ def create_summary_detail_routes(
         uid = request.cookies.get("uid")
         if not uid:
             return jsonify({"error": "Login required", "message": "请先登录以使用深度阅读功能"}), 401
+        
+        # Record deep read action as user interest signal
+        # This is a strong interest indicator - user explicitly requested full analysis
+        if user_service:
+            try:
+                user_data = user_service.get_user_data(uid)
+                user_data.mark_as_deep_read(arxiv_id)
+                logger.info(f"Recorded deep read action for paper {arxiv_id} by user {uid}")
+            except Exception as e:
+                # Don't fail the deep read request if recording fails
+                logger.warning(f"Failed to record deep read action for {arxiv_id} by {uid}: {e}")
             
         try:
             # Check if already processing

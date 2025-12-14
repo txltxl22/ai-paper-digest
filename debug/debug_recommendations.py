@@ -137,10 +137,13 @@ def debug_recommendations(uid: str):
     user_data = load_user_data(uid, user_data_dir)
     favorites_map = user_data.get('favorites', {})
     read_map = user_data.get('read', {})
+    deep_read_map = user_data.get('deep_read', {})
     
     print(f"  Favorites: {len(favorites_map)} papers")
     print(f"  Read: {len(read_map)} papers")
+    print(f"  Deep Read: {len(deep_read_map)} papers")
     print(f"  Favorites that are also read: {len(set(favorites_map.keys()) & set(read_map.keys()))}")
+    print(f"  Deep reads that are also favorites: {len(set(deep_read_map.keys()) & set(favorites_map.keys()))}")
     
     # Debug: Show sample favorites_map entries
     if favorites_map:
@@ -153,12 +156,14 @@ def debug_recommendations(uid: str):
     all_entries_meta = load_all_entries(summary_dir)
     print(f"  Total entries: {len(all_entries_meta)}")
     
-    # Build favorites_meta and read_meta
+    # Build favorites_meta, read_meta, and deep_read_meta
     favorites_meta = [e for e in all_entries_meta if e["id"] in favorites_map]
     read_meta = [e for e in all_entries_meta if e["id"] in read_map]
+    deep_read_meta = [e for e in all_entries_meta if e["id"] in deep_read_map]
     
     print(f"\n  Favorites in summary: {len(favorites_meta)}")
     print(f"  Read in summary: {len(read_meta)}")
+    print(f"  Deep Read in summary: {len(deep_read_meta)}")
     
     # Debug: Check which favorites are missing from summary
     favorites_in_map = set(favorites_map.keys())
@@ -188,6 +193,8 @@ def debug_recommendations(uid: str):
         favorites_map=favorites_map,
         read_meta=read_meta,
         read_map=read_map,
+        deep_read_meta=deep_read_meta,
+        deep_read_map=deep_read_map,
         extra={'uid': uid},
     )
     
@@ -201,6 +208,7 @@ def debug_recommendations(uid: str):
     print(f"  Formula: exp(-ln(2) * (delta_days / {strategy.recency_half_life_days})) + 0.5")
     print(f"  Top tag multiplier: {strategy.top_tag_multiplier}")
     print(f"  Detail tag multiplier: {strategy.detail_tag_multiplier}")
+    print(f"  Deep read multiplier: {strategy.deep_read_multiplier}")
     print(f"  Min negative samples: {strategy.min_negative_samples}")
     
     # Show recency calculations for favorites
@@ -279,17 +287,18 @@ def debug_recommendations(uid: str):
         if len(read_recency_details) > 10:
             print(f"  ... and {len(read_recency_details) - 10} more read papers")
     
-    # Calculate weights
-    positive_weights = strategy._build_positive_tag_weights(favorites_meta, favorites_map)
+    # Calculate weights from each source separately
+    favorites_weights = strategy._build_positive_tag_weights(favorites_meta, favorites_map)
+    deep_read_weights = strategy._build_deep_read_tag_weights(deep_read_meta, deep_read_map)
     negative_weights = strategy._build_negative_tag_weights(read_meta, read_map, favorites_map)
     
     # Show detailed tag weight breakdown for top tags
     print_section("Detailed Tag Weight Breakdown")
     
-    # Show how positive weights are calculated for top tags
-    print(f"\nPositive Tag Weight Calculation (showing top 5 tags):")
-    sorted_positive = sorted(positive_weights.items(), key=lambda x: x[1], reverse=True)
-    for tag, total_weight in sorted_positive[:5]:
+    # Show how favorites weights are calculated for top tags
+    print(f"\nFavorites Tag Weight Calculation (showing top 5 tags):")
+    sorted_favorites = sorted(favorites_weights.items(), key=lambda x: x[1], reverse=True)
+    for tag, total_weight in sorted_favorites[:5]:
         print(f"\n  Tag: {tag}")
         print(f"    Total weight: {total_weight:.4f}")
         print(f"    Contributions from favorite papers:")
@@ -333,28 +342,37 @@ def debug_recommendations(uid: str):
         if len(contributions) > 5:
             print(f"      ... and {len(contributions) - 5} more contributions")
     
-    print_tag_weights("Positive Tag Weights (from favorites)", positive_weights)
+    # Show deep read weights if any
+    if deep_read_weights:
+        print(f"\nDeep Read Tag Weight Calculation (showing top 5 tags):")
+        sorted_deep_read = sorted(deep_read_weights.items(), key=lambda x: x[1], reverse=True)
+        for tag, total_weight in sorted_deep_read[:5]:
+            print(f"  {tag:30s} {total_weight:8.4f}")
+    
+    print_tag_weights("Favorites Tag Weights (from favorites)", favorites_weights)
+    print_tag_weights("Deep Read Tag Weights (from deep_read, excluding favorites)", deep_read_weights)
     print_tag_weights("Negative Tag Weights (from read, excluding favorites)", negative_weights)
     
-    # Calculate net weights
+    # Calculate net weights: favorites + deep_read - negative
     net_weights: Dict[str, float] = {}
-    all_tags = set(positive_weights.keys()) | set(negative_weights.keys())
+    all_tags = set(favorites_weights.keys()) | set(deep_read_weights.keys()) | set(negative_weights.keys())
     for tag in all_tags:
-        positive = positive_weights.get(tag, 0.0)
-        negative = negative_weights.get(tag, 0.0)
-        net_weights[tag] = positive - negative
+        fav_w = favorites_weights.get(tag, 0.0)
+        deep_w = deep_read_weights.get(tag, 0.0)
+        neg_w = negative_weights.get(tag, 0.0)
+        net_weights[tag] = fav_w + deep_w - neg_w
     
-    print_tag_weights("Net Tag Weights (positive - negative)", net_weights)
+    print_tag_weights("Net Tag Weights (favorites + deep_read - negative)", net_weights)
     
     # Show conflicts
-    conflicts = {tag: (positive_weights.get(tag, 0), negative_weights.get(tag, 0)) 
+    conflicts = {tag: (favorites_weights.get(tag, 0), deep_read_weights.get(tag, 0), negative_weights.get(tag, 0)) 
                  for tag in all_tags 
-                 if tag in positive_weights and tag in negative_weights}
+                 if tag in favorites_weights and tag in negative_weights}
     if conflicts:
         print(f"\nTag Conflicts (appear in both positive and negative):")
-        for tag, (pos, neg) in sorted(conflicts.items(), key=lambda x: abs(x[1][0] - x[1][1]), reverse=True):
-            net = pos - neg
-            print(f"  {tag:30s} positive={pos:6.4f} negative={neg:6.4f} net={net:6.4f}")
+        for tag, (fav, deep, neg) in sorted(conflicts.items(), key=lambda x: abs(x[1][0] + x[1][1] - x[1][2]), reverse=True)[:10]:
+            net = fav + deep - neg
+            print(f"  {tag:30s} fav={fav:6.4f} deep={deep:6.4f} neg={neg:6.4f} net={net:6.4f}")
     
     # Run recommendation engine
     print_section("Recommendation Results")
@@ -429,7 +447,8 @@ def debug_recommendations(uid: str):
     print_section("Strategy Profile")
     profile = response.profiles.get("tag_preference", {})
     print(f"\nTop tags: {profile.get('top_tags', [])}")
-    print(f"Total positive tag weights: {sum(positive_weights.values()):.4f}")
+    print(f"Total favorites tag weights: {sum(favorites_weights.values()):.4f}")
+    print(f"Total deep_read tag weights: {sum(deep_read_weights.values()):.4f}")
     print(f"Total negative tag weights: {sum(negative_weights.values()):.4f}")
     print(f"Total net tag weights (positive): {sum(w for w in net_weights.values() if w > 0):.4f}")
     print(f"Total net tag weights (negative): {sum(w for w in net_weights.values() if w < 0):.4f}")
@@ -462,7 +481,9 @@ def debug_recommendations(uid: str):
     print_section("Summary")
     print(f"\n  User has {len(favorites_meta)} favorite papers in system")
     print(f"  User has {len(read_meta)} read papers in system")
+    print(f"  User has {len(deep_read_meta)} deep read papers in system")
     print(f"  {len(set(favorites_map.keys()) & set(read_map.keys()))} favorites are also read")
+    print(f"  {len(set(deep_read_map.keys()) - set(favorites_map.keys()))} deep reads (not also favorites)")
     print(f"  {len(candidate_entries)} unread candidate papers available")
     print(f"  {len(response.scores)} recommendations generated")
     

@@ -169,6 +169,8 @@ def create_index_routes(
         favorites_map: Dict[str, Optional[str]],
         read_meta: List[Dict[str, Any]],
         read_map: Dict[str, Optional[str]],
+        deep_read_meta: List[Dict[str, Any]],
+        deep_read_map: Dict[str, Optional[str]],
         uid: Optional[str],
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         if (
@@ -185,6 +187,8 @@ def create_index_routes(
             favorites_map=favorites_map,
             read_meta=read_meta,
             read_map=read_map,
+            deep_read_meta=deep_read_meta,
+            deep_read_map=deep_read_map,
             extra={'uid': uid} if uid else {},
         )
         response: RecommendationResponse = recommendation_engine.recommend(context)
@@ -331,9 +335,14 @@ def create_index_routes(
                 # Build read_meta for negative signals
                 read_meta: List[Dict[str, Any]] = []
                 read_map: Dict[str, Optional[str]] = {}
+                # Build deep_read_meta for strong interest signals
+                deep_read_meta: List[Dict[str, Any]] = []
+                deep_read_map: Dict[str, Optional[str]] = {}
                 if user_data:
                     read_map = user_data.load_read_map()
                     read_meta = [e for e in all_entries_meta if e["id"] in read_map]
+                    deep_read_map = user_data.load_deep_read_map()
+                    deep_read_meta = [e for e in all_entries_meta if e["id"] in deep_read_map]
                 
                 filtered_entries_meta, personalization = _apply_recommendations(
                     filtered_entries_meta,
@@ -341,6 +350,8 @@ def create_index_routes(
                     favorites_map,
                     read_meta,
                     read_map,
+                    deep_read_meta,
+                    deep_read_map,
                     uid,
                 )
             else:

@@ -284,3 +284,51 @@ class UserData:
             "todo_total": len(todo_ids),
             "todo_today": todo_today
         }
+    
+    def load_deep_read_map(self) -> Dict[str, Optional[str]]:
+        """Load deep_read map for the user.
+        
+        Deep read is a strong interest signal - user explicitly requested 
+        full paper analysis instead of just viewing the abstract summary.
+        """
+        data = self.load()
+        return data.get("deep_read", {})
+    
+    def save_deep_read_map(self, deep_read_map: Dict[str, Optional[str]]) -> None:
+        """Persist deep_read map, preserving other fields."""
+        data = self.load()
+        data["deep_read"] = deep_read_map
+        self.save(data)
+    
+    def mark_as_deep_read(self, arxiv_id: str) -> None:
+        """Mark a paper as deep read with current timestamp.
+        
+        This indicates the user explicitly requested full paper analysis,
+        which is a stronger interest signal than just viewing a summary.
+        """
+        deep_read_map = self.load_deep_read_map()
+        deep_read_map[str(arxiv_id)] = datetime.now().astimezone().isoformat(timespec="seconds")
+        self.save_deep_read_map(deep_read_map)
+    
+    def get_deep_read_stats(self) -> Dict[str, int]:
+        """Get deep_read statistics for the user."""
+        deep_read_map = self.load_deep_read_map()
+        deep_read_ids = set(deep_read_map.keys())
+        
+        # Count how many deep read today
+        today_iso = date.today().isoformat()
+        deep_read_today = 0
+        for d in deep_read_map.values():
+            if not d:
+                continue
+            try:
+                # match date prefix for both date-only and datetime strings
+                if str(d).split('T', 1)[0] == today_iso:
+                    deep_read_today += 1
+            except Exception:
+                continue
+        
+        return {
+            "deep_read_total": len(deep_read_ids),
+            "deep_read_today": deep_read_today
+        }

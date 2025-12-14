@@ -265,33 +265,73 @@ class ArticleActions {
   }
 
   markRead(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[markRead] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
     
-    // Save scroll position before removal
-    this.saveScrollPosition(art);
+    // Add loading state
+    const originalText = link.textContent;
+    link.textContent = '标记中...';
+    link.style.opacity = '0.6';
+    link.style.pointerEvents = 'none';
+    
+    // Save scroll position before removal (only if not on detail page)
+    if (!isOnDetailPage) {
+      this.saveScrollPosition(art);
+    }
     
     // Capture next card reference before removal
-    const nextCard = art.nextElementSibling;
+    const nextCard = !isOnDetailPage ? art.nextElementSibling : null;
     
     fetch(window.appUrls.mark_read + id, { method: 'POST' }).then(r => {
       if (r.ok) {
-        art.remove();
-        this.updateInfoBarCounts(-1, 1);
-        
-        // Scroll to next card after removal
-        setTimeout(() => {
-          this.scrollToNextCard(nextCard);
-        }, 0);
+        if (isOnDetailPage) {
+          // On detail page, just update button and show toast
+          link.textContent = '已标记没兴趣';
+          link.classList.add('disabled');
+          link.style.opacity = '';
+          link.style.pointerEvents = '';
+          showToast('已标记为没兴趣 👋');
+        } else {
+          art.remove();
+          this.updateInfoBarCounts(-1, 1);
+          
+          // Scroll to next card after removal
+          setTimeout(() => {
+            this.scrollToNextCard(nextCard);
+          }, 0);
+        }
         
         // Track event using centralized tracker
         window.eventTracker.trackMarkRead(art);
+      } else {
+        // Restore on error
+        link.textContent = originalText;
+        link.style.opacity = '';
+        link.style.pointerEvents = '';
+        showToast('操作失败，请重试');
       }
+    }).catch(() => {
+      // Restore on error
+      link.textContent = originalText;
+      link.style.opacity = '';
+      link.style.pointerEvents = '';
+      showToast('网络错误，请重试');
     });
   }
 
   removeFromRead(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[removeFromRead] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
     
     // Save scroll position before removal
@@ -316,7 +356,12 @@ class ArticleActions {
   }
 
   toggleFavorite(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[toggleFavorite] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
     const isInterested = link.getAttribute('data-favorited') === 'true';
     
@@ -324,13 +369,17 @@ class ArticleActions {
     const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
     const isOnInterestedPage = window.location.pathname.includes('/favorites');
     const isOnNotInterestedPage = window.location.pathname.includes('/read');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
     const isMarkingInterested = !isInterested;
     
     console.log('[toggleFavorite] id:', id, 'isInterested:', isInterested, 'isMarkingInterested:', isMarkingInterested, 'pathname:', window.location.pathname);
     
     // Should remove card: when marking interested on main/todo page, or unmarking on interested page
-    const shouldRemoveCard = (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
-                             (!isMarkingInterested && isOnInterestedPage);
+    // Never remove on detail page (we just update the button state)
+    const shouldRemoveCard = !isOnDetailPage && (
+      (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
+      (!isMarkingInterested && isOnInterestedPage)
+    );
     
     console.log('[toggleFavorite] shouldRemoveCard:', shouldRemoveCard, 'isOnInterestedPage:', isOnInterestedPage, 'isOnNotInterestedPage:', isOnNotInterestedPage);
     
@@ -402,7 +451,12 @@ class ArticleActions {
   }
 
   toggleFavoriteStar(button) {
-    const art = button.closest('article');
+    const art = button.closest('article[data-id]') || button.closest('[data-id]');
+    if (!art) {
+      console.error('[toggleFavoriteStar] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = button.getAttribute('data-id') || art.getAttribute('data-id');
     const isInterested = button.getAttribute('data-favorited') === 'true';
     
@@ -410,13 +464,17 @@ class ArticleActions {
     const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
     const isOnInterestedPage = window.location.pathname.includes('/favorites');
     const isOnNotInterestedPage = window.location.pathname.includes('/read');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
     const isMarkingInterested = !isInterested;
     
     console.log('[toggleFavoriteStar] id:', id, 'isInterested:', isInterested, 'isMarkingInterested:', isMarkingInterested);
     
     // Should remove card: when marking interested on main/todo page, or unmarking on interested page
-    const shouldRemoveCard = (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
-                             (!isMarkingInterested && isOnInterestedPage);
+    // Never remove on detail page (we just update the button state)
+    const shouldRemoveCard = !isOnDetailPage && (
+      (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
+      (!isMarkingInterested && isOnInterestedPage)
+    );
     
     console.log('[toggleFavoriteStar] shouldRemoveCard:', shouldRemoveCard);
     
@@ -491,7 +549,12 @@ class ArticleActions {
   }
 
   removeFromFavorites(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[removeFromFavorites] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
     
     // Save scroll position before removal
@@ -516,8 +579,14 @@ class ArticleActions {
   }
 
   addToTodo(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[addToTodo] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
     
     // Add loading state
     const originalText = link.textContent;
@@ -527,22 +596,31 @@ class ArticleActions {
     
     fetch(window.appUrls.mark_todo + id, { method: 'POST' }).then(r => {
       if (r.ok) {
-        // Save scroll position before removal
-        this.saveScrollPosition(art);
-        
-        // Capture next card reference before removal
-        const nextCard = art.nextElementSibling;
-        
-        art.remove();
-        this.updateInfoBarCounts(-1, 0, 1);
-        
-        // Scroll to next card after removal
-        setTimeout(() => {
-          this.scrollToNextCard(nextCard);
-        }, 0);
-        
-        // Show success toast
-        showToast('已添加到待读列表 📌');
+        if (isOnDetailPage) {
+          // On detail page, just update button and show toast
+          link.textContent = '已加入待读';
+          link.classList.add('disabled');
+          link.style.opacity = '';
+          link.style.pointerEvents = '';
+          showToast('已添加到待读列表 📌');
+        } else {
+          // Save scroll position before removal
+          this.saveScrollPosition(art);
+          
+          // Capture next card reference before removal
+          const nextCard = art.nextElementSibling;
+          
+          art.remove();
+          this.updateInfoBarCounts(-1, 0, 1);
+          
+          // Scroll to next card after removal
+          setTimeout(() => {
+            this.scrollToNextCard(nextCard);
+          }, 0);
+          
+          // Show success toast
+          showToast('已添加到待读列表 📌');
+        }
         
         // Track event
         window.eventTracker.trackAddToTodo(art);
@@ -563,7 +641,12 @@ class ArticleActions {
   }
 
   removeFromTodo(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[removeFromTodo] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
     
     // Save scroll position before removal

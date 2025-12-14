@@ -122,7 +122,7 @@
 <body>
     {% set show_back_link = true %}
     {% include 'components/header.html' %}
-    <main>
+    <main data-id="{{ arxiv_id }}">
         <div class="summary-header">
           <div class="source-info">
             {% if source_type == "user" %}

@@ -5,6 +5,9 @@
 (function() {
   'use strict';
 
+  const STORAGE_KEY = 'trending_period_preference';
+  const DEFAULT_PERIOD = '30d';
+
   class TrendingManager {
     constructor() {
       this.section = document.getElementById('trending-section');
@@ -17,22 +20,27 @@
     }
 
     init() {
+      // Bind tab click events
       this.tabs.forEach(tab => {
         tab.addEventListener('click', (e) => this.handleTabClick(e));
       });
+      
+      // Restore saved preference or use default
+      const savedPeriod = localStorage.getItem(STORAGE_KEY) || DEFAULT_PERIOD;
+      this.selectPeriod(savedPeriod);
     }
 
-    handleTabClick(e) {
-      const clickedTab = e.currentTarget;
-      const period = clickedTab.dataset.period;
-      
+    selectPeriod(period) {
       // Update tab states
       this.tabs.forEach(tab => {
-        tab.classList.remove('active');
-        tab.setAttribute('aria-selected', 'false');
+        if (tab.dataset.period === period) {
+          tab.classList.add('active');
+          tab.setAttribute('aria-selected', 'true');
+        } else {
+          tab.classList.remove('active');
+          tab.setAttribute('aria-selected', 'false');
+        }
       });
-      clickedTab.classList.add('active');
-      clickedTab.setAttribute('aria-selected', 'true');
       
       // Update container visibility
       this.containers.forEach(container => {
@@ -44,6 +52,17 @@
           container.classList.remove('active');
         }
       });
+    }
+
+    handleTabClick(e) {
+      const clickedTab = e.currentTarget;
+      const period = clickedTab.dataset.period;
+      
+      // Save preference to localStorage
+      localStorage.setItem(STORAGE_KEY, period);
+      
+      // Update UI
+      this.selectPeriod(period);
     }
 
     // Optional: Refresh trending data via API

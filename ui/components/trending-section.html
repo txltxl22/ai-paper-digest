@@ -6,17 +6,17 @@
       <h2>热门趋势</h2>
     </div>
     <div class="trending-tabs" role="tablist">
-      <button class="trending-tab active" data-period="7" role="tab" aria-selected="true">
+      <button class="trending-tab" data-period="7d" role="tab" aria-selected="false">
         <span class="tab-text">近7天</span>
       </button>
-      <button class="trending-tab" data-period="30" role="tab" aria-selected="false">
+      <button class="trending-tab active" data-period="30d" role="tab" aria-selected="true">
         <span class="tab-text">近30天</span>
       </button>
     </div>
   </div>
   
   <div class="trending-content">
-    <div class="trending-tags-container" id="trending-tags-7" data-period="7">
+    <div class="trending-tags-container" id="trending-tags-7d" data-period="7d" style="display: none;">
       {% if trending_7d %}
         {% for tag in trending_7d %}
         <a href="{{ url_for('index_page.index') }}?tag={{ tag.name }}" class="trending-chip {% if tag.is_new %}is-new{% endif %}">
@@ -47,7 +47,7 @@
       {% endif %}
     </div>
     
-    <div class="trending-tags-container" id="trending-tags-30" data-period="30" style="display: none;">
+    <div class="trending-tags-container" id="trending-tags-30d" data-period="30d">
       {% if trending_30d %}
         {% for tag in trending_30d %}
         <a href="{{ url_for('index_page.index') }}?tag={{ tag.name }}" class="trending-chip {% if tag.is_new %}is-new{% endif %}">

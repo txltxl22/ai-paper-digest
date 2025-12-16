@@ -141,13 +141,25 @@ from app.search.factory import create_search_module
 
 search_module = create_search_module(summary_dir=SUMMARY_DIR)
 
+# Create a temporary scanner for trending service
+from app.index_page.services import EntryScanner
+temp_scanner = EntryScanner(SUMMARY_DIR)
+
+# Initialize trending module
+from app.trending.factory import create_trending_module
+
+trending_module = create_trending_module(
+    entry_scanner=temp_scanner
+)
+
 index_page_module = create_index_page_module(
     summary_dir=SUMMARY_DIR,
     user_service=user_management_module["service"],
     index_template=INDEX_TEMPLATE,
     detail_template=DETAIL_TEMPLATE,
     paper_config=paper_config,
-    search_service=search_module["service"]
+    search_service=search_module["service"],
+    trending_service=trending_module["service"]
 )
 
 summary_detail_module = create_summary_detail_module(
@@ -226,6 +238,9 @@ app.register_blueprint(visitor_stats_module["blueprint"])
 
 # Register search blueprint
 app.register_blueprint(search_module["blueprint"])
+
+# Register trending blueprint
+app.register_blueprint(trending_module["blueprint"])
 
 # -----------------------------------------------------------------------------
 # Templates (plain strings — no Python f-strings)                               

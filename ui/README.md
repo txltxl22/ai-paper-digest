@@ -10,14 +10,16 @@ The UI has been refactored to improve maintainability by separating concerns int
 ui/
 ├── components/           # Reusable HTML components
 │   ├── header.html      # Site header with navigation
-│   ├── paper-submission.html  # Paper URL submission form
-│   ├── tag-filter.html  # Tag filtering interface
+│   ├── paper-submission.html  # Paper URL submission form (main content)
+│   ├── sidebar-submission.html  # Sidebar submission (desktop) + FAB (mobile)
+│   ├── tag-filter.html  # Collapsible search & tag filtering interface
+│   ├── trending-section.html  # Trending tags with period tabs (7d/30d)
 │   ├── article-card.html # Individual paper article card
 │   ├── pagination.html  # Pagination controls
 │   └── admin-modal.html # Admin fetch progress modal
 ├── css/                 # Modular CSS files
 │   ├── badges.css      # Badge styles for source indicators
-│   ├── components.css  # Component-specific styles
+│   ├── components.css  # Component-specific styles (filters, trending, sidebar)
 │   └── modal.css       # Modal dialog styles
 ├── js/                 # JavaScript modules
 │   ├── theme.js        # Theme management
@@ -25,7 +27,8 @@ ui/
 │   ├── user-actions.js # User login/logout/tracking
 │   ├── article-actions.js # Article interactions
 │   ├── admin-modal.js  # Admin functionality
-│   └── paper-submission.js # Paper submission handling
+│   ├── paper-submission.js # Paper submission handling
+│   └── trending.js     # Trending section tab switching
 ├── index.html          # Main page template
 ├── detail.html         # Paper detail page template
 ├── base.css           # Base styles and theme tokens
@@ -39,8 +42,10 @@ ui/
 Each component is a self-contained HTML template that can be included in multiple pages:
 
 - **header.html**: Responsive header with user authentication, navigation, and theme toggle
-- **paper-submission.html**: Form for submitting paper URLs with status feedback
-- **tag-filter.html**: Advanced filtering interface with search and tag selection
+- **paper-submission.html**: Form for submitting paper URLs with status feedback (shown on mobile/tablet)
+- **sidebar-submission.html**: Fixed sidebar for paper submission (desktop) + FAB with modal (mobile)
+- **tag-filter.html**: Collapsible search/filter interface - search bar always visible, advanced filters expandable
+- **trending-section.html**: Displays trending tags with 7-day/30-day tabs and growth indicators
 - **article-card.html**: Displays paper information with tags and action buttons
 - **pagination.html**: Navigation controls for paginated content
 - **admin-modal.html**: Modal dialog for admin fetch operations with real-time logs
@@ -62,6 +67,7 @@ Each module is a self-contained class that handles specific functionality:
 - **ArticleActions**: Article interactions (expand, mark read, PDF links)
 - **AdminModal**: Admin fetch operations with streaming progress
 - **PaperSubmission**: Paper URL submission with validation and feedback
+- **TrendingManager**: Trending section tab switching and dynamic updates
 
 ## Benefits of This Architecture
 
@@ -90,9 +96,17 @@ Each module is a self-contained class that handles specific functionality:
 {% set show_back_link = true %}
 {% include 'components/header.html' %}
 
-<!-- Include standard components -->
-{% include 'components/paper-submission.html' %}
+<!-- Include trending section (requires trending_7d and trending_30d template vars) -->
+{% include 'components/trending-section.html' %}
+
+<!-- Include collapsible search/filter -->
 {% include 'components/tag-filter.html' %}
+
+<!-- Include paper submission (main form for mobile/tablet) -->
+{% include 'components/paper-submission.html' %}
+
+<!-- Include sidebar submission (desktop sidebar + mobile FAB) -->
+{% include 'components/sidebar-submission.html' %}
 ```
 
 ### CSS Architecture
@@ -146,6 +160,32 @@ window.appUrls = {
 ```
 
 This allows JavaScript modules to work with Flask template variables while maintaining separation of concerns.
+
+## Responsive Design
+
+### Breakpoints
+
+- **Desktop**: > 1200px - Full sidebar, all features visible
+- **Tablet**: 768px - 1200px - No sidebar, FAB for submission
+- **Mobile**: < 768px - Collapsible sections, mobile navigation, FAB
+
+### Key Responsive Patterns
+
+1. **Sidebar Submission**: Desktop fixed sidebar → Mobile FAB + modal
+2. **Tag Filter**: Always shows search bar, advanced filters collapsible on all sizes
+3. **Navigation**: Desktop horizontal nav → Mobile hamburger menu overlay
+4. **Trending Section**: Responsive tag chip wrapping, stacked tabs on narrow screens
+
+### CSS Variables for Theming
+
+Always use CSS variables for colors to support light/dark themes:
+```css
+.my-component {
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--btn-border);
+}
+```
 
 ## Future Improvements
 

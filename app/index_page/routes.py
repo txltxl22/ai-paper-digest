@@ -18,6 +18,7 @@ def create_index_routes(
     paper_config=None,
     search_service=None,
     recommendation_engine: RecommendationEngine | None = None,
+    trending_service=None,
 ) -> Blueprint:
     """Create index page routes."""
     bp = Blueprint('index_page', __name__)
@@ -93,6 +94,8 @@ def create_index_routes(
         papers_updated_24h: int = 0,
         papers_updated_72h: int = 0,
         latest_paper: Optional[Dict[str, Any]] = None,
+        trending_7d: Optional[List[Dict]] = None,
+        trending_30d: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         """Build the template context with all necessary data."""
         # Build tag clouds from all entries (not just filtered ones)
@@ -159,6 +162,12 @@ def create_index_routes(
             'papers_updated_24h': papers_updated_24h,
             'papers_updated_72h': papers_updated_72h,
             'latest_paper': latest_paper,
+        })
+        
+        # Add trending data
+        context.update({
+            'trending_7d': trending_7d or [],
+            'trending_30d': trending_30d or [],
         })
         
         return context
@@ -368,6 +377,18 @@ def create_index_routes(
                 'promotional': True,
             }
         
+        # Get trending data
+        trending_7d = []
+        trending_30d = []
+        if trending_service:
+            try:
+                trending_7d = trending_service.get_trending_tags(period_days=7, limit=15)
+                trending_30d = trending_service.get_trending_tags(period_days=30, limit=15)
+            except Exception as e:
+                # Log error but don't fail the page
+                import logging
+                logging.error(f"Error getting trending data: {e}")
+        
         # Pagination
         pagination = Pagination(len(filtered_entries_meta), pagination_params['page'], pagination_params['per_page'])
         page_entries = pagination.get_page_items(filtered_entries_meta)
@@ -387,6 +408,8 @@ def create_index_routes(
             papers_updated_24h=papers_updated_24h,
             papers_updated_72h=papers_updated_72h,
             latest_paper=latest_paper,
+            trending_7d=trending_7d,
+            trending_30d=trending_30d,
         )
         return make_response(render_template_string(index_template, **context))
     

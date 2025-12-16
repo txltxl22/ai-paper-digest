@@ -14,7 +14,8 @@ def create_index_page_module(
     detail_template: str = "",
     paper_config=None,
     search_service=None,
-    recommendation_engine=None
+    recommendation_engine=None,
+    trending_service=None
 ) -> dict:
     """Create index page module with services and routes.
     
@@ -22,6 +23,7 @@ def create_index_page_module(
         summary_dir: Directory containing summary files
         user_service: User management service
         index_template: HTML template for index page
+        trending_service: Optional trending service for tag trends
     
     Returns:
         Dictionary containing the services and blueprint
@@ -43,6 +45,7 @@ def create_index_page_module(
         paper_config,
         search_service,
         recommendation_engine,
+        trending_service,
     )
     
     return {

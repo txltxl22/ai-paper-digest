@@ -283,6 +283,7 @@ def inject_versioned_urls():
     return {
         'static_css_versioned': static_css_versioned,
         'base_css_versioned': base_css_versioned,
+        'rybbit_site_id': app_config.rybbit_site_id,
     }
 
 # -----------------------------------------------------------------------------

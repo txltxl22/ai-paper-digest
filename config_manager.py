@@ -29,6 +29,7 @@ class AppConfig:
     port: int
     debug: bool
     admin_user_ids: list[str]
+    rybbit_site_id: str
 
 
 @dataclass
@@ -93,7 +94,8 @@ class ConfigManager:
                 "host": "0.0.0.0",
                 "port": 22581,
                 "debug": False,
-                "admin_user_ids": []
+                "admin_user_ids": [],
+                "rybbit_site_id": ""
             },
             "paper_processing": {
                 "max_workers": 4,
@@ -154,6 +156,9 @@ class ConfigManager:
                 uid.strip() for uid in os.getenv("ADMIN_USER_IDS").split(",") if uid.strip()
             ]
 
+        if os.getenv("RYBBIT_SITE_ID"):
+            self._config["app"]["rybbit_site_id"] = os.getenv("RYBBIT_SITE_ID")
+
         # Paper processing settings
         if os.getenv("MAX_WORKERS"):
             self._config["paper_processing"]["max_workers"] = int(os.getenv("MAX_WORKERS"))
@@ -190,7 +195,8 @@ class ConfigManager:
             host=app_config["host"],
             port=app_config["port"],
             debug=app_config["debug"],
-            admin_user_ids=app_config["admin_user_ids"]
+            admin_user_ids=app_config["admin_user_ids"],
+            rybbit_site_id=app_config.get("rybbit_site_id", "")
         )
 
     def get_paper_processing_config(self) -> PaperProcessingConfig:

@@ -26,6 +26,44 @@ class ArticleActions {
     }
   }
 
+  // Check if we're on the first page
+  isOnFirstPage() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    // First page if no page param or page=1
+    return !pageParam || pageParam === '1';
+  }
+
+  // Scroll to first paper on the page
+  scrollToFirstPaper() {
+    const articles = document.querySelectorAll('article');
+    if (articles.length > 0) {
+      const firstArticle = articles[0];
+      const rect = firstArticle.getBoundingClientRect();
+      // Calculate scroll position to show the first paper card completely
+      // Account for any fixed headers (typically around 80-100px)
+      const headerOffset = 100; // Approximate header height
+      const scrollTop = window.pageYOffset + rect.top - headerOffset;
+      
+      // Ensure we don't scroll to negative position
+      const finalScrollTop = Math.max(0, scrollTop);
+      
+      window.scrollTo({
+        top: finalScrollTop,
+        behavior: 'smooth' // Use smooth for better UX
+      });
+      return true;
+    }
+    return false;
+  }
+
+  // Reload page with scroll_to_first parameter, preserving other URL params
+  reloadWithScrollToFirst() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('scroll_to_first', '1');
+    window.location.href = url.toString();
+  }
+
   // Scroll to target card or find alternative
   scrollToNextCard(targetCard) {
     if (targetCard && targetCard.tagName === 'ARTICLE') {
@@ -297,6 +335,16 @@ class ArticleActions {
         } else {
           art.remove();
           this.updateInfoBarCounts(-1, 1);
+          
+          // Check if we're on first page and no articles remain
+          if (this.isOnFirstPage()) {
+            const remainingArticles = document.querySelectorAll('article');
+            if (remainingArticles.length === 0) {
+              // All papers on first page are marked, refresh and scroll to first paper
+              this.reloadWithScrollToFirst();
+              return; // Exit early, page will reload
+            }
+          }
           
           // Scroll to next card after removal
           setTimeout(() => {
@@ -724,4 +772,37 @@ class ArticleActions {
   
   // Re-initialize on pageshow to handle bfcache (back/forward navigation)
   window.addEventListener('pageshow', init);
+  
+  // Handle scroll_to_first parameter on page load
+  function handleScrollToFirst() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('scroll_to_first') === '1') {
+      // Remove the parameter from URL to avoid scrolling on subsequent navigations
+      urlParams.delete('scroll_to_first');
+      const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '') + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+      
+      // Wait for DOM to be ready, then scroll to first paper
+      // Use a longer timeout to ensure all content is loaded and rendered
+      setTimeout(() => {
+        if (instance) {
+          const scrolled = instance.scrollToFirstPaper();
+          if (!scrolled) {
+            // No papers found, just scroll to top
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          }
+        }
+      }, 300); // Increased timeout to ensure page is fully rendered
+    }
+  }
+  
+  // Check on DOMContentLoaded and pageshow
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', handleScrollToFirst);
+  } else {
+    handleScrollToFirst();
+  }
+  
+  // Also check on pageshow (for back/forward navigation)
+  window.addEventListener('pageshow', handleScrollToFirst);
 })();

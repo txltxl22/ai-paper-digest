@@ -165,7 +165,14 @@ class AbstractViewer {
         const triggerRect = trigger.getBoundingClientRect();
         const popoverRect = popover.getBoundingClientRect();
         
-        // Position above the trigger, accounting for page scroll
+        // Get header height to account for sticky header (including status bar if visible)
+        const getHeaderHeight = () => {
+            const header = document.querySelector('header');
+            return header ? header.offsetHeight : 100; // Fallback to approximate height
+        };
+        const headerHeight = getHeaderHeight();
+        
+        // Position above the trigger, accounting for page scroll and header
         let top = triggerRect.top + window.scrollY - popoverRect.height - 10;
         let left = triggerRect.left + window.scrollX + (triggerRect.width / 2) - (popoverRect.width / 2);
         
@@ -175,8 +182,9 @@ class AbstractViewer {
             left = window.innerWidth - popoverRect.width - 10;
         }
         
-        if (top < window.scrollY + 10) {
-            // Position below if no space above
+        // Check if popover would overlap with header (account for header height + padding)
+        if (top < window.scrollY + headerHeight + 10) {
+            // Position below if no space above (accounting for header)
             top = triggerRect.bottom + window.scrollY + 10;
             popover.querySelector('.abstract-popover-arrow').style.transform = 'translateX(-50%) rotate(180deg)';
             popover.querySelector('.abstract-popover-arrow').style.top = 'auto';

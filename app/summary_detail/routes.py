@@ -211,6 +211,22 @@ def create_summary_detail_routes(
                 "message": f"深度阅读生成出错: {str(e)}"
             }), 500
     
+    def _extract_paper_title(arxiv_id: str) -> str:
+        """Extract paper title from summary record, fallback to arxiv_id."""
+        try:
+            record = summary_loader.load_summary(arxiv_id)
+            if record and record.summary_data and record.summary_data.structured_content:
+                paper_info = record.summary_data.structured_content.paper_info
+                # Prefer Chinese title, fallback to English title
+                if paper_info.title_zh and paper_info.title_zh.strip():
+                    return paper_info.title_zh.strip()
+                elif paper_info.title_en and paper_info.title_en.strip():
+                    return paper_info.title_en.strip()
+        except Exception as e:
+            logger.debug(f"Could not extract title for {arxiv_id}: {e}")
+        # Fallback to arxiv_id if title not available
+        return arxiv_id
+
     @bp.route("/api/deep_read/status", methods=["GET"])
     def deep_read_status():
         """Get processing status for current user's deep read jobs."""
@@ -245,6 +261,7 @@ def create_summary_detail_routes(
                 "processing": [
                     {
                         "arxiv_id": job.arxiv_id,
+                        "title": _extract_paper_title(job.arxiv_id),
                         "started_at": job.started_at.isoformat()
                     }
                     for job in verified_processing
@@ -252,6 +269,7 @@ def create_summary_detail_routes(
                 "completed": [
                     {
                         "arxiv_id": job.arxiv_id,
+                        "title": _extract_paper_title(job.arxiv_id),
                         "completed_at": job.completed_at.isoformat() if job.completed_at else None
                     }
                     for job in completed_jobs

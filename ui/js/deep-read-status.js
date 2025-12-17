@@ -122,9 +122,11 @@ class DeepReadStatusBar {
     // Find items that were previously processing but are now completed
     for (const arxivId of this.previousProcessing) {
       if (currentCompletedIds.has(arxivId) && !this.notifiedCompletions.has(arxivId)) {
-        // This item just completed!
+        // This item just completed! Find the completed item to get its title
+        const completedItem = completed.find(c => c.arxiv_id === arxivId);
+        const title = completedItem?.title || arxivId;
         this.notifiedCompletions.add(arxivId);
-        this.onJobCompleted(arxivId);
+        this.onJobCompleted(arxivId, title);
       }
     }
     
@@ -164,27 +166,34 @@ class DeepReadStatusBar {
   }
 
   // Called when a deep read job completes
-  onJobCompleted(arxivId) {
+  onJobCompleted(arxivId, title = null) {
     // Check if we're on the detail page for this paper
     const currentPath = window.location.pathname;
     const isOnDetailPage = currentPath === `/summary/${arxivId}`;
     
+    // Use provided title or fallback to arxivId
+    const displayTitle = title || arxivId;
+    
     if (isOnDetailPage) {
       // We're on the detail page for this paper - auto refresh after showing notification
-      this.showCompletionNotification(arxivId, true);
+      this.showCompletionNotification(arxivId, displayTitle, true);
     } else {
       // We're on another page - show notification with link
-      this.showCompletionNotification(arxivId, false);
+      this.showCompletionNotification(arxivId, displayTitle, false);
     }
   }
 
   // Show a beautiful completion notification
-  showCompletionNotification(arxivId, autoRefresh = false) {
+  showCompletionNotification(arxivId, title = null, autoRefresh = false) {
     // Remove any existing notification
     const existingNotification = document.getElementById('deep-read-notification');
     if (existingNotification) {
       existingNotification.remove();
     }
+
+    // Use provided title or fallback to arxivId
+    const displayTitle = title || arxivId;
+    const subtitleText = title ? `论文《${displayTitle}》的详细解读已生成` : `论文 ${arxivId} 的详细解读已生成`;
 
     // Create the notification element
     const notification = document.createElement('div');
@@ -197,7 +206,7 @@ class DeepReadStatusBar {
           <div class="notification-icon">🎉</div>
           <div class="notification-text">
             <div class="notification-title">深度阅读完成！</div>
-            <div class="notification-subtitle">论文 ${arxivId} 的详细解读已生成</div>
+            <div class="notification-subtitle">${subtitleText}</div>
             <div class="notification-action">页面将自动刷新...</div>
           </div>
         </div>
@@ -209,7 +218,7 @@ class DeepReadStatusBar {
           <div class="notification-icon">🎉</div>
           <div class="notification-text">
             <div class="notification-title">深度阅读完成！</div>
-            <div class="notification-subtitle">论文 ${arxivId} 的详细解读已生成</div>
+            <div class="notification-subtitle">${subtitleText}</div>
           </div>
           <a href="/summary/${arxivId}" class="notification-btn">
             <span>查看详情</span>
@@ -249,10 +258,11 @@ class DeepReadStatusBar {
     this.processingList.innerHTML = processing
       .map(item => {
         const timeAgo = this.getTimeAgo(item.started_at);
+        const displayText = item.title || item.arxiv_id;
         return `
           <span class="deep-read-status-item processing">
             <span class="spinner"></span>
-            <a href="/summary/${item.arxiv_id}">${item.arxiv_id}</a>
+            <a href="/summary/${item.arxiv_id}">${displayText}</a>
             <span class="time-ago">${timeAgo}</span>
           </span>
         `;
@@ -266,10 +276,11 @@ class DeepReadStatusBar {
     this.completedList.innerHTML = completed
       .map(item => {
         const timeAgo = this.getTimeAgo(item.completed_at);
+        const displayText = item.title || item.arxiv_id;
         return `
           <span class="deep-read-status-item completed" data-arxiv-id="${item.arxiv_id}">
             <span>✓</span>
-            <a href="/summary/${item.arxiv_id}">${item.arxiv_id}</a>
+            <a href="/summary/${item.arxiv_id}">${displayText}</a>
             <span class="time-ago">${timeAgo}</span>
             <button onclick="window.deepReadStatusBar.dismissCompleted('${item.arxiv_id}'); event.stopPropagation();" title="关闭">×</button>
           </span>

@@ -34,6 +34,16 @@ class ArticleActions {
     return !pageParam || pageParam === '1';
   }
 
+  // Get the actual header height dynamically (including status bar if visible)
+  getHeaderHeight() {
+    const header = document.querySelector('header');
+    if (!header) {
+      return 100; // Fallback to approximate height
+    }
+    // Get the actual computed height of the header (includes status bar if visible)
+    return header.offsetHeight;
+  }
+
   // Scroll to first paper on the page
   scrollToFirstPaper() {
     const articles = document.querySelectorAll('article');
@@ -41,8 +51,8 @@ class ArticleActions {
       const firstArticle = articles[0];
       const rect = firstArticle.getBoundingClientRect();
       // Calculate scroll position to show the first paper card completely
-      // Account for any fixed headers (typically around 80-100px)
-      const headerOffset = 100; // Approximate header height
+      // Account for sticky header height (dynamically calculated)
+      const headerOffset = this.getHeaderHeight() + 10; // Add 10px padding for better visibility
       const scrollTop = window.pageYOffset + rect.top - headerOffset;
       
       // Ensure we don't scroll to negative position
@@ -66,32 +76,41 @@ class ArticleActions {
 
   // Scroll to target card or find alternative
   scrollToNextCard(targetCard) {
-    if (targetCard && targetCard.tagName === 'ARTICLE') {
-      // Scroll to the target card
-      const rect = targetCard.getBoundingClientRect();
-      const scrollTop = window.pageYOffset + rect.top - 20; // 20px offset for better visibility
-      window.scrollTo({
-        top: scrollTop,
-        behavior: 'instant'
+    // Use double requestAnimationFrame to ensure DOM has fully reflowed after card removal
+    // First rAF schedules for next paint, second ensures layout is computed
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (targetCard && targetCard.tagName === 'ARTICLE') {
+          // Scroll to the target card
+          const rect = targetCard.getBoundingClientRect();
+          // Account for sticky header height dynamically
+          const headerOffset = this.getHeaderHeight();
+          const scrollTop = window.pageYOffset + rect.top - headerOffset;
+          window.scrollTo({
+            top: Math.max(0, scrollTop), // Ensure non-negative
+            behavior: 'instant'
+          });
+        } else {
+          // If no target card, try to find any remaining article
+          const articles = document.querySelectorAll('article');
+          if (articles.length > 0) {
+            const rect = articles[0].getBoundingClientRect();
+            const headerOffset = this.getHeaderHeight();
+            const scrollTop = window.pageYOffset + rect.top - headerOffset;
+            window.scrollTo({
+              top: Math.max(0, scrollTop), // Ensure non-negative
+              behavior: 'instant'
+            });
+          } else {
+            // No cards left, scroll to top
+            window.scrollTo({
+              top: 0,
+              behavior: 'instant'
+            });
+          }
+        }
       });
-    } else {
-      // If no target card, try to find any remaining article
-      const articles = document.querySelectorAll('article');
-      if (articles.length > 0) {
-        const rect = articles[0].getBoundingClientRect();
-        const scrollTop = window.pageYOffset + rect.top - 20;
-        window.scrollTo({
-          top: scrollTop,
-          behavior: 'instant'
-        });
-      } else {
-        // No cards left, scroll to top
-        window.scrollTo({
-          top: 0,
-          behavior: 'instant'
-        });
-      }
-    }
+    });
   }
 
   handleClick(ev) {

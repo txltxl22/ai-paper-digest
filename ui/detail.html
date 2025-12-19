@@ -5,6 +5,10 @@
     <meta charset='utf-8'>
     <meta name='viewport' content='width=device-width,initial-scale=1'>
     
+    {% if rybbit_site_id %}
+    <script src="https://app.rybbit.io/api/script.js" data-site-id="{{ rybbit_site_id }}" defer></script>
+    {% endif %}
+    
     <!-- Dynamic Title -->
     <title>{% if english_title %}{{ english_title }}{% else %}{{ arxiv_id }}{% endif %} – AI Paper Summary</title>
     

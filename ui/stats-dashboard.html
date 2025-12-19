@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% if rybbit_site_id %}
+    <script src="https://app.rybbit.io/api/script.js" data-site-id="{{ rybbit_site_id }}" defer></script>
+    {% endif %}
     <title>Analytics Dashboard</title>
     <link rel="stylesheet" href="{{ base_css_versioned() }}">
     <style>

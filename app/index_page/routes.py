@@ -65,7 +65,7 @@ def create_index_routes(
             # Determine search fields based on search type
             search_fields = []
             if filters['search_type'] == 'all':
-                search_fields = ['title', 'content', 'tags']
+                search_fields = ['title', 'content', 'tags', 'arxiv_id', 'abstract']
             elif filters['search_type'] == 'content':
                 search_fields = ['title', 'content']
             elif filters['search_type'] == 'tags':

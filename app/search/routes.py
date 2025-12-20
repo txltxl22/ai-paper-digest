@@ -20,13 +20,13 @@ def create_search_routes(search_service: SearchService) -> Blueprint:
         # Determine search fields based on search type
         if not search_fields:
             if search_type == "all":
-                search_fields = ['title', 'content', 'tags']
+                search_fields = ['title', 'content', 'tags', 'arxiv_id', 'abstract']
             elif search_type == "content":
                 search_fields = ['title', 'content']
             elif search_type == "tags":
                 search_fields = ['tags']
             else:
-                search_fields = ['title', 'content', 'tags']
+                search_fields = ['title', 'content', 'tags', 'arxiv_id', 'abstract']
         
         if not query:
             return jsonify({

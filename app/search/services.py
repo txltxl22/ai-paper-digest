@@ -114,6 +114,8 @@ class SearchService:
                     "tags": tags,
                     "top_tags": top_tags,
                     "detail_tags": detail_tags,
+                    "arxiv_id": arxiv_id,  # Use filename as arxiv_id for legacy files
+                    "abstract": "",  # Legacy files may not have abstract
                     "source_type": "system",
                     "user_id": None,
                     "original_url": None,
@@ -150,6 +152,11 @@ class SearchService:
             detail_tags = [str(t).strip().lower() for t in (tags_obj.tags or []) if str(t).strip()]
             tags = top_tags + detail_tags
             
+            # Extract arxiv_id and abstract from PaperInfo
+            paper_info = record.summary_data.structured_content.paper_info
+            paper_arxiv_id = paper_info.arxiv_id or arxiv_id
+            abstract = paper_info.abstract or ""
+            
             return {
                 "id": arxiv_id,
                 "title": title,
@@ -157,6 +164,8 @@ class SearchService:
                 "tags": tags,
                 "top_tags": top_tags,
                 "detail_tags": detail_tags,
+                "arxiv_id": paper_arxiv_id,
+                "abstract": abstract,
                 "source_type": record.service_data.source_type or "system",
                 "user_id": record.service_data.user_id,
                 "original_url": record.service_data.original_url,
@@ -204,7 +213,7 @@ class SearchService:
         
         Args:
             query: Search query string
-            search_fields: List of fields to search in ['title', 'content', 'tags']
+            search_fields: List of fields to search in ['title', 'content', 'tags', 'arxiv_id', 'abstract']
         
         Returns:
             List of matching papers with relevance scores
@@ -213,7 +222,7 @@ class SearchService:
             return []
         
         if search_fields is None:
-            search_fields = ['title', 'content', 'tags']
+            search_fields = ['title', 'content', 'tags', 'arxiv_id', 'abstract']
         
         query = query.strip().lower()
         content_index = self._build_content_index()
@@ -223,12 +232,26 @@ class SearchService:
             score = 0
             matches = []
             
+            # Search in arxiv_id (high priority for ID searches)
+            if 'arxiv_id' in search_fields and paper.get('arxiv_id'):
+                arxiv_id_matches = self._search_in_text(str(paper['arxiv_id']), query)
+                if arxiv_id_matches:
+                    score += arxiv_id_matches * 10  # High weight for arxiv_id matches
+                    matches.append(f"arXiv ID: {paper['arxiv_id']}")
+            
             # Search in title
             if 'title' in search_fields and paper.get('title'):
                 title_matches = self._search_in_text(paper['title'], query)
                 if title_matches:
-                    score += title_matches * 3  # Higher weight for title matches
+                    score += title_matches * 3
                     matches.extend([f"标题: {match}" for match in self._get_match_contexts(paper['title'], query)])
+            
+            # Search in abstract
+            if 'abstract' in search_fields and paper.get('abstract'):
+                abstract_matches = self._search_in_text(paper['abstract'], query)
+                if abstract_matches:
+                    score += abstract_matches * 2
+                    matches.extend([f"摘要: {match}" for match in self._get_match_contexts(paper['abstract'], query)])
             
             # Search in content
             if 'content' in search_fields and paper.get('content'):

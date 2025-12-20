@@ -10,6 +10,10 @@ from config_manager import get_llm_config, get_paper_processing_config
 from pathlib import Path
 import logging
 import threading
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.quota import QuotaManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +25,19 @@ def create_summary_detail_routes(
     summary_dir: Path,
     processing_tracker: ProcessingTracker,
     user_service=None,
-    daily_limit: int = 3,
-    limit_file: Path = None
+    quota_manager: "QuotaManager" = None
 ) -> Blueprint:
-    """Create summary detail routes."""
+    """Create summary detail routes.
+    
+    Args:
+        summary_loader: Service for loading summaries
+        summary_renderer: Service for rendering summaries
+        detail_template: HTML template for detail page
+        summary_dir: Directory containing summary files
+        processing_tracker: Tracker for deep read processing
+        user_service: User management service
+        quota_manager: QuotaManager for tiered access control
+    """
     bp = Blueprint('summary_detail', __name__)
     
     @bp.route("/summary/<arxiv_id>")
@@ -100,37 +113,40 @@ def create_summary_detail_routes(
     @bp.route("/api/summary/<arxiv_id>/deep_read", methods=["POST"])
     def deep_read(arxiv_id):
         """Trigger deep read (full summarization) for a paper."""
-        # Import limit utilities (same as paper submission)
-        from app.paper_submission.utils import get_client_ip, check_daily_limit, increment_daily_limit
-        
-        # Check user login
+        # Get user info - support both logged-in users and guests
         uid = request.cookies.get("uid")
-        if not uid:
+        effective_uid = uid  # May be replaced with pseudo-uid for guests
+        
+        # Check quota using the new tiered system
+        if quota_manager:
+            client_ip = quota_manager.get_client_ip()
+            quota_result = quota_manager.check_only(client_ip, uid)
+            
+            if not quota_result.allowed:
+                return jsonify({
+                    "error": quota_result.reason or "Quota exceeded",
+                    "message": quota_result.message or "配额已用完，请稍后再试。"
+                }), 429
+            
+            # Use pseudo_uid for guests
+            if quota_result.pseudo_uid:
+                effective_uid = quota_result.pseudo_uid
+        elif not uid:
+            # Fallback: require login if no quota_manager
             return jsonify({"error": "Login required", "message": "请先登录以使用深度阅读功能"}), 401
         
-        # Check daily limit (shared with paper submission)
-        if limit_file:
-            client_ip = get_client_ip()
-            if not check_daily_limit(client_ip, limit_file, daily_limit):
-                return jsonify({
-                    "error": "Daily limit exceeded",
-                    "message": f"您今天已使用完 {daily_limit} 次深度阅读/论文提交配额，请明天再试。"
-                }), 429
-        
-        # Record deep read action as user interest signal
-        # This is a strong interest indicator - user explicitly requested full analysis
-        if user_service:
+        # Record deep read action as user interest signal (only for logged-in users)
+        if user_service and uid and not uid.startswith("ip:"):
             try:
                 user_data = user_service.get_user_data(uid)
                 user_data.mark_as_deep_read(arxiv_id)
                 logger.info(f"Recorded deep read action for paper {arxiv_id} by user {uid}")
             except Exception as e:
-                # Don't fail the deep read request if recording fails
                 logger.warning(f"Failed to record deep read action for {arxiv_id} by {uid}: {e}")
             
         try:
             # Check if already processing
-            if processing_tracker.is_processing(arxiv_id, uid):
+            if processing_tracker.is_processing(arxiv_id, effective_uid):
                 return jsonify({
                     "success": True,
                     "message": "深度阅读正在生成中，请稍候",
@@ -148,34 +164,42 @@ def create_summary_detail_routes(
                 original_url = f"https://arxiv.org/abs/{arxiv_id}"
             
             # Start tracking
-            logger.info(f"Attempting to start processing for {arxiv_id} by user {uid}")
-            tracking_started = processing_tracker.start_processing(arxiv_id, uid)
-            logger.info(f"Tracking start result for {arxiv_id} by user {uid}: {tracking_started}")
+            logger.info(f"Attempting to start processing for {arxiv_id} by user {effective_uid}")
+            tracking_started = processing_tracker.start_processing(arxiv_id, effective_uid)
+            logger.info(f"Tracking start result for {arxiv_id} by user {effective_uid}: {tracking_started}")
             
             if not tracking_started:
                 # Another request started processing just now
-                logger.info(f"Processing already started for {arxiv_id} by user {uid}")
+                logger.info(f"Processing already started for {arxiv_id} by user {effective_uid}")
                 return jsonify({
                     "success": True,
                     "message": "深度阅读正在生成中，请稍候",
                     "already_processing": True
                 })
             
-            # Increment daily limit counter (only when actually starting new processing)
-            if limit_file:
-                from app.paper_submission.utils import get_client_ip, increment_daily_limit
-                client_ip = get_client_ip()
-                increment_daily_limit(client_ip, limit_file)
-                logger.info(f"Incremented daily limit for {client_ip} (deep read for {arxiv_id})")
+            # Consume quota (only when actually starting new processing)
+            if quota_manager:
+                consume_result = quota_manager.check_and_consume(client_ip, uid)
+                if not consume_result.allowed:
+                    # Rollback tracking if quota consumption failed
+                    processing_tracker.mark_failed(arxiv_id, effective_uid, "Quota exceeded")
+                    return jsonify({
+                        "error": consume_result.reason or "Quota exceeded",
+                        "message": consume_result.message or "配额已用完"
+                    }), 429
+                logger.info(f"Consumed quota for {client_ip}/{uid} (deep read for {arxiv_id})")
             
             # Verify the job was created
             is_now_processing = processing_tracker.is_processing(arxiv_id, uid)
             logger.info(f"Verification: is_processing({arxiv_id}, {uid}) = {is_now_processing}")
             
+            # Capture effective_uid for the background thread
+            thread_uid = effective_uid
+            
             # Run summarization in background thread
             def process_in_background():
                 try:
-                    logger.info(f"[THREAD] Starting background deep read processing for {arxiv_id} by user {uid}")
+                    logger.info(f"[THREAD] Starting background deep read processing for {arxiv_id} by user {thread_uid}")
                     # We import inside the function to avoid circular imports
                     import paper_summarizer as ps
                     
@@ -200,25 +224,25 @@ def create_summary_detail_routes(
                     
                     logger.info(f"[THREAD] Summarization result for {arxiv_id}: success={result.is_success}")
                     if result.is_success:
-                        processing_tracker.mark_completed(arxiv_id, uid)
-                        logger.info(f"[THREAD] Deep read completed for {arxiv_id} by user {uid}")
+                        processing_tracker.mark_completed(arxiv_id, thread_uid)
+                        logger.info(f"[THREAD] Deep read completed for {arxiv_id} by user {thread_uid}")
                     else:
                         error_msg = getattr(result, 'error', 'Summarization failed')
-                        processing_tracker.mark_failed(arxiv_id, uid, error_msg)
-                        logger.error(f"[THREAD] Deep read failed for {arxiv_id} by user {uid}: {error_msg}")
+                        processing_tracker.mark_failed(arxiv_id, thread_uid, error_msg)
+                        logger.error(f"[THREAD] Deep read failed for {arxiv_id} by user {thread_uid}: {error_msg}")
                 except Exception as e:
                     error_msg = str(e)
-                    processing_tracker.mark_failed(arxiv_id, uid, error_msg)
-                    logger.exception(f"[THREAD] Error generating deep read for {arxiv_id} by user {uid}: {e}")
+                    processing_tracker.mark_failed(arxiv_id, thread_uid, error_msg)
+                    logger.exception(f"[THREAD] Error generating deep read for {arxiv_id} by user {thread_uid}: {e}")
             
             # Start background thread (non-daemon so it completes)
-            thread = threading.Thread(target=process_in_background, daemon=False, name=f"DeepRead-{arxiv_id}-{uid}")
+            thread = threading.Thread(target=process_in_background, daemon=False, name=f"DeepRead-{arxiv_id}-{effective_uid}")
             thread.start()
-            logger.info(f"Started background thread for deep read: {arxiv_id} by user {uid}, thread_id={thread.ident}")
+            logger.info(f"Started background thread for deep read: {arxiv_id} by user {effective_uid}, thread_id={thread.ident}")
             
             # Double-check the job is in the tracker
-            final_check = processing_tracker.is_processing(arxiv_id, uid)
-            logger.info(f"Final check: is_processing({arxiv_id}, {uid}) = {final_check}")
+            final_check = processing_tracker.is_processing(arxiv_id, effective_uid)
+            logger.info(f"Final check: is_processing({arxiv_id}, {effective_uid}) = {final_check}")
             
             return jsonify({
                 "success": True,
@@ -230,7 +254,7 @@ def create_summary_detail_routes(
             logger.error(f"Error starting deep read for {arxiv_id}: {e}")
             # Try to mark as failed if we started tracking
             try:
-                processing_tracker.mark_failed(arxiv_id, uid, str(e))
+                processing_tracker.mark_failed(arxiv_id, effective_uid, str(e))
             except:
                 pass
             return jsonify({
@@ -258,11 +282,17 @@ def create_summary_detail_routes(
     def deep_read_status():
         """Get processing status for current user's deep read jobs."""
         uid = request.cookies.get("uid")
-        if not uid:
+        effective_uid = uid
+        
+        # Support guests with IP-based tracking
+        if not uid and quota_manager:
+            client_ip = quota_manager.get_client_ip()
+            effective_uid = f"ip:{client_ip}"
+        elif not uid:
             return jsonify({"error": "Login required"}), 401
         
         try:
-            processing_jobs = processing_tracker.get_processing_jobs(uid)
+            processing_jobs = processing_tracker.get_processing_jobs(effective_uid)
             
             # Verify processing jobs - check if summary is actually complete
             verified_processing = []
@@ -273,7 +303,7 @@ def create_summary_detail_routes(
                     # If summary exists and is not abstract-only, it's actually complete
                     if not record.service_data.is_abstract_only:
                         # Summary is complete, mark it as completed
-                        processing_tracker.mark_completed(job.arxiv_id, uid)
+                        processing_tracker.mark_completed(job.arxiv_id, effective_uid)
                         logger.info(f"Auto-marked {job.arxiv_id} as completed (summary file verified)")
                     else:
                         # Still abstract-only, keep as processing
@@ -282,8 +312,8 @@ def create_summary_detail_routes(
                     # Summary doesn't exist yet, keep as processing
                     verified_processing.append(job)
             
-            completed_jobs = processing_tracker.get_completed_jobs(uid, limit=10)
-            logger.info(f"Completed jobs for user {uid}: {completed_jobs}")
+            completed_jobs = processing_tracker.get_completed_jobs(effective_uid, limit=10)
+            logger.info(f"Completed jobs for user {effective_uid}: {completed_jobs}")
             return jsonify({
                 "processing": [
                     {
@@ -303,7 +333,7 @@ def create_summary_detail_routes(
                 ]
             })
         except Exception as e:
-            logger.exception(f"Error getting deep read status for user {uid}: {e}")
+            logger.exception(f"Error getting deep read status for user {effective_uid}: {e}")
             return jsonify({
                 "error": "Internal server error",
                 "message": "Failed to get processing status"
@@ -313,11 +343,17 @@ def create_summary_detail_routes(
     def dismiss_deep_read(arxiv_id):
         """Dismiss a completed deep read job from status bar."""
         uid = request.cookies.get("uid")
-        if not uid:
+        effective_uid = uid
+        
+        # Support guests with IP-based tracking
+        if not uid and quota_manager:
+            client_ip = quota_manager.get_client_ip()
+            effective_uid = f"ip:{client_ip}"
+        elif not uid:
             return jsonify({"error": "Login required"}), 401
         
         try:
-            processing_tracker.dismiss_job(arxiv_id, uid)
+            processing_tracker.dismiss_job(arxiv_id, effective_uid)
             return jsonify({"success": True})
         except Exception as e:
             logger.error(f"Error dismissing job: {e}")

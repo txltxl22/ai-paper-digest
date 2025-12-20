@@ -1,15 +1,17 @@
 import json
 import uuid
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 
 from .models import PaperSubmissionResult
-from .utils import get_client_ip, check_daily_limit, increment_daily_limit
 from .ai_cache import AICacheManager
 from .user_data import UserDataManager
 from .ai_checker import AIContentChecker
 from summary_service.record_manager import load_summary_with_service_record, save_summary_with_service_record
+
+if TYPE_CHECKING:
+    from app.quota import QuotaManager
 
 
 class PaperSubmissionService:
@@ -19,8 +21,6 @@ class PaperSubmissionService:
                  user_data_manager: UserDataManager,
                  ai_cache_manager: AICacheManager,
                  ai_checker: AIContentChecker,
-                 limit_file: Path,
-                 daily_limit: int,
                  summary_dir: Path,
                  llm_config,
                  paper_config,
@@ -28,12 +28,11 @@ class PaperSubmissionService:
                  max_pdf_size_mb: int = 20,
                  index_page_module=None,
                  processing_tracker=None,
-                 user_service=None):
+                 user_service=None,
+                 quota_manager: "QuotaManager" = None):
         self.user_data_manager = user_data_manager
         self.ai_cache_manager = ai_cache_manager
         self.ai_checker = ai_checker
-        self.limit_file = limit_file
-        self.daily_limit = daily_limit
         self.summary_dir = summary_dir
         self.llm_config = llm_config
         self.paper_config = paper_config
@@ -42,6 +41,7 @@ class PaperSubmissionService:
         self.index_page_module = index_page_module
         self.processing_tracker = processing_tracker  # For deep read tracking
         self.user_service = user_service  # For accessing user data
+        self.quota_manager = quota_manager  # For tiered quota management
         self.progress_cache = {}  # Store progress for each task
     
 
@@ -68,9 +68,17 @@ class PaperSubmissionService:
             }
     
     def submit_paper(self, paper_url: str, uid: str) -> PaperSubmissionResult:
-        """Submit a paper URL for processing."""
+        """Submit a paper URL for processing.
+        
+        Args:
+            paper_url: URL of the paper to process
+            uid: User ID, or None for guests
+        """
         task_id = str(uuid.uuid4())
         self._update_progress(task_id, "starting", 0, "正在初始化...")
+        
+        # Track the effective uid for processing tracker (may be pseudo-uid for guests)
+        effective_uid = uid
         
         try:
             # Validate input
@@ -85,16 +93,23 @@ class PaperSubmissionService:
             
             paper_url = paper_url.strip()
             
-            # Check daily limit
-            client_ip = get_client_ip()
-            if not check_daily_limit(client_ip, self.limit_file, self.daily_limit):
-                self._update_progress(task_id, "error", 0, "每日限额已用完")
-                return PaperSubmissionResult(
-                    success=False,
-                    message="您今天已经提交了3篇论文，请明天再试。",
-                    error="Daily limit exceeded",
-                    task_id=task_id
-                )
+            # Check quota using the new tiered system
+            if self.quota_manager:
+                client_ip = self.quota_manager.get_client_ip()
+                quota_result = self.quota_manager.check_only(client_ip, uid)
+                
+                if not quota_result.allowed:
+                    self._update_progress(task_id, "error", 0, quota_result.message or "配额已用完")
+                    return PaperSubmissionResult(
+                        success=False,
+                        message=quota_result.message or "您的配额已用完，请稍后再试。",
+                        error=quota_result.reason or "Quota exceeded",
+                        task_id=task_id
+                    )
+                
+                # Use pseudo_uid for guests (for tracking)
+                if quota_result.pseudo_uid:
+                    effective_uid = quota_result.pseudo_uid
             
             # Import paper_summarizer module
             import paper_summarizer as ps
@@ -177,9 +192,18 @@ class PaperSubmissionService:
             # Check if paper has already been processed globally (for all users)
             already_processed = self._check_paper_processed_globally(paper_url)
             
-            # Only increment daily limit if paper hasn't been processed before
-            if not already_processed:
-                increment_daily_limit(client_ip, self.limit_file)
+            # Only consume quota if paper hasn't been processed before
+            if not already_processed and self.quota_manager:
+                # Now actually consume the quota
+                consume_result = self.quota_manager.check_and_consume(client_ip, uid)
+                if not consume_result.allowed:
+                    self._update_progress(task_id, "error", 0, consume_result.message or "配额已用完")
+                    return PaperSubmissionResult(
+                        success=False,
+                        message=consume_result.message or "您的配额已用完，请稍后再试。",
+                        error=consume_result.reason or "Quota exceeded",
+                        task_id=task_id
+                    )
             
             if not is_ai:
                 # If paper is not AI-related but has already been processed globally, allow access
@@ -227,11 +251,13 @@ class PaperSubmissionService:
                 arxiv_id = self._extract_arxiv_id_from_url(paper_url)
                 
                 # Add to deep read tracking list so user can see progress
+                # Use effective_uid which may be pseudo-uid for guests
                 if self.processing_tracker:
-                    self.processing_tracker.start_processing(arxiv_id, uid)
+                    self.processing_tracker.start_processing(arxiv_id, effective_uid)
                 
                 # Also mark as deep_read in user's data for the deep read status display
-                if self.user_service:
+                # Only for logged-in users (not pseudo-uid guests)
+                if self.user_service and uid and not uid.startswith("ip:"):
                     try:
                         user_data = self.user_service.get_user_data(uid)
                         if user_data:
@@ -432,7 +458,7 @@ class PaperSubmissionService:
                     
                     # Mark deep read as completed in tracking
                     if self.processing_tracker:
-                        self.processing_tracker.mark_completed(arxiv_id, uid)
+                        self.processing_tracker.mark_completed(arxiv_id, effective_uid)
                     
                     self._update_progress(task_id, "completed", 100, "论文处理完成")
                     return PaperSubmissionResult(
@@ -452,7 +478,7 @@ class PaperSubmissionService:
                     
                     # Mark deep read as failed in tracking
                     if self.processing_tracker:
-                        self.processing_tracker.mark_failed(arxiv_id, uid, "Summary generation failed")
+                        self.processing_tracker.mark_failed(arxiv_id, effective_uid, "Summary generation failed")
                     
                     self._update_progress(task_id, "error", 0, "摘要生成失败")
                     return PaperSubmissionResult(
@@ -471,7 +497,7 @@ class PaperSubmissionService:
                 
                 # Mark deep read as failed in tracking (arxiv_id might not be set if error happened early)
                 if self.processing_tracker and 'arxiv_id' in locals():
-                    self.processing_tracker.mark_failed(arxiv_id, uid, str(e))
+                    self.processing_tracker.mark_failed(arxiv_id, effective_uid, str(e))
                 
                 self._update_progress(task_id, "error", 0, f"Processing failed: {str(e)}")
                 return PaperSubmissionResult(
@@ -495,46 +521,41 @@ class PaperSubmissionService:
         return self.user_data_manager.get_uploaded_urls(uid)
     
     def get_user_quota(self, uid: str) -> Dict[str, Any]:
-        """Get user's current quota information."""
+        """Get user's current quota information using the tiered quota system."""
         from datetime import date, datetime, timedelta
         
-        client_ip = get_client_ip()
-        today = date.today().isoformat()
-        
-        try:
-            if self.limit_file.exists():
-                with open(self.limit_file, 'r', encoding='utf-8') as f:
-                    limits = json.load(f)
-            else:
-                limits = {}
-            
-            # Clean up old entries
-            limits = {k: v for k, v in limits.items() if v['date'] == today}
-            
-            current_count = limits.get(client_ip, {}).get('count', 0)
-            remaining = max(0, self.daily_limit - current_count)
+        if self.quota_manager:
+            client_ip = self.quota_manager.get_client_ip()
+            quota_info = self.quota_manager.get_quota_info(client_ip, uid)
             
             # Calculate next reset time (tomorrow at midnight)
             tomorrow = date.today() + timedelta(days=1)
             next_reset = datetime.combine(tomorrow, datetime.min.time())
             
             return {
-                "daily_limit": self.daily_limit,
-                "used": current_count,
-                "remaining": remaining,
+                "tier": quota_info.get("tier", "guest"),
+                "daily_limit": quota_info.get("daily_limit"),
+                "used": quota_info.get("used_today", 0),
+                "remaining": quota_info.get("remaining", 0),
+                "is_unlimited": quota_info.get("is_unlimited", False),
+                "quota_total": quota_info.get("quota_total"),  # For Pro users
+                "quota_remaining": quota_info.get("quota_remaining"),  # For Pro users
+                "message": quota_info.get("message", ""),
                 "next_reset": next_reset.isoformat(),
                 "next_reset_formatted": next_reset.strftime("%Y-%m-%d %H:%M:%S")
             }
-            
-        except Exception as e:
-            # Return default values on error
-            return {
-                "daily_limit": self.daily_limit,
-                "used": 0,
-                "remaining": self.daily_limit,
-                "next_reset": (datetime.now() + timedelta(days=1)).isoformat(),
-                "next_reset_formatted": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-            }
+        
+        # Fallback for when quota_manager is not available
+        return {
+            "tier": "unknown",
+            "daily_limit": 3,
+            "used": 0,
+            "remaining": 3,
+            "is_unlimited": False,
+            "message": "配额系统未初始化",
+            "next_reset": (datetime.now() + timedelta(days=1)).isoformat(),
+            "next_reset_formatted": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+        }
     
     def _check_paper_processed_globally(self, paper_url: str) -> bool:
         """Check if a paper has been processed globally by looking in the summary directory."""

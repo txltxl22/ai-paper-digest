@@ -38,8 +38,16 @@ class PaperProcessingConfig:
     max_workers: int
     chunk_size: int
     max_tags: int
-    daily_submission_limit: int
+    daily_submission_limit: int  # Deprecated: use QuotaConfig instead
     max_pdf_size_mb: int
+
+
+@dataclass
+class QuotaConfig:
+    """Quota configuration for tiered user access."""
+    guest_daily_limit: int
+    normal_daily_limit: int
+    pro_users: list[str]
 
 
 @dataclass
@@ -109,6 +117,11 @@ class ConfigManager:
                 "user_data_dir": "user_data",
                 "papers_dir": "papers",
                 "markdown_dir": "markdown"
+            },
+            "quota": {
+                "guest_daily_limit": 1,
+                "normal_daily_limit": 3,
+                "pro_users": []
             }
         }
 
@@ -175,6 +188,18 @@ class ConfigManager:
         if os.getenv("MAX_PDF_SIZE_MB"):
             self._config["paper_processing"]["max_pdf_size_mb"] = int(os.getenv("MAX_PDF_SIZE_MB"))
 
+        # Quota settings
+        if os.getenv("GUEST_DAILY_LIMIT"):
+            self._config["quota"]["guest_daily_limit"] = int(os.getenv("GUEST_DAILY_LIMIT"))
+
+        if os.getenv("NORMAL_DAILY_LIMIT"):
+            self._config["quota"]["normal_daily_limit"] = int(os.getenv("NORMAL_DAILY_LIMIT"))
+
+        if os.getenv("PRO_USERS"):
+            self._config["quota"]["pro_users"] = [
+                uid.strip() for uid in os.getenv("PRO_USERS").split(",") if uid.strip()
+            ]
+
     def get_llm_config(self) -> LLMConfig:
         """Get LLM configuration."""
         llm_config = self._config["llm"]
@@ -220,6 +245,15 @@ class ConfigManager:
             markdown_dir=paths_config["markdown_dir"]
         )
 
+    def get_quota_config(self) -> QuotaConfig:
+        """Get quota configuration."""
+        quota_config = self._config.get("quota", {})
+        return QuotaConfig(
+            guest_daily_limit=quota_config.get("guest_daily_limit", 1),
+            normal_daily_limit=quota_config.get("normal_daily_limit", 3),
+            pro_users=quota_config.get("pro_users", [])
+        )
+
     def get_config(self) -> Dict[str, Any]:
         """Get raw configuration dictionary."""
         return self._config.copy()
@@ -256,6 +290,11 @@ def get_paper_processing_config() -> PaperProcessingConfig:
 def get_paths_config() -> PathsConfig:
     """Get paths configuration."""
     return config_manager.get_paths_config()
+
+
+def get_quota_config() -> QuotaConfig:
+    """Get quota configuration."""
+    return config_manager.get_quota_config()
 
 
 def reload_config() -> None:

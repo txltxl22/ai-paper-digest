@@ -129,6 +129,21 @@ from app.summary_detail.factory import create_summary_detail_module
 # Initialize fetch module
 from app.fetch.factory import create_fetch_module
 
+# Initialize quota module
+from app.quota.factory import create_quota_module
+
+# Get quota configuration
+quota_config = config_manager.get_quota_config()
+
+# Create quota module - the unified quota management system
+quota_module = create_quota_module(
+    data_dir=DATA_DIR,
+    guest_daily_limit=quota_config.guest_daily_limit,
+    normal_daily_limit=quota_config.normal_daily_limit,
+    pro_users=quota_config.pro_users,
+    admin_users=app_config.admin_user_ids  # Share admin list from app config
+)
+
 # Load templates
 with open(Path(__file__).parent.parent / "ui" / "index.html", "r", encoding="utf-8") as f:
     INDEX_TEMPLATE = f.read()
@@ -167,8 +182,7 @@ summary_detail_module = create_summary_detail_module(
     detail_template=DETAIL_TEMPLATE,
     data_dir=DATA_DIR,
     user_service=user_management_module["service"],
-    daily_limit=paper_config.daily_submission_limit,  # Shared limit with paper submission
-    limit_file=DATA_DIR / "daily_limits.json"
+    quota_manager=quota_module["manager"]  # Use new tiered quota system
 )
 
 fetch_module = create_fetch_module(
@@ -187,11 +201,11 @@ paper_submission_module = create_paper_submission_module(
     prompts_dir=Path(__file__).parent.parent / "summary_service" / "prompts",
     llm_config=llm_config,
     paper_config=paper_config,
-    daily_limit=paper_config.daily_submission_limit,
     save_summary_func=save_summary_with_service_record,
     index_page_module=index_page_module,
     processing_tracker=summary_detail_module["processing_tracker"],
-    user_service=user_management_module["service"]
+    user_service=user_management_module["service"],
+    quota_manager=quota_module["manager"]  # Use new tiered quota system
 )
 
 # Register blueprints
@@ -492,9 +506,13 @@ if __name__ == "__main__":
     print(f"   - LLM Provider: {llm_config.provider}")
     print(f"   - Base URL: {llm_config.base_url}")
     print(f"   - Model: {llm_config.model}")
-    print(f"   - Daily Limit: {paper_config.daily_submission_limit}")
     print(f"   - Max Workers: {paper_config.max_workers}")
     print(f"   - Server: {app_config.host}:{app_config.port}")
+    print(f"📊 Quota Configuration:")
+    print(f"   - Guest Daily Limit: {quota_config.guest_daily_limit}")
+    print(f"   - Normal User Daily Limit: {quota_config.normal_daily_limit}")
+    print(f"   - Pro Users: {len(quota_config.pro_users)}")
+    print(f"   - Admin Users: {len(app_config.admin_user_ids)}")
     app.run(
         host=app_config.host, 
         port=app_config.port, 

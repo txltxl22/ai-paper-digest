@@ -1,5 +1,6 @@
 import json
 import uuid
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, TYPE_CHECKING
 from datetime import datetime
@@ -43,17 +44,19 @@ class PaperSubmissionService:
         self.user_service = user_service  # For accessing user data
         self.quota_manager = quota_manager  # For tiered quota management
         self.progress_cache = {}  # Store progress for each task
+        self.result_cache = {}  # Store final results for completed tasks
     
-
-    
-    def _update_progress(self, task_id: str, step: str, progress: int, details: str = ""):
+    def _update_progress(self, task_id: str, step: str, progress: int, details: str = "", result: Dict[str, Any] = None):
         """Update progress for a specific task."""
-        self.progress_cache[task_id] = {
+        progress_data = {
             "step": step,
             "progress": progress,
             "details": details,
             "timestamp": datetime.now().isoformat()
         }
+        if result:
+            progress_data["result"] = result
+        self.progress_cache[task_id] = progress_data
     
     def get_progress(self, task_id: str) -> Dict[str, Any]:
         """Get progress for a specific task."""
@@ -68,7 +71,9 @@ class PaperSubmissionService:
             }
     
     def submit_paper(self, paper_url: str, uid: str) -> PaperSubmissionResult:
-        """Submit a paper URL for processing.
+        """Submit a paper URL for processing asynchronously.
+        
+        Returns immediately with a task_id. Processing happens in background.
         
         Args:
             paper_url: URL of the paper to process
@@ -79,38 +84,57 @@ class PaperSubmissionService:
         
         # Track the effective uid for processing tracker (may be pseudo-uid for guests)
         effective_uid = uid
+        client_ip = None
         
-        try:
-            # Validate input
-            if not paper_url or not paper_url.strip():
-                self._update_progress(task_id, "error", 0, "URL为空")
+        # Validate input
+        if not paper_url or not paper_url.strip():
+            self._update_progress(task_id, "error", 0, "URL为空")
+            return PaperSubmissionResult(
+                success=False,
+                message="Empty URL",
+                error="Empty URL",
+                task_id=task_id
+            )
+        
+        paper_url = paper_url.strip()
+        
+        # Check quota using the new tiered system
+        if self.quota_manager:
+            client_ip = self.quota_manager.get_client_ip()
+            quota_result = self.quota_manager.check_only(client_ip, uid)
+            
+            if not quota_result.allowed:
+                self._update_progress(task_id, "error", 0, quota_result.message or "配额已用完")
                 return PaperSubmissionResult(
                     success=False,
-                    message="Empty URL",
-                    error="Empty URL",
+                    message=quota_result.message or "您的配额已用完，请稍后再试。",
+                    error=quota_result.reason or "Quota exceeded",
                     task_id=task_id
                 )
             
-            paper_url = paper_url.strip()
-            
-            # Check quota using the new tiered system
-            if self.quota_manager:
-                client_ip = self.quota_manager.get_client_ip()
-                quota_result = self.quota_manager.check_only(client_ip, uid)
-                
-                if not quota_result.allowed:
-                    self._update_progress(task_id, "error", 0, quota_result.message or "配额已用完")
-                    return PaperSubmissionResult(
-                        success=False,
-                        message=quota_result.message or "您的配额已用完，请稍后再试。",
-                        error=quota_result.reason or "Quota exceeded",
-                        task_id=task_id
-                    )
-                
-                # Use pseudo_uid for guests (for tracking)
-                if quota_result.pseudo_uid:
-                    effective_uid = quota_result.pseudo_uid
-            
+            # Use pseudo_uid for guests (for tracking)
+            if quota_result.pseudo_uid:
+                effective_uid = quota_result.pseudo_uid
+        
+        # Start background processing
+        self._update_progress(task_id, "starting", 5, "任务已提交，开始处理...")
+        thread = threading.Thread(
+            target=self._process_paper_async,
+            args=(task_id, paper_url, uid, effective_uid, client_ip),
+            daemon=True
+        )
+        thread.start()
+        
+        # Return immediately - processing continues in background
+        return PaperSubmissionResult(
+            success=True,
+            message="论文提交成功，正在后台处理...",
+            task_id=task_id
+        )
+    
+    def _process_paper_async(self, task_id: str, paper_url: str, uid: str, effective_uid: str, client_ip: str):
+        """Process paper in background thread."""
+        try:
             # Import paper_summarizer module
             import paper_summarizer as ps
             
@@ -126,12 +150,7 @@ class PaperSubmissionService:
                 })
                 
                 self._update_progress(task_id, "error", 0, f"PDF解析失败: {str(e)}")
-                return PaperSubmissionResult(
-                    success=False,
-                    message=f"无法解析PDF链接: {str(e)}",
-                    error=f"PDF resolution failed: {str(e)}",
-                    task_id=task_id
-                )
+                return
             
             # Step 2: Download PDF
             self._update_progress(task_id, "downloading", 20, "正在下载PDF...")
@@ -156,12 +175,7 @@ class PaperSubmissionService:
                 })
                 
                 self._update_progress(task_id, "error", 0, f"PDF下载失败: {str(e)}")
-                return PaperSubmissionResult(
-                    success=False,
-                    message=f"PDF下载失败: {str(e)}",
-                    error=f"PDF download failed: {str(e)}",
-                    task_id=task_id
-                )
+                return
             
             # Step 3: Extract text
             self._update_progress(task_id, "extracting", 50, "正在提取文本...")
@@ -177,12 +191,7 @@ class PaperSubmissionService:
                 })
                 
                 self._update_progress(task_id, "error", 0, f"文本提取失败: {str(e)}")
-                return PaperSubmissionResult(
-                    success=False,
-                    message=f"文本提取失败: {str(e)}",
-                    error=f"Text extraction failed: {str(e)}",
-                    task_id=task_id
-                )
+                return
             
             # Step 4: Check if paper is AI-related (with caching)
             self._update_progress(task_id, "checking", 70, "正在检查AI相关性...")
@@ -198,12 +207,7 @@ class PaperSubmissionService:
                 consume_result = self.quota_manager.check_and_consume(client_ip, uid)
                 if not consume_result.allowed:
                     self._update_progress(task_id, "error", 0, consume_result.message or "配额已用完")
-                    return PaperSubmissionResult(
-                        success=False,
-                        message=consume_result.message or "您的配额已用完，请稍后再试。",
-                        error=consume_result.reason or "Quota exceeded",
-                        task_id=task_id
-                    )
+                    return
             
             if not is_ai:
                 # If paper is not AI-related but has already been processed globally, allow access
@@ -216,13 +220,12 @@ class PaperSubmissionService:
                         "arxiv_id": arxiv_id
                     })
                     
-                    self._update_progress(task_id, "completed", 100, "论文已存在，处理完成")
-                    return PaperSubmissionResult(
-                        success=True,
-                        message="这篇论文已经被处理过了，您可以在搜索结果中找到它。",
-                        task_id=task_id,
-                        summary_url=f"/summary/{arxiv_id}"
-                    )
+                    self._update_progress(task_id, "completed", 100, "论文已存在，处理完成", result={
+                        "success": True,
+                        "summary_url": f"/summary/{arxiv_id}",
+                        "message": "这篇论文已经被处理过了，您可以在搜索结果中找到它。"
+                    })
+                    return
                 
                 # Save failed upload attempt
                 self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
@@ -232,14 +235,8 @@ class PaperSubmissionService:
 
                 print(f"Not AI paper: {paper_url}, confidence: {confidence}, tags: {tags}")
                 
-                self._update_progress(task_id, "error", 0, "论文不是AI相关")
-                return PaperSubmissionResult(
-                    success=False,
-                    message="抱歉，我们只接受AI相关的论文。根据分析，这篇论文不属于AI领域。",
-                    error="Not AI paper",
-                    confidence=confidence,
-                    task_id=task_id
-                )
+                self._update_progress(task_id, "error", 0, "论文不是AI相关 - 抱歉，我们只接受AI相关的论文。")
+                return
             
             # Step 5: Process the paper using existing pipeline
             self._update_progress(task_id, "summarizing", 85, "正在生成摘要...")
@@ -310,13 +307,12 @@ class PaperSubmissionService:
                         "arxiv_id": arxiv_id
                     })
                     
-                    self._update_progress(task_id, "completed", 100, "论文已存在，处理完成")
-                    return PaperSubmissionResult(
-                        success=True,
-                        message="这篇论文已经被处理过了，您可以在搜索结果中找到它。",
-                        task_id=task_id,
-                        summary_url=f"/summary/{arxiv_id}"
-                    )
+                    self._update_progress(task_id, "completed", 100, "论文已存在，处理完成", result={
+                        "success": True,
+                        "summary_url": f"/summary/{arxiv_id}",
+                        "message": "这篇论文已经被处理过了，您可以在搜索结果中找到它。"
+                    })
+                    return
                 
                 # Process the paper
                 result = fps._summarize_url(
@@ -460,15 +456,14 @@ class PaperSubmissionService:
                     if self.processing_tracker:
                         self.processing_tracker.mark_completed(arxiv_id, effective_uid)
                     
-                    self._update_progress(task_id, "completed", 100, "论文处理完成")
-                    return PaperSubmissionResult(
-                        success=True,
-                        message="论文提交成功！",
-                        summary_path=str(summary_path),
-                        paper_subject=paper_subject,
-                        task_id=task_id,
-                        summary_url=f"/summary/{arxiv_id}"
-                    )
+                    self._update_progress(task_id, "completed", 100, "论文处理完成", result={
+                        "success": True,
+                        "summary_url": f"/summary/{arxiv_id}",
+                        "message": "论文提交成功！",
+                        "summary_path": str(summary_path),
+                        "paper_subject": paper_subject
+                    })
+                    return
                 else:
                     # Save failed upload attempt
                     self.user_data_manager.save_uploaded_url(uid, paper_url, (is_ai, confidence, tags), {
@@ -480,13 +475,8 @@ class PaperSubmissionService:
                     if self.processing_tracker:
                         self.processing_tracker.mark_failed(arxiv_id, effective_uid, "Summary generation failed")
                     
-                    self._update_progress(task_id, "error", 0, "摘要生成失败")
-                    return PaperSubmissionResult(
-                        success=False,
-                        message="论文处理失败，请稍后重试。",
-                        error="Summary generation failed",
-                        task_id=task_id
-                    )
+                    self._update_progress(task_id, "error", 0, "摘要生成失败 - 论文处理失败，请稍后重试。")
+                    return
                     
             except Exception as e:
                 # Save failed upload attempt
@@ -499,22 +489,11 @@ class PaperSubmissionService:
                 if self.processing_tracker and 'arxiv_id' in locals():
                     self.processing_tracker.mark_failed(arxiv_id, effective_uid, str(e))
                 
-                self._update_progress(task_id, "error", 0, f"Processing failed: {str(e)}")
-                return PaperSubmissionResult(
-                    success=False,
-                    message=f"论文处理失败: {str(e)}",
-                    error=f"Processing failed: {str(e)}",
-                    task_id=task_id
-                )
+                self._update_progress(task_id, "error", 0, f"处理失败: {str(e)}")
+                return
                 
         except Exception as e:
-            self._update_progress(task_id, "error", 0, f"Server error: {str(e)}")
-            return PaperSubmissionResult(
-                success=False,
-                message=f"服务器错误: {str(e)}",
-                error=f"Server error: {str(e)}",
-                task_id=task_id
-            )
+            self._update_progress(task_id, "error", 0, f"服务器错误: {str(e)}")
     
     def get_uploaded_urls(self, uid: str) -> list:
         """Get uploaded URLs for a user."""

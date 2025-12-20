@@ -9,6 +9,7 @@ from .utils import get_client_ip, check_daily_limit, increment_daily_limit
 from .ai_cache import AICacheManager
 from .user_data import UserDataManager
 from .ai_checker import AIContentChecker
+from summary_service.record_manager import load_summary_with_service_record, save_summary_with_service_record
 
 
 class PaperSubmissionService:
@@ -25,7 +26,9 @@ class PaperSubmissionService:
                  paper_config,
                  save_summary_func=None,
                  max_pdf_size_mb: int = 20,
-                 index_page_module=None):
+                 index_page_module=None,
+                 processing_tracker=None,
+                 user_service=None):
         self.user_data_manager = user_data_manager
         self.ai_cache_manager = ai_cache_manager
         self.ai_checker = ai_checker
@@ -37,6 +40,8 @@ class PaperSubmissionService:
         self.save_summary_func = save_summary_func
         self.max_pdf_size_mb = max_pdf_size_mb
         self.index_page_module = index_page_module
+        self.processing_tracker = processing_tracker  # For deep read tracking
+        self.user_service = user_service  # For accessing user data
         self.progress_cache = {}  # Store progress for each task
     
 
@@ -221,6 +226,19 @@ class PaperSubmissionService:
                 # Extract arXiv ID from the paper URL using centralized method
                 arxiv_id = self._extract_arxiv_id_from_url(paper_url)
                 
+                # Add to deep read tracking list so user can see progress
+                if self.processing_tracker:
+                    self.processing_tracker.start_processing(arxiv_id, uid)
+                
+                # Also mark as deep_read in user's data for the deep read status display
+                if self.user_service:
+                    try:
+                        user_data = self.user_service.get_user_data(uid)
+                        if user_data:
+                            user_data.mark_as_deep_read(arxiv_id)
+                    except Exception as e:
+                        print(f"Failed to mark paper as deep_read for user {uid}: {e}")
+                
                 # Check if this paper already exists to preserve first creation time
                 first_created_at = None
                 existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
@@ -231,7 +249,6 @@ class PaperSubmissionService:
                 if already_processed:
                     # Update the updated_at timestamp for the existing paper
                     try:
-                        from summary_service.record_manager import load_summary_with_service_record, save_summary_with_service_record
                         existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
                         if existing_record:
                             # Update the updated_at timestamp using Pydantic model
@@ -286,7 +303,7 @@ class PaperSubmissionService:
                     extract_only=False,
                     local=False,
                     max_workers=self.paper_config.max_workers,
-                    abstract_only=True  # Default to abstract only for all submissions, user can click "Deep Read" later
+                    abstract_only=False  # User submissions get full deep read
                 )
                 
                 self._update_progress(task_id, "summarizing", 95, "摘要生成完成")
@@ -308,7 +325,6 @@ class PaperSubmissionService:
                     # Update the existing service record to mark it as user submission
                     if summary_json_path.exists():
                         try:
-                            from summary_service.record_manager import load_summary_with_service_record
                             existing_record = load_summary_with_service_record(arxiv_id, self.summary_dir)
                             
                             if existing_record:
@@ -328,7 +344,6 @@ class PaperSubmissionService:
                                 existing_record.summary_data.updated_at = datetime.now().isoformat()
                                 
                                 # Save the updated record using Pydantic
-                                from summary_service.record_manager import save_summary_with_service_record
                                 save_summary_with_service_record(
                                     arxiv_id=arxiv_id,
                                     summary_content=existing_record.summary_data.structured_content,
@@ -350,7 +365,6 @@ class PaperSubmissionService:
                             print(f"⚠️ Error updating existing record: {e}")
                             # If we have a result with structured summary, use it
                             if result.structured_summary:
-                                from summary_service.record_manager import save_summary_with_service_record, load_summary_with_service_record
                                 from summary_service.models import Tags
                                 # Try to load tags from existing record or use empty tags
                                 tags_obj = Tags(top=[], tags=[])
@@ -378,7 +392,6 @@ class PaperSubmissionService:
                         # No existing record, but we should have one from the summarization
                         # Use the structured summary from the result
                         if result.structured_summary:
-                            from summary_service.record_manager import save_summary_with_service_record, load_summary_with_service_record
                             from summary_service.models import Tags
                             # Try to load tags from the record that should have been created
                             tags_obj = Tags(top=[], tags=[])
@@ -417,6 +430,10 @@ class PaperSubmissionService:
                         except Exception as e:
                             print(f"Failed to clear index cache: {e}")
                     
+                    # Mark deep read as completed in tracking
+                    if self.processing_tracker:
+                        self.processing_tracker.mark_completed(arxiv_id, uid)
+                    
                     self._update_progress(task_id, "completed", 100, "论文处理完成")
                     return PaperSubmissionResult(
                         success=True,
@@ -433,6 +450,10 @@ class PaperSubmissionService:
                         "error": "Summary generation failed"
                     })
                     
+                    # Mark deep read as failed in tracking
+                    if self.processing_tracker:
+                        self.processing_tracker.mark_failed(arxiv_id, uid, "Summary generation failed")
+                    
                     self._update_progress(task_id, "error", 0, "摘要生成失败")
                     return PaperSubmissionResult(
                         success=False,
@@ -447,6 +468,10 @@ class PaperSubmissionService:
                     "success": False,
                     "error": f"Processing failed: {str(e)}"
                 })
+                
+                # Mark deep read as failed in tracking (arxiv_id might not be set if error happened early)
+                if self.processing_tracker and 'arxiv_id' in locals():
+                    self.processing_tracker.mark_failed(arxiv_id, uid, str(e))
                 
                 self._update_progress(task_id, "error", 0, f"Processing failed: {str(e)}")
                 return PaperSubmissionResult(

@@ -7,7 +7,14 @@ from .routes import create_summary_detail_routes
 from .processing_tracker import ProcessingTracker
 
 
-def create_summary_detail_module(summary_dir, detail_template: str, data_dir: Path = None, user_service=None) -> dict:
+def create_summary_detail_module(
+    summary_dir, 
+    detail_template: str, 
+    data_dir: Path = None, 
+    user_service=None,
+    daily_limit: int = 3,
+    limit_file: Path = None
+) -> dict:
     """Create summary detail module with services and routes.
     
     Args:
@@ -15,6 +22,8 @@ def create_summary_detail_module(summary_dir, detail_template: str, data_dir: Pa
         detail_template: Template string for detail view
         data_dir: Optional directory for persistence files
         user_service: Optional user service for authentication and user data
+        daily_limit: Daily limit for deep read requests (shared with paper submission)
+        limit_file: Path to the daily limits JSON file
         
     Returns:
         Dictionary containing the services and blueprint
@@ -30,6 +39,10 @@ def create_summary_detail_module(summary_dir, detail_template: str, data_dir: Pa
         persistence_file = data_dir / "deep_read_processing.json"
     processing_tracker = ProcessingTracker(persistence_file=persistence_file)
     
+    # Default limit file if not provided
+    if limit_file is None and data_dir:
+        limit_file = data_dir / "daily_limits.json"
+    
     # Create routes
     blueprint = create_summary_detail_routes(
         summary_loader, 
@@ -37,7 +50,9 @@ def create_summary_detail_module(summary_dir, detail_template: str, data_dir: Pa
         detail_template, 
         summary_dir,
         processing_tracker,
-        user_service=user_service
+        user_service=user_service,
+        daily_limit=daily_limit,
+        limit_file=limit_file
     )
     
     return {

@@ -20,7 +20,9 @@ def create_summary_detail_routes(
     detail_template: str,
     summary_dir: Path,
     processing_tracker: ProcessingTracker,
-    user_service=None
+    user_service=None,
+    daily_limit: int = 3,
+    limit_file: Path = None
 ) -> Blueprint:
     """Create summary detail routes."""
     bp = Blueprint('summary_detail', __name__)
@@ -98,10 +100,22 @@ def create_summary_detail_routes(
     @bp.route("/api/summary/<arxiv_id>/deep_read", methods=["POST"])
     def deep_read(arxiv_id):
         """Trigger deep read (full summarization) for a paper."""
+        # Import limit utilities (same as paper submission)
+        from app.paper_submission.utils import get_client_ip, check_daily_limit, increment_daily_limit
+        
         # Check user login
         uid = request.cookies.get("uid")
         if not uid:
             return jsonify({"error": "Login required", "message": "请先登录以使用深度阅读功能"}), 401
+        
+        # Check daily limit (shared with paper submission)
+        if limit_file:
+            client_ip = get_client_ip()
+            if not check_daily_limit(client_ip, limit_file, daily_limit):
+                return jsonify({
+                    "error": "Daily limit exceeded",
+                    "message": f"您今天已使用完 {daily_limit} 次深度阅读/论文提交配额，请明天再试。"
+                }), 429
         
         # Record deep read action as user interest signal
         # This is a strong interest indicator - user explicitly requested full analysis
@@ -146,6 +160,13 @@ def create_summary_detail_routes(
                     "message": "深度阅读正在生成中，请稍候",
                     "already_processing": True
                 })
+            
+            # Increment daily limit counter (only when actually starting new processing)
+            if limit_file:
+                from app.paper_submission.utils import get_client_ip, increment_daily_limit
+                client_ip = get_client_ip()
+                increment_daily_limit(client_ip, limit_file)
+                logger.info(f"Incremented daily limit for {client_ip} (deep read for {arxiv_id})")
             
             # Verify the job was created
             is_now_processing = processing_tracker.is_processing(arxiv_id, uid)

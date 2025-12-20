@@ -166,7 +166,9 @@ summary_detail_module = create_summary_detail_module(
     summary_dir=SUMMARY_DIR,
     detail_template=DETAIL_TEMPLATE,
     data_dir=DATA_DIR,
-    user_service=user_management_module["service"]
+    user_service=user_management_module["service"],
+    daily_limit=paper_config.daily_submission_limit,  # Shared limit with paper submission
+    limit_file=DATA_DIR / "daily_limits.json"
 )
 
 fetch_module = create_fetch_module(
@@ -187,7 +189,9 @@ paper_submission_module = create_paper_submission_module(
     paper_config=paper_config,
     daily_limit=paper_config.daily_submission_limit,
     save_summary_func=save_summary_with_service_record,
-    index_page_module=index_page_module
+    index_page_module=index_page_module,
+    processing_tracker=summary_detail_module["processing_tracker"],
+    user_service=user_management_module["service"]
 )
 
 # Register blueprints

@@ -208,7 +208,7 @@
         // Fallback: direct API call
         try {
           if (statusEl) statusEl.style.display = 'block';
-          const response = await fetch('/paper/submit', {
+          const response = await fetch('/submit_paper', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: url })

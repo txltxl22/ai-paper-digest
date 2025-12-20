@@ -163,7 +163,11 @@
       <div class="personalization-primary">
         <span class="personalization-pill">🎯 个性推荐</span>
         <p class="personalization-copy">
+          {% if personalization.recommendations_exhausted %}
+          你已经阅读完所有推荐的论文。下方显示的是其他未读论文，按时间排序。你也可以使用搜索功能查找所有论文（包括已读、收藏、待读的论文）。
+          {% else %}
           根据你感兴趣的论文主题推荐最新内容
+          {% endif %}
         </p>
       </div>
       {% if personalization.top_tags %}

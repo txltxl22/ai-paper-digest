@@ -600,7 +600,7 @@ class TestIntegration:
         
         # Paper 1: submitted first (older)
         paper1_summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="Paper 1", title_en="Paper 1", abstract="Paper 1 content"),
+            paper_info=PaperInfo(title_zh="Paper 1", title_en="Paper 1", abstract="Paper 1 content", submission_date="2025-08-30"),
             one_sentence_summary="Paper 1 content",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),
@@ -617,15 +617,24 @@ class TestIntegration:
             original_url="https://arxiv.org/abs/2506.12345"
         )
         
-        # Manually update timestamps for paper 1
+        # Manually update submission_date for paper 1 (older date)
         from summary_service.record_manager import load_summary_with_service_record
         record1 = load_summary_with_service_record("2506.12345", summary_dir)
         if record1:
-            record1.service_data.created_at = "2025-08-30T10:00:00.000000"
-            record1.service_data.first_created_at = "2025-08-30T10:00:00.000000"
+            # Update PaperInfo submission_date
+            paper_info1 = record1.summary_data.structured_content.paper_info
+            paper_info1.submission_date = "2025-08-30"
+            # Create new StructuredSummary with updated PaperInfo
+            updated_summary1 = StructuredSummary(
+                paper_info=paper_info1,
+                one_sentence_summary=record1.summary_data.structured_content.one_sentence_summary,
+                innovations=record1.summary_data.structured_content.innovations,
+                results=record1.summary_data.structured_content.results,
+                terminology=record1.summary_data.structured_content.terminology
+            )
             save_summary_with_service_record(
                 arxiv_id="2506.12345",
-                summary_content=record1.summary_data.structured_content,
+                summary_content=updated_summary1,
                 tags=record1.summary_data.tags,
                 summary_dir=summary_dir,
                 source_type="user",
@@ -635,7 +644,7 @@ class TestIntegration:
         
         # Paper 2: submitted second (newer)
         paper2_summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="Paper 2", title_en="Paper 2", abstract="Paper 2 content"),
+            paper_info=PaperInfo(title_zh="Paper 2", title_en="Paper 2", abstract="Paper 2 content", submission_date="2025-08-31"),
             one_sentence_summary="Paper 2 content",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),
@@ -651,21 +660,6 @@ class TestIntegration:
             user_id="testuser",
             original_url="https://arxiv.org/abs/2506.67890"
         )
-        
-        # Manually update timestamps for paper 2
-        record2 = load_summary_with_service_record("2506.67890", summary_dir)
-        if record2:
-            record2.service_data.created_at = "2025-08-31T15:00:00.000000"
-            record2.service_data.first_created_at = "2025-08-31T15:00:00.000000"
-            save_summary_with_service_record(
-                arxiv_id="2506.67890",
-                summary_content=record2.summary_data.structured_content,
-                tags=record2.summary_data.tags,
-                summary_dir=summary_dir,
-                source_type="user",
-                user_id="testuser",
-                original_url="https://arxiv.org/abs/2506.67890"
-            )
         
         # Create scanner and scan entries
         scanner = EntryScanner(summary_dir)

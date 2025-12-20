@@ -349,13 +349,15 @@ class TestConfigDataClasses:
             host="localhost",
             port=8080,
             debug=True,
-            admin_user_ids=["admin1", "admin2"]
+            admin_user_ids=["admin1", "admin2"],
+            rybbit_site_id="test-site-id"
         )
         
         assert config.host == "localhost"
         assert config.port == 8080
         assert config.debug is True
         assert config.admin_user_ids == ["admin1", "admin2"]
+        assert config.rybbit_site_id == "test-site-id"
     
     def test_paper_processing_config(self):
         """Test PaperProcessingConfig data class."""

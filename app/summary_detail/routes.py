@@ -57,6 +57,11 @@ def create_summary_detail_routes(
             is_favorited = arxiv_id in favorites_map
             is_read = arxiv_id in read_map
         
+        # Get admin users for header component
+        admin_users = []
+        if user_service:
+            admin_users = [admin_id.strip() for admin_id in user_service.admin_user_ids if admin_id.strip()]
+        
         return render_template_string(
             detail_template,
             content=rendered["html_content"],
@@ -76,6 +81,7 @@ def create_summary_detail_routes(
             is_abstract_only=is_abstract_only,
             created_at=record.service_data.created_at,
             updated_at=record.summary_data.updated_at,
+            admin_users=admin_users,  # Required for header component
             # Add URL variables for JavaScript
             mark_read_url=url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
             unmark_read_url=url_for("user_management.unmark_read", arxiv_id="__ID__").replace("__ID__", ""),

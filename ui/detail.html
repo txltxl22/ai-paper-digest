@@ -31,7 +31,7 @@
     <meta property="og:description" content="{% if abstract %}{{ abstract[:300] }}{% elif one_sentence_summary %}{{ one_sentence_summary[:300] }}{% else %}AI research paper summary and analysis{% endif %}">
     <meta property="og:image" content="https://arxiv.org/pdf/{{ arxiv_id }}.pdf">
     <meta property="og:site_name" content="AI Papers Reader">
-    <meta property="article:published_time" content="{{ service_data.get('created_at', '') if service_data else '' }}">
+    <meta property="article:published_time" content="{{ created_at if created_at else '' }}">
     {% if top_tags %}
     {% for tag in top_tags %}
     <meta property="article:tag" content="{{ tag }}">

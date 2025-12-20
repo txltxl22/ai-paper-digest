@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Pre-commit hook to run tests before allowing commit
+# This hook will abort the commit if tests fail
+#
+# To install: Run ./install-hooks.sh or manually:
+#   git config core.hooksPath hooks
+
+# Redirect output to stderr so it appears in the commit output
+exec 1>&2
+
+# Get the repository root directory
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT" || exit 1
+
+echo "Running tests before commit..."
+echo "================================"
+
+# Run the test script and capture exit status immediately
+./run_tests.sh
+TEST_EXIT_CODE=$?
+
+# Check the exit status
+if [ $TEST_EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "❌ Tests failed! Commit aborted."
+    echo "Fix the failing tests before committing."
+    echo "To bypass this hook (not recommended), use: git commit --no-verify"
+    exit 1
+fi
+
+echo ""
+echo "✅ All tests passed! Proceeding with commit..."
+exit 0
+

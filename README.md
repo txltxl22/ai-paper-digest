@@ -460,8 +460,43 @@ cd ai-paper-digest
 # 安装开发依赖
 uv sync
 
+# 安装Git钩子（推荐）
+# 这将配置pre-commit钩子，在每次提交前自动运行测试
+./install-hooks.sh
+
 # 运行测试
 python -m pytest tests/
+# 或使用便捷脚本
+./run_tests.sh
+```
+
+### Git钩子设置
+
+项目包含pre-commit钩子，用于在提交代码前自动运行测试，确保代码质量。
+
+**安装钩子：**
+```bash
+./install-hooks.sh
+```
+
+安装后，每次执行 `git commit` 时，会自动运行测试套件：
+- ✅ 如果所有测试通过，提交将正常进行
+- ❌ 如果测试失败，提交将被阻止
+
+**手动运行测试：**
+```bash
+./run_tests.sh
+```
+
+**跳过钩子（不推荐）：**
+如果确实需要跳过测试（例如紧急修复），可以使用：
+```bash
+git commit --no-verify -m "your message"
+```
+
+**卸载钩子：**
+```bash
+git config --unset core.hooksPath
 ```
 
 ## 📄 许可证

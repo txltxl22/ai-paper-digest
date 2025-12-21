@@ -13,10 +13,26 @@ exec 1>&2
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT" || exit 1
 
-echo "Running tests before commit..."
+echo "Running checks before commit..."
 echo "================================"
 
-# Run the test script and capture exit status immediately
+# 1. Font-size variable check
+echo "Checking font-size variable usage in staged files..."
+uv run python scripts/check_font_size.py --staged
+CHECK_EXIT_CODE=$?
+
+if [ $CHECK_EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "❌ Font-size check failed! Commit aborted."
+    echo "Please use CSS variables for all font-size declarations."
+    echo "To bypass this hook (not recommended), use: git commit --no-verify"
+    exit 1
+fi
+
+echo ""
+
+# 2. Run tests
+echo "Running tests..."
 ./run_tests.sh
 TEST_EXIT_CODE=$?
 

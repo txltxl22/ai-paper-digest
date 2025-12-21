@@ -38,7 +38,7 @@ git config core.hooksPath hooks
 
 echo "✅ Git hooks installed successfully!"
 echo ""
-echo "The pre-commit hook will now run tests before each commit."
+echo "The pre-commit hook will now run font-size checks on staged files and run tests before each commit."
 echo "To uninstall, run: git config --unset core.hooksPath"
 echo ""
 

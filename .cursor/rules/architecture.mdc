@@ -128,6 +128,7 @@ RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → summar
 8. **UI Components**: Use CSS variables for theming (`var(--card-bg)`, `var(--text)`, etc.) to support light/dark modes
 9. **Responsive Design**: Desktop-first with mobile breakpoints at 768px and 480px; use collapsible sections for mobile
 10. **New Subsystems**: Follow factory pattern (`factory.py`, `services.py`, `routes.py`) like `app/trending/`
+11. **Typography & Styling**: Don't use absolute values for styling (like font sizes in `px` or `rem`) in component CSS or inline styles. Instead, use the centralized typography system in `ui/base.css` (e.g., `var(--font-size-base)`) to ensure maintainability and consistent responsive scaling.
 
 ### Running
 - **Dev**: `uv run python run_app.py` (foreground)

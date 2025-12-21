@@ -418,7 +418,7 @@ class PaperSubmission {
             if (progress.details.includes('论文已存在')) {
               showToast('✅ 论文已存在，处理完成！', 5000);
             } else {
-              showToast('✅ 论文处理成功！可在顶部查看深度阅读状态', 5000);
+              showToast('✅ 论文处理成功！可在顶部查看 AI 研读状态', 5000);
             }
             
             // Show guide notification pointing to deep read status bar
@@ -522,7 +522,7 @@ class PaperSubmission {
         <div class="guide-icon">👆</div>
         <div class="guide-text">
           <div class="guide-title">论文提交成功！</div>
-          <div class="guide-subtitle">可在页面顶部查看深度阅读处理状态</div>
+          <div class="guide-subtitle">可在页面顶部查看 AI 全文研读处理状态</div>
         </div>
         <button class="guide-close" onclick="this.parentElement.parentElement.classList.remove('show'); setTimeout(() => this.parentElement.parentElement.remove(), 300);">✕</button>
       </div>

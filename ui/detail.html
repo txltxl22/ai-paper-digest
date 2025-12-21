@@ -51,6 +51,7 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="AI Papers">
@@ -138,14 +139,11 @@
     {% include 'components/header.html' %}
     <main data-id="{{ arxiv_id }}">
         <div class="summary-header">
-          <div class="source-info">
-            {% if source_type == "user" %}
-              <span class="user-chip" title="用户上传">👤 {{ user_id or "用户" }}</span>
-              {% if original_url %}
-                <span class="muted">来源: <a href="{{ original_url }}" target="_blank" class="source-link">{{ original_url }}</a></span>
-              {% endif %}
-            {% else %}
-              <span class="user-chip" title="系统自动处理">🤖 系统</span>
+          <div class="submission-info" style="margin-bottom: 1rem;">
+            {% if submission_date %}
+              <div class="update-time" style="font-size: var(--font-size-sm); color: var(--muted-text); font-weight: 500;">
+                arXiv 提交日期: {{ submission_date }}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -196,29 +194,34 @@
         </form>
         {% endif %}
         
-        <!-- Deep Read Control Section -->
+        <!-- AI Study Control Section -->
         <div class="deep-read-control" style="text-align:center; padding: var(--spacing-2xl) 0; display: none;" id="deep-read-control-container">
             <div class="deep-read-card" style="background: var(--card-bg); border: 1px solid var(--btn-border); border-radius: var(--radius-md); padding: var(--spacing-xl); max-width: 600px; margin: 0 auto;">
-                <h3 style="margin-top: 0;">🤖 AI 深度阅读</h3>
+                <h3 style="margin-top: 0;">
+                  <svg class="ai-sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 1.5em; height: 1.5em;">
+                    <path d="M12 3L14.5 9L21 11.5L14.5 14L12 21L9.5 14L3 11.5L9.5 9L12 3Z" fill="currentColor"/>
+                    <path d="M18 3L19.14 5.86L22 7L19.14 8.14L18 11L16.86 8.14L14 7L16.86 5.86L18 3Z" fill="currentColor" opacity="0.7"/>
+                  </svg> AI 帮我研读全文
+                </h3>
                 
                 <!-- Case 1: Generate (Abstract Only) -->
                 <div id="deep-read-generate-ui" style="display: none;">
-                    <p style="color: var(--muted-text);">当前仅显示摘要总结。如需获取详细的论文深度解读（包含创新点、实验结果、术语解释等），请点击下方按钮。</p>
+                    <p style="color: var(--muted-text);">当前仅显示摘要。如需 AI 帮您阅读整篇论文并总结核心创新点、实验结果和技术细节，请点击下方按钮。</p>
                     
                     {% if current_user_id %}
-                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: 1.1rem; padding: var(--spacing-lg) var(--spacing-xl); margin-top: var(--spacing-lg);">
-                        <span>📚</span> 生成深度解读
+                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: var(--font-size-md); padding: var(--spacing-lg) var(--spacing-xl); margin-top: var(--spacing-lg);">
+                        <span>📚</span> 触发 AI 全文精读
                     </button>
                     <div id="deep-read-loading" style="display: none; margin-top: var(--spacing-lg);">
                         <div class="loading-spinner" style="display: inline-block; margin-right: var(--spacing-sm);"></div>
-                        <span>AI正在深入阅读并生成详细报告，请稍候... (约30-60秒)</span>
+                        <span>AI正在研读全文并提炼核心要点，请稍候... (约30-60秒)</span>
                     </div>
                     <div id="deep-read-error" style="display: none; margin-top: var(--spacing-lg); color: var(--danger);"></div>
                     {% else %}
                     <div style="margin-top: var(--spacing-lg);">
                         <a href="/#login" class="login-cta-btn" style="display: inline-block; text-decoration: none;">
                             <span class="cta-icon">🔑</span>
-                            <span class="cta-text">登录以启用深度阅读</span>
+                            <span class="cta-text">登录以启用 AI 全文精读</span>
                         </a>
                     </div>
                     {% endif %}
@@ -232,10 +235,10 @@
         </article>
         
         <!-- Action Buttons Section -->
-        <div class="card-actions" style="margin: 2rem 0 1.5rem 0; padding: 1.5rem 0; border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider);">
-            <div class="primary-actions" style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;">
+        <div class="card-actions detail-actions">
+            <div class="primary-actions">
                 {% if is_read %}
-                    <a class='remove-read-link action-btn secondary-btn'>从没兴趣列表移除</a>
+                    <a class='remove-read-link action-btn secondary-btn'>移除没兴趣</a>
                 {% else %}
                     {% if uid %}
                         <a class='mark-read-link action-btn secondary-btn'>👋 没兴趣</a>
@@ -256,10 +259,20 @@
                     <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
                 {% endif %}
             </div>
+            <div class="secondary-actions">
+                <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf' class='action-btn secondary-btn pdf-btn'>
+                    <svg class="pdf-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 18H17V16H7V18Z" fill="currentColor" />
+                        <path d="M17 14H7V12H17V14Z" fill="currentColor" />
+                        <path d="M7 10H11V8H7V10Z" fill="currentColor" />
+                        <path d="M6 2C4.34315 2 3 3.34315 3 5V19C3 20.6569 4.34315 22 6 22H18C19.6569 22 21 20.6569 21 19V9L14 2H6ZM6 4H13V9H19V19C19 19.5523 18.5523 20 18 20H6C5.44772 20 5 19.5523 5 19V5C5 4.44772 5.44772 4 6 4Z" fill="currentColor" />
+                    </svg> 打开原文 PDF
+                </a>
+            </div>
         </div>
         
-        <p style='text-align:center;margin-top:var(--spacing-2xl);'>
-            <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf'>📄 打开原文 PDF</a>
+        <p style='text-align:center;margin-top:var(--spacing-2xl); color: var(--muted-text); font-size: var(--font-size-sm);'>
+            源自 arXiv: {{ arxiv_id }}
         </p>
     </main>
     
@@ -415,7 +428,7 @@
             if (response.ok && data.success) {
               if (data.processing || data.already_processing) {
                 // Processing started, show status bar and keep loading
-                showToast('深度阅读生成已开始，请稍候');
+                showToast('AI 全文研读已开始，请稍候');
                 if (window.deepReadStatusBar) {
                   // Register this job so we can detect when it completes
                   window.deepReadStatusBar.registerProcessingJob('{{ arxiv_id }}');
@@ -432,7 +445,7 @@
               }
             } else if (response.ok) {
               // Response OK but success not explicitly true - still treat as processing started
-              showToast('深度阅读生成已开始，请稍候');
+              showToast('AI 全文研读已开始，请稍候');
               if (window.deepReadStatusBar) {
                 window.deepReadStatusBar.registerProcessingJob('{{ arxiv_id }}');
                 window.deepReadStatusBar.updateStatus().then(() => {

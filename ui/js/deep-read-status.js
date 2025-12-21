@@ -193,7 +193,7 @@ class DeepReadStatusBar {
 
     // Use provided title or fallback to arxivId
     const displayTitle = title || arxivId;
-    const subtitleText = title ? `论文《${displayTitle}》的详细解读已生成` : `论文 ${arxivId} 的详细解读已生成`;
+    const subtitleText = title ? `论文《${displayTitle}》的 AI 全文精读已完成` : `论文 ${arxivId} 的 AI 全文精读已完成`;
 
     // Create the notification element
     const notification = document.createElement('div');
@@ -205,7 +205,7 @@ class DeepReadStatusBar {
         <div class="notification-content">
           <div class="notification-icon">🎉</div>
           <div class="notification-text">
-            <div class="notification-title">深度阅读完成！</div>
+            <div class="notification-title">AI 全文研读完成！</div>
             <div class="notification-subtitle">${subtitleText}</div>
             <div class="notification-action">页面将自动刷新...</div>
           </div>
@@ -217,7 +217,7 @@ class DeepReadStatusBar {
         <div class="notification-content">
           <div class="notification-icon">🎉</div>
           <div class="notification-text">
-            <div class="notification-title">深度阅读完成！</div>
+            <div class="notification-title">AI 全文研读完成！</div>
             <div class="notification-subtitle">${subtitleText}</div>
           </div>
           <a href="/summary/${arxivId}" class="notification-btn">

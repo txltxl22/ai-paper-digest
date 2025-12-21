@@ -194,13 +194,8 @@ class EntryRenderer:
                         from summary_service.record_manager import load_summary_with_service_record
                         record = load_summary_with_service_record(meta['id'], self.summary_dir)
                         if record:
-                            # Use markdown_content from SummaryData
+                            # markdown_content is guaranteed to be populated by load_summary_with_service_record
                             md_text = record.summary_data.markdown_content
-                            
-                            # If markdown content is empty, generate from structured content
-                            if not md_text:
-                                structured_summary = record.summary_data.structured_content
-                                md_text = structured_summary.to_markdown()
                         else:
                             md_text = None
                     except Exception as e:
@@ -231,6 +226,11 @@ class EntryRenderer:
                     md_text = md_text.split("## Innovations", 1)[0]
                 elif "### Innovations" in md_text:
                     md_text = md_text.split("### Innovations", 1)[0]
+                
+                # Strip trailing whitespace and potential markdown horizontal rules
+                md_text = md_text.strip()
+                while md_text.endswith("---") or md_text.endswith("***") or md_text.endswith("___"):
+                    md_text = md_text[:-3].strip()
                 
                 preview_html = self.render_markdown(md_text)
             except Exception:

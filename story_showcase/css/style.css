@@ -13,6 +13,36 @@
     --heat-2: #3b82f6;
     --heat-3: #60a5fa;
     --heat-4: #93c5fd;
+
+    /* Typography System */
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-md: 1.125rem;
+    --font-size-lg: 1.5rem;
+    --font-size-xl: 2.25rem;
+    --font-size-2xl: 3.5rem;
+    --font-size-hero: 4rem;
+}
+
+@media (max-width: 768px) {
+    :root {
+        --font-size-xs: 0.7rem;
+        --font-size-sm: 0.8rem;
+        --font-size-base: 0.9375rem;
+        --font-size-md: 1.05rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.8rem;
+        --font-size-2xl: 2.2rem;
+        --font-size-hero: 3rem;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 1.8rem;
+    }
 }
 
 * {
@@ -51,7 +81,7 @@ header {
 }
 
 h1 {
-    font-size: 3.5rem;
+    font-size: var(--font-size-2xl);
     font-weight: 800;
     margin-bottom: 1rem;
     background: linear-gradient(to right, #60a5fa, #a78bfa);
@@ -62,7 +92,7 @@ h1 {
 }
 
 .subtitle {
-    font-size: 1.25rem;
+    font-size: var(--font-size-md);
     color: var(--text-secondary);
     max-width: 600px;
     opacity: 0;
@@ -177,7 +207,7 @@ h1 {
 }
 
 .stat-value {
-    font-size: 3rem;
+    font-size: var(--font-size-xl);
     font-weight: 800;
     color: var(--text-primary);
     margin-bottom: 0.25rem;
@@ -189,7 +219,7 @@ h1 {
 
 .stat-label {
     color: var(--accent);
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1rem;
@@ -220,7 +250,7 @@ h1 {
 
 .chart-box h3 {
     margin-bottom: 2rem;
-    font-size: 0.9rem;
+    font-size: var(--font-size-sm);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1rem;
@@ -263,7 +293,7 @@ h1 {
 }
 
 .month-label {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     color: var(--text-secondary);
     white-space: nowrap;
 }
@@ -318,7 +348,7 @@ h1 {
 }
 
 .time-label {
-    font-size: 0.8rem;
+    font-size: var(--font-size-sm);
     margin-bottom: 0.25rem;
     color: var(--text-secondary);
 }
@@ -342,7 +372,7 @@ h1 {
     right: 10px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     font-weight: bold;
     color: white;
     text-shadow: 0 0 2px rgba(0,0,0,0.5);
@@ -427,14 +457,14 @@ h1 {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: var(--font-size-xl);
     z-index: 10;
     box-shadow: 0 0 0 8px var(--bg-color);
 }
 
 /* Typography & Tags */
 .date {
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm);
     color: var(--accent);
     font-weight: 700;
     text-transform: uppercase;
@@ -444,7 +474,7 @@ h1 {
 }
 
 .chapter-title {
-    font-size: 1.5rem;
+    font-size: var(--font-size-lg);
     margin-bottom: 1rem;
     font-weight: 700;
 }
@@ -457,7 +487,7 @@ h1 {
 }
 
 .tag {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     padding: 0.25rem 0.75rem;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 1rem;
@@ -476,13 +506,11 @@ footer {
 /* Mobile Responsive */
 @media (max-width: 768px) {
     h1 { 
-        font-size: 2.2rem;
         padding: 0 1rem;
         word-wrap: break-word;
     }
     
     .subtitle {
-        font-size: 1.1rem;
         padding: 0 1.5rem;
         word-wrap: break-word;
     }
@@ -497,7 +525,6 @@ footer {
     }
 
     .section-title {
-        font-size: 0.8rem;
         margin-bottom: 2rem;
     }
 
@@ -508,10 +535,6 @@ footer {
 
     .stat-card {
         padding: 2rem 1rem;
-    }
-
-    .stat-value {
-        font-size: 2.5rem;
     }
 
     .timeline-container {
@@ -542,7 +565,6 @@ footer {
         left: 20px;
         width: 2.2rem;
         height: 2.2rem;
-        font-size: 1.1rem;
     }
 
     /* Stats Mobile */
@@ -559,7 +581,6 @@ footer {
 
     .lang-btn {
         padding: 0.4rem 0.8rem;
-        font-size: 0.8rem;
     }
     
     header {
@@ -591,14 +612,9 @@ footer {
         height: 1.2rem;
     }
 
-    .month-label {
-        font-size: 0.7rem;
-    }
-
     .heatmap-legend {
         flex-wrap: wrap;
         justify-content: center;
-        font-size: 0.7rem;
         gap: 6px;
     }
 
@@ -607,13 +623,11 @@ footer {
     }
 
     .chart-box h3 {
-        font-size: 1rem;
         margin-bottom: 1rem;
     }
 
     footer {
         padding: 2rem 1rem;
-        font-size: 0.875rem;
     }
 
     .time-track {
@@ -621,7 +635,6 @@ footer {
     }
 
     .time-val {
-        font-size: 0.7rem;
         right: 8px;
     }
 
@@ -629,25 +642,19 @@ footer {
         content: '← 滑动查看更多 → / Swipe to see more';
         display: block;
         text-align: center;
-        font-size: 0.7rem;
+        font-size: var(--font-size-xs);
         color: var(--text-secondary);
         margin-top: 10px;
         opacity: 0.6;
         padding: 0 1rem;
     }
 
-    .timeline-content p {
-        font-size: 0.9rem;
-        line-height: 1.6;
-    }
-
     .chapter-title {
-        font-size: 1.3rem;
+        /* font-size handled by root variable */
     }
 }
 
 @media (max-width: 480px) {
-    h1 { font-size: 1.8rem; }
     .metrics-grid {
         grid-template-columns: 1fr;
     }
@@ -672,22 +679,22 @@ footer {
     align-items: center;
     gap: 0.5rem;
     background-color: var(--card-bg);
-    color: var(--text);
+    color: var(--text-primary);
     padding: 0.6rem 1.2rem;
     border-radius: 2rem;
     text-decoration: none;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: var(--font-size-sm);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .github-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    background-color: var(--text);
-    color: var(--bg);
+    background-color: var(--text-primary);
+    color: var(--bg-color);
 }
 
 [data-theme="dark"] .github-btn {
@@ -704,7 +711,7 @@ footer {
     border-radius: 2rem;
     text-decoration: none;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: var(--font-size-sm);
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     transition: all 0.3s ease;
     border: 1px solid rgba(59, 130, 246, 0.3);
@@ -717,6 +724,6 @@ footer {
 }
 
 .btn-icon {
-    font-size: 1.1rem;
+    font-size: var(--font-size-base);
     line-height: 1;
 }

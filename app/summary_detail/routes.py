@@ -96,6 +96,7 @@ def create_summary_detail_routes(
             is_abstract_only=is_abstract_only,
             created_at=record.service_data.created_at,
             updated_at=record.summary_data.updated_at,
+            submission_date=structured_summary.paper_info.submission_date if structured_summary else None,
             admin_users=admin_users,  # Required for header component
             # Add URL variables for JavaScript
             mark_read_url=url_for("user_management.mark_read", arxiv_id="__ID__").replace("__ID__", ""),
@@ -133,7 +134,7 @@ def create_summary_detail_routes(
                 effective_uid = quota_result.pseudo_uid
         elif not uid:
             # Fallback: require login if no quota_manager
-            return jsonify({"error": "Login required", "message": "请先登录以使用深度阅读功能"}), 401
+            return jsonify({"error": "Login required", "message": "请先登录以使用 AI 全文研读功能"}), 401
         
         # Record deep read action as user interest signal (only for logged-in users)
         if user_service and uid and not uid.startswith("ip:"):
@@ -149,7 +150,7 @@ def create_summary_detail_routes(
             if processing_tracker.is_processing(arxiv_id, effective_uid):
                 return jsonify({
                     "success": True,
-                    "message": "深度阅读正在生成中，请稍候",
+                    "message": "AI 全文研读正在生成中，请稍候",
                     "already_processing": True
                 })
             
@@ -173,7 +174,7 @@ def create_summary_detail_routes(
                 logger.info(f"Processing already started for {arxiv_id} by user {effective_uid}")
                 return jsonify({
                     "success": True,
-                    "message": "深度阅读正在生成中，请稍候",
+                    "message": "AI 全文研读正在生成中，请稍候",
                     "already_processing": True
                 })
             
@@ -246,7 +247,7 @@ def create_summary_detail_routes(
             
             return jsonify({
                 "success": True,
-                "message": "深度阅读生成已开始，请稍候",
+                "message": "AI 全文研读已开始，请稍候",
                 "processing": True
             })
                 
@@ -259,7 +260,7 @@ def create_summary_detail_routes(
                 pass
             return jsonify({
                 "error": "Internal server error",
-                "message": f"深度阅读生成出错: {str(e)}"
+                "message": f"AI 全文研读生成出错: {str(e)}"
             }), 500
     
     def _extract_paper_title(arxiv_id: str) -> str:

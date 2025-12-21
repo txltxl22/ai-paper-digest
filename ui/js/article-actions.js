@@ -67,6 +67,38 @@ class ArticleActions {
     return false;
   }
 
+  // Restore scroll position to the last viewed article
+  restoreLastViewedPosition() {
+    const scrollToId = sessionStorage.getItem('scroll_to_arxiv_id');
+    if (scrollToId) {
+      // Clear it so it doesn't happen again on refresh
+      sessionStorage.removeItem('scroll_to_arxiv_id');
+      
+      // Wait for DOM to be fully ready and articles rendered
+      setTimeout(() => {
+        const targetArticle = document.querySelector(`article[data-id="${scrollToId}"]`);
+        if (targetArticle) {
+          const rect = targetArticle.getBoundingClientRect();
+          const headerOffset = this.getHeaderHeight() + 20; // Extra padding
+          const scrollTop = window.pageYOffset + rect.top - headerOffset;
+          
+          window.scrollTo({
+            top: Math.max(0, scrollTop),
+            behavior: 'instant' // Instant is better for "back" navigation
+          });
+          
+          // Briefly highlight the card to show user where they are
+          targetArticle.style.transition = 'background-color 0.5s ease';
+          const originalBg = targetArticle.style.backgroundColor;
+          targetArticle.style.backgroundColor = 'var(--primary-light)';
+          setTimeout(() => {
+            targetArticle.style.backgroundColor = originalBg;
+          }, 1000);
+        }
+      }, 100);
+    }
+  }
+
   // Reload page with scroll_to_first parameter, preserving other URL params
   reloadWithScrollToFirst() {
     const url = new URL(window.location.href);
@@ -197,6 +229,8 @@ class ArticleActions {
       if (!isAbstractOnly) {
         const id = art.getAttribute('data-id') || deepReadElement.getAttribute('data-id');
         if (id) {
+          // Save ID for scroll restoration
+          sessionStorage.setItem('scroll_to_arxiv_id', id);
           window.location.href = `/summary/${id}`;
         }
         return;
@@ -205,6 +239,16 @@ class ArticleActions {
       // If abstract-only, trigger generation (backend will check login)
       this.triggerDeepReadFromIndex(deepReadElement);
       return;
+    }
+
+    // Handle detail page link clicks for scroll restoration
+    let arxivIdLink = ev.target.closest('.arxiv-id-link');
+    if (arxivIdLink) {
+      const art = arxivIdLink.closest('article');
+      const id = art ? art.getAttribute('data-id') : arxivIdLink.getAttribute('data-arxiv-id');
+      if (id) {
+        sessionStorage.setItem('scroll_to_arxiv_id', id);
+      }
     }
   }
 
@@ -241,7 +285,7 @@ class ArticleActions {
           button.textContent = '生成中...';
           button.style.opacity = '0.7';
           button.disabled = true;
-          showToast('深度阅读正在生成中，请稍候');
+          showToast('AI 全文研读正在生成中，请稍候');
           // Trigger status bar update
           if (window.deepReadStatusBar) {
             window.deepReadStatusBar.updateStatus();
@@ -279,7 +323,7 @@ class ArticleActions {
         button.textContent = originalText;
         button.style.opacity = '';
         button.disabled = false;
-          this.guideToLogin('使用深度阅读');
+          this.guideToLogin('使用 AI 全文研读');
         } else if (r.ok && data.success) {
         // Keep button in "生成中" state
         button.textContent = '生成中...';
@@ -287,9 +331,9 @@ class ArticleActions {
         button.disabled = true;
         
         if (data.already_processing) {
-          showToast('深度阅读正在生成中，请稍候');
+          showToast('AI 全文研读正在生成中，请稍候');
         } else {
-          showToast('深度阅读生成已开始，请稍候');
+          showToast('AI 全文研读已开始，请稍候');
         }
         
         // Trigger status bar update and start polling
@@ -307,14 +351,14 @@ class ArticleActions {
         button.textContent = originalText;
         button.style.opacity = '';
         button.disabled = false;
-        showToast(data.message || '深度阅读生成失败，请稍后重试');
+        showToast(data.message || 'AI 全文研读生成失败，请稍后重试');
       }
     } catch (error) {
       // Restore button state on error
       button.textContent = originalText;
       button.style.opacity = '';
       button.disabled = false;
-        showToast('网络错误，无法触发深度阅读');
+        showToast('网络错误，无法触发 AI 全文研读');
     }
   }
 
@@ -784,6 +828,9 @@ class ArticleActions {
       document.removeEventListener('click', instance.boundHandleClick);
     }
     instance = new ArticleActions();
+    
+    // Check for scroll restoration
+    instance.restoreLastViewedPosition();
   }
   
   // Initialize now

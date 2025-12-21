@@ -53,14 +53,11 @@ class SummaryRenderer:
         # Extract data from Pydantic models
         structured_summary = record.summary_data.structured_content
         tags_obj = record.summary_data.tags
+        # markdown_content is guaranteed to be populated by load_summary_with_service_record
         content = record.summary_data.markdown_content
         
-        # If content is empty, generate from structured content
-        if not content:
-            content = structured_summary.to_markdown()
-        
         # If content is still empty, show a message
-        if not content:
+        if not content or not content.strip():
             arxiv_id = record.service_data.arxiv_id
             content = f"**{arxiv_id}**\n\n⚠️ 内容暂时不可用\n\n该论文的摘要内容当前不可用。"
         

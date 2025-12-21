@@ -260,6 +260,14 @@ app.register_blueprint(search_module["blueprint"])
 # Register trending blueprint
 app.register_blueprint(trending_module["blueprint"])
 
+# Initialize story showcase module
+from app.story_showcase.factory import create_story_showcase_module
+
+story_showcase_module = create_story_showcase_module()
+
+# Register story showcase blueprint
+app.register_blueprint(story_showcase_module["blueprint"])
+
 # -----------------------------------------------------------------------------
 # Templates (plain strings — no Python f-strings)                               
 # -----------------------------------------------------------------------------

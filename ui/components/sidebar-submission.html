@@ -156,6 +156,14 @@
     expandBtn.addEventListener('click', function() {
       sidebar.classList.remove('collapsed');
       expandBtn.style.display = 'none';
+      
+      // If there's an ongoing submission, make sure status is visible
+      if (window.paperSubmissionHandler && window.paperSubmissionHandler.currentTaskId) {
+        const sidebarStatus = document.getElementById('sidebar-status');
+        if (sidebarStatus) {
+          sidebarStatus.style.display = 'block';
+        }
+      }
     });
   }
   
@@ -168,6 +176,14 @@
     fab.addEventListener('click', function() {
       overlay.classList.add('active');
       document.body.style.overflow = 'hidden';
+      
+      // If there's an ongoing submission, make sure status is visible
+      if (window.paperSubmissionHandler && window.paperSubmissionHandler.currentTaskId) {
+        const mobileStatus = document.getElementById('mobile-status');
+        if (mobileStatus) {
+          mobileStatus.style.display = 'block';
+        }
+      }
     });
     
     if (closeBtn) {
@@ -205,7 +221,8 @@
           stepEl: stepEl
         });
       } else {
-        // Fallback: direct API call
+        // Fallback: direct API call (should not happen if paper-submission.js is loaded)
+        // This is just a safety fallback
         try {
           if (statusEl) statusEl.style.display = 'block';
           const response = await fetch('/submit_paper', {
@@ -215,16 +232,25 @@
           });
           const data = await response.json();
           if (data.error) {
-            alert('提交失败: ' + data.error);
+            if (window.showToast) {
+              showToast('❌ 提交失败: ' + data.error);
+            } else {
+              console.error('提交失败:', data.error);
+            }
           } else {
-            alert('提交成功！');
+            if (window.showToast) {
+              showToast('✅ 提交成功！正在处理中...');
+            }
             urlInput.value = '';
           }
         } catch (err) {
-          alert('提交失败: ' + err.message);
-        } finally {
-          if (statusEl) statusEl.style.display = 'none';
+          if (window.showToast) {
+            showToast('❌ 提交失败: ' + err.message);
+          } else {
+            console.error('提交失败:', err.message);
+          }
         }
+        // Don't hide status - let the main handler manage it
       }
     });
   }

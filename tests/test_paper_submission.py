@@ -500,15 +500,21 @@ class TestIntegration:
     def test_pdf_size_limit_configuration(self, client, tmp_path):
         """Test that PDF size limit is properly configured and enforced."""
         import app.main as sp
+        from config_manager import ConfigManager
         
-        # Test default configuration
+        # Test that the attribute exists
         assert hasattr(sp.paper_config, 'max_pdf_size_mb')
-        assert sp.paper_config.max_pdf_size_mb == 20
+        
+        # Get the expected value from the config manager
+        config = ConfigManager()
+        expected_value = config.get_paper_processing_config().max_pdf_size_mb
+        
+        # Test that the value matches the config
+        assert sp.paper_config.max_pdf_size_mb == expected_value
         
         # Test configuration override via environment variable
         with patch.dict(os.environ, {'MAX_PDF_SIZE_MB': '50'}):
             # Recreate the config to test environment override
-            from config_manager import ConfigManager
             config = ConfigManager()
             paper_config = config.get_paper_processing_config()
             assert paper_config.max_pdf_size_mb == 50

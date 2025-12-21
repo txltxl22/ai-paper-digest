@@ -3,6 +3,8 @@ class PaperSubmission {
   constructor() {
     this.progressInterval = null;
     this.lastSubmissionResult = null;
+    this.currentTaskId = null; // Track current task being processed
+    this.currentSubmissionState = null; // Store current submission state
     this.init();
   }
 
@@ -117,6 +119,17 @@ class PaperSubmission {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
+      // If there's already a task in progress, don't submit again
+      if (this.currentTaskId && this.progressInterval) {
+        showToast('⚠️ 已有论文正在处理中，请等待完成');
+        // Show the existing progress instead
+        if (elements.statusEl) {
+          elements.statusEl.style.display = 'block';
+          elements.statusEl.classList.add('active');
+        }
+        return;
+      }
+      
       const paperUrl = elements.urlInput.value.trim();
       
       if (!paperUrl) {
@@ -131,6 +144,17 @@ class PaperSubmission {
       const progressText = elements.progressText?.();
       const currentStep = elements.currentStep?.();
       const fileSizeInfo = elements.fileSizeInfo?.();
+      
+      // Store current submission state for reopening sidebar
+      this.currentSubmissionState = {
+        elements: elements,
+        statusIcon: statusIcon,
+        statusText: statusText,
+        progressFill: progressFill,
+        progressText: progressText,
+        currentStep: currentStep,
+        fileSizeInfo: fileSizeInfo
+      };
       
       // Show submission status with initial state
       if (elements.statusEl) {
@@ -180,8 +204,18 @@ class PaperSubmission {
           // Success - start progress tracking immediately
           showToast('✅ 论文提交成功！正在处理中...');
           
+          // Store task ID
+          this.currentTaskId = result.task_id;
+          
           // Clear input
           elements.urlInput.value = '';
+          
+          // Keep mobile modal open during processing
+          const mobileOverlay = document.getElementById('mobile-submission-overlay');
+          if (mobileOverlay && mobileOverlay.classList.contains('active')) {
+            // Don't close the modal - let user see progress
+            // The modal will close when they manually close it or when redirect happens
+          }
           
           // Start progress tracking
           this.startProgressTracking(
@@ -198,11 +232,16 @@ class PaperSubmission {
           
         } else {
           // Error - quota exceeded or validation error
+          this.currentTaskId = null;
+          this.currentSubmissionState = null;
           this.handleSubmissionError(result, statusIcon, statusText, progressFill, progressText, currentStep, elements.submitBtn, elements.statusEl);
         }
         
       } catch (error) {
         console.error('Paper submission error:', error);
+        
+        this.currentTaskId = null;
+        this.currentSubmissionState = null;
         
         if (statusIcon) statusIcon.textContent = '❌';
         if (statusText) statusText.textContent = '网络错误，请重试';
@@ -375,17 +414,20 @@ class PaperSubmission {
             this.stopProgressTracking();
             this.resetSubmitButton(submitBtn);
             
-            // Show completion toast
+            // Show completion toast with guide to deep read status
             if (progress.details.includes('论文已存在')) {
-              showToast('✅ 论文已存在，处理完成！');
+              showToast('✅ 论文已存在，处理完成！', 5000);
             } else {
-              showToast('✅ 论文处理成功！');
+              showToast('✅ 论文处理成功！可在顶部查看深度阅读状态', 5000);
             }
+            
+            // Show guide notification pointing to deep read status bar
+            this.showDeepReadStatusGuide();
             
             // Get summary URL from result if available
             const summaryUrl = progress.result?.summary_url;
             
-            // Redirect to paper detail page after delay
+            // Redirect to paper detail page after delay (longer delay to let user see the guide)
             setTimeout(() => {
               if (summaryUrl) {
                 window.location.href = summaryUrl;
@@ -395,7 +437,7 @@ class PaperSubmission {
                 url.searchParams.set('_t', Date.now());
                 window.location.href = url.toString();
               }
-            }, 1500);
+            }, 3000);
             
           } else if (progress.step === 'error') {
             // Error occurred
@@ -416,16 +458,11 @@ class PaperSubmission {
             this.resetSubmitButton(submitBtn);
             
             // Show error toast with details
-            showToast(`❌ ${progress.details}`);
+            showToast(`❌ ${progress.details}`, 5000);
             
-            // Hide status after delay
-            setTimeout(() => {
-              if (statusEl) {
-                statusEl.style.display = 'none';
-                statusEl.classList.remove('active');
-              }
-              if (progressFill) progressFill.classList.remove('error');
-            }, 10000);
+            // Keep status visible longer so user can see the error
+            // Don't auto-hide - let user manually dismiss or see it
+            // Status will be hidden when user submits again or closes modal
             
           } else {
             // Update status text based on current step
@@ -458,11 +495,85 @@ class PaperSubmission {
       clearInterval(this.progressInterval);
       this.progressInterval = null;
     }
+    // Clear task tracking when completed or errored
+    this.currentTaskId = null;
+    this.currentSubmissionState = null;
+  }
+
+  showDeepReadStatusGuide() {
+    // Check if deep read status bar exists
+    const deepReadStatusBar = document.getElementById('deep-read-status-bar');
+    if (!deepReadStatusBar) {
+      return; // No deep read status bar, skip guide
+    }
+
+    // Create a modern guide notification
+    let guideNotification = document.getElementById('deep-read-guide-notification');
+    if (!guideNotification) {
+      guideNotification = document.createElement('div');
+      guideNotification.id = 'deep-read-guide-notification';
+      guideNotification.className = 'deep-read-guide-notification';
+      document.body.appendChild(guideNotification);
+    }
+
+    // Set content
+    guideNotification.innerHTML = `
+      <div class="guide-content">
+        <div class="guide-icon">👆</div>
+        <div class="guide-text">
+          <div class="guide-title">论文提交成功！</div>
+          <div class="guide-subtitle">可在页面顶部查看深度阅读处理状态</div>
+        </div>
+        <button class="guide-close" onclick="this.parentElement.parentElement.classList.remove('show'); setTimeout(() => this.parentElement.parentElement.remove(), 300);">✕</button>
+      </div>
+      <div class="guide-arrow"></div>
+    `;
+
+    // Position arrow to point at deep read status bar
+    const updateArrowPosition = () => {
+      const arrow = guideNotification.querySelector('.guide-arrow');
+      if (arrow && deepReadStatusBar) {
+        const barRect = deepReadStatusBar.getBoundingClientRect();
+        const guideRect = guideNotification.getBoundingClientRect();
+        const arrowLeft = barRect.left + (barRect.width / 2) - guideRect.left;
+        arrow.style.left = `${Math.max(20, Math.min(arrowLeft, guideRect.width - 20))}px`;
+      }
+    };
+
+    // Show notification with animation
+    setTimeout(() => {
+      guideNotification.classList.add('show');
+      updateArrowPosition();
+      window.addEventListener('scroll', updateArrowPosition);
+      window.addEventListener('resize', updateArrowPosition);
+    }, 100);
+
+    // Auto-hide after 10 seconds (longer to give user time to read)
+    setTimeout(() => {
+      guideNotification.classList.remove('show');
+      window.removeEventListener('scroll', updateArrowPosition);
+      window.removeEventListener('resize', updateArrowPosition);
+      setTimeout(() => {
+        if (guideNotification.parentElement) {
+          guideNotification.remove();
+        }
+      }, 300);
+    }, 10000);
+
+    // Ensure deep read status bar is visible
+    if (deepReadStatusBar && window.deepReadStatusBar) {
+      // Trigger status bar update
+      if (window.deepReadStatusBar.updateStatus) {
+        window.deepReadStatusBar.updateStatus();
+      }
+    }
   }
 }
 
 // Initialize paper submission
-new PaperSubmission();
+const paperSubmissionHandler = new PaperSubmission();
+// Make it globally accessible for sidebar reopening
+window.paperSubmissionHandler = paperSubmissionHandler;
 
 // Global function for toggling paper submission panel
 function togglePaperSubmission() {
@@ -484,5 +595,14 @@ function togglePaperSubmission() {
     content.classList.add('expanded');
     toggleIcon.classList.add('expanded');
     toggleBtn.setAttribute('aria-label', '收起提交表单');
+    
+    // If there's an ongoing submission, make sure status is visible
+    if (window.paperSubmissionHandler && window.paperSubmissionHandler.currentTaskId) {
+      const submissionStatus = document.getElementById('submission-status');
+      if (submissionStatus) {
+        submissionStatus.style.display = 'block';
+        submissionStatus.classList.add('active');
+      }
+    }
   }
 }

@@ -1,196 +1,342 @@
-# UI Refactoring Documentation
+# UI Frontend Documentation
 
-## Overview
-
-The UI has been refactored to improve maintainability by separating concerns into modular components, CSS files, and JavaScript modules.
+Clean, modular frontend architecture with reusable components, organized CSS, and maintainable JavaScript.
 
 ## Directory Structure
 
 ```
 ui/
-├── components/           # Reusable HTML components
-│   ├── header.html      # Site header with navigation
-│   ├── paper-submission.html  # Paper URL submission form (main content)
-│   ├── sidebar-submission.html  # Sidebar submission (desktop) + FAB (mobile)
-│   ├── tag-filter.html  # Collapsible search & tag filtering interface
-│   ├── trending-section.html  # Trending tags with period tabs (7d/30d)
-│   ├── article-card.html # Individual paper article card
-│   ├── pagination.html  # Pagination controls
-│   └── admin-modal.html # Admin fetch progress modal
-├── css/                 # Modular CSS files
-│   ├── badges.css      # Badge styles for source indicators
-│   ├── components.css  # Component-specific styles (filters, trending, sidebar)
-│   └── modal.css       # Modal dialog styles
-├── js/                 # JavaScript modules
-│   ├── theme.js        # Theme management
-│   ├── toast.js        # Toast notifications
-│   ├── user-actions.js # User login/logout/tracking
-│   ├── article-actions.js # Article interactions
-│   ├── admin-modal.js  # Admin functionality
-│   ├── paper-submission.js # Paper submission handling
-│   └── trending.js     # Trending section tab switching
-├── index.html          # Main page template
-├── detail.html         # Paper detail page template
-├── base.css           # Base styles and theme tokens
-└── README.md          # This documentation
+├── components/      # Reusable HTML components (Jinja2 templates)
+├── css/            # Modular stylesheets
+├── js/             # JavaScript modules
+├── *.html          # Main page templates
+└── base.css        # Core styles + CSS variables
 ```
 
-## Component Architecture
+## Quick Start
 
-### HTML Components
+### Adding a New Page
 
-Each component is a self-contained HTML template that can be included in multiple pages:
-
-- **header.html**: Responsive header with user authentication, navigation, and theme toggle
-- **paper-submission.html**: Form for submitting paper URLs with status feedback (shown on mobile/tablet)
-- **sidebar-submission.html**: Fixed sidebar for paper submission (desktop) + FAB with modal (mobile)
-- **tag-filter.html**: Collapsible search/filter interface - search bar always visible, advanced filters expandable
-- **trending-section.html**: Displays trending tags with 7-day/30-day tabs and growth indicators
-- **article-card.html**: Displays paper information with tags and action buttons
-- **pagination.html**: Navigation controls for paginated content
-- **admin-modal.html**: Modal dialog for admin fetch operations with real-time logs
-
-### CSS Modules
-
-- **base.css**: Core styles, theme tokens, and fundamental layout
-- **badges.css**: Source badges (user vs system) styling
-- **components.css**: Component-specific styles for filters, forms, etc.
-- **modal.css**: Modal dialog and admin interface styles
-
-### JavaScript Modules
-
-Each module is a self-contained class that handles specific functionality:
-
-- **ThemeManager**: Dark/light theme switching with localStorage persistence
-- **ToastManager**: Non-blocking notification system
-- **UserActions**: Login, logout, and user event tracking
-- **ArticleActions**: Article interactions (expand, mark read, PDF links)
-- **AdminModal**: Admin fetch operations with streaming progress
-- **PaperSubmission**: Paper URL submission with validation and feedback
-- **TrendingManager**: Trending section tab switching and dynamic updates
-
-## Benefits of This Architecture
-
-### Maintainability
-- **Separation of Concerns**: Each file has a single responsibility
-- **Reusability**: Components can be used across multiple pages
-- **Modularity**: Changes to one component don't affect others
-- **Clear Dependencies**: Each module has explicit dependencies
-
-### Performance
-- **Code Splitting**: Only load JavaScript modules that are needed
-- **CSS Organization**: Styles are organized by purpose, reducing conflicts
-- **Caching**: Separate files can be cached independently
-
-### Developer Experience
-- **Easier Debugging**: Issues are isolated to specific modules
-- **Better Testing**: Individual components can be tested in isolation
-- **Code Readability**: Smaller, focused files are easier to understand
-- **Version Control**: Changes are easier to track and review
-
-## Usage Examples
-
-### Including Components
 ```html
-<!-- Include header with back link -->
-{% set show_back_link = true %}
-{% include 'components/header.html' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Theme script MUST be first to prevent flash -->
+  <script>
+    (function() {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const saved = localStorage.getItem('theme');
+      const theme = saved === 'dark' || saved === 'light' ? saved : (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  
+  <!-- CSS in order: base → badges → components → modal -->
+  <link rel="stylesheet" href="{{ base_css_versioned() }}">
+  <link rel="stylesheet" href="{{ static_css_versioned('badges.css') }}">
+  <link rel="stylesheet" href="{{ static_css_versioned('components.css') }}">
+  <link rel="stylesheet" href="{{ static_css_versioned('modal.css') }}">
+</head>
+<body>
+  {% include 'components/header.html' %}
+  <main><!-- content --></main>
+  
+  <!-- JS: core first, then features -->
+  <script src="{{ url_for('static_js', filename='event-tracker.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='theme.js') }}"></script>
+  <script src="{{ url_for('static_js', filename='toast.js') }}"></script>
+</body>
+</html>
+```
 
-<!-- Include trending section (requires trending_7d and trending_30d template vars) -->
+### Using Components
+
+```jinja2
+{% include 'components/header.html' %}
+{% include 'components/tag-filter.html' %}
 {% include 'components/trending-section.html' %}
 
-<!-- Include collapsible search/filter -->
-{% include 'components/tag-filter.html' %}
+{% for e in entries %}
+  {% include 'components/article-card.html' %}
+{% endfor %}
 
-<!-- Include paper submission (main form for mobile/tablet) -->
-{% include 'components/paper-submission.html' %}
-
-<!-- Include sidebar submission (desktop sidebar + mobile FAB) -->
-{% include 'components/sidebar-submission.html' %}
+{% include 'components/pagination.html' %}
 ```
 
-### CSS Architecture
-```html
-<!-- Load base styles first -->
-<link rel="stylesheet" href="{{ url_for('base_css') }}">
-<link rel="stylesheet" href="{{ url_for('badge_css') }}">
+## Components Reference
 
-<!-- Then component-specific styles -->
-<link rel="stylesheet" href="css/components.css">
-<link rel="stylesheet" href="css/modal.css">
-```
+| Component | Purpose |
+|-----------|---------|
+| `header.html` | Site header, nav, login |
+| `article-card.html` | Paper display card |
+| `tag-filter.html` | Search and filter UI |
+| `trending-section.html` | Trending tags with tabs |
+| `pagination.html` | Page navigation |
+| `paper-submission.html` | Paper URL form |
+| `sidebar-submission.html` | Desktop sidebar + mobile FAB |
+| `admin-modal.html` | Admin operations modal |
+| `deep-read-status.html` | Processing status bar |
 
-### JavaScript Module Loading
-```html
-<!-- Load core modules -->
-<script src="js/theme.js"></script>
-<script src="js/toast.js"></script>
+## CSS Guidelines
 
-<!-- Load feature-specific modules -->
-<script src="js/user-actions.js"></script>
-<script src="js/article-actions.js"></script>
-```
+### Always Use CSS Variables
 
-## Migration Notes
-
-### From Monolithic to Modular
-
-The original files had:
-- All HTML in single large templates
-- Inline CSS mixed with templates
-- Monolithic JavaScript blocks
-
-After refactoring:
-- HTML is componentized and reusable
-- CSS is organized by purpose and feature
-- JavaScript is modular with clear interfaces
-
-### Template Variables
-
-Global configuration is passed to JavaScript via `window.appUrls`:
-
-```javascript
-window.appUrls = {
-  mark_read: '{{ mark_read_url }}',
-  unmark_read: '{{ unmark_read_url }}',
-  reset: '{{ reset_url }}',
-  admin_stream: '{{ admin_stream_url }}',
-  admin_fetch: '{{ admin_fetch_url }}'
-};
-```
-
-This allows JavaScript modules to work with Flask template variables while maintaining separation of concerns.
-
-## Responsive Design
-
-### Breakpoints
-
-- **Desktop**: > 1200px - Full sidebar, all features visible
-- **Tablet**: 768px - 1200px - No sidebar, FAB for submission
-- **Mobile**: < 768px - Collapsible sections, mobile navigation, FAB
-
-### Key Responsive Patterns
-
-1. **Sidebar Submission**: Desktop fixed sidebar → Mobile FAB + modal
-2. **Tag Filter**: Always shows search bar, advanced filters collapsible on all sizes
-3. **Navigation**: Desktop horizontal nav → Mobile hamburger menu overlay
-4. **Trending Section**: Responsive tag chip wrapping, stacked tabs on narrow screens
-
-### CSS Variables for Theming
-
-Always use CSS variables for colors to support light/dark themes:
 ```css
-.my-component {
+/* ✅ Good - Theme-aware */
+.element {
   background: var(--card-bg);
   color: var(--text);
-  border: 1px solid var(--btn-border);
+  border: 1px solid var(--divider);
+  padding: var(--spacing-lg);
+}
+
+/* ❌ Bad - Hard-coded */
+.element {
+  background: #ffffff;
+  color: #000000;
 }
 ```
 
-## Future Improvements
+### Common CSS Variables
 
-1. **Build Process**: Add CSS/JS minification and bundling
-2. **Testing**: Add unit tests for JavaScript modules
-3. **Documentation**: Add JSDoc comments to JavaScript classes
-4. **Accessibility**: Enhance keyboard navigation and screen reader support
-5. **Performance**: Implement lazy loading for non-critical components
+```css
+/* Colors */
+--text              /* Primary text */
+--muted-text        /* Secondary text */
+--card-bg           /* Card background */
+--primary           /* Brand color */
+--divider           /* Borders */
+
+/* Spacing */
+--spacing-sm        /* 0.5rem */
+--spacing-md        /* 0.75rem */
+--spacing-lg        /* 1rem */
+--spacing-xl        /* 1.5rem */
+
+/* Border Radius */
+--radius-sm         /* 4px */
+--radius-md         /* 8px */
+--radius-lg         /* 12px */
+```
+
+### Responsive Breakpoints
+
+```css
+/* Mobile first */
+.element { flex-direction: column; }
+
+@media (min-width: 768px) {  /* Tablet */
+  .element { flex-direction: row; }
+}
+
+@media (min-width: 1200px) {  /* Desktop */
+  .element { max-width: 1200px; }
+}
+```
+
+## JavaScript Patterns
+
+### Module Template
+
+```javascript
+/**
+ * MyModule - Description
+ * @class MyModule
+ */
+class MyModule {
+  constructor() {
+    this.init();
+  }
+
+  init() {
+    // Use event delegation
+    document.addEventListener('click', (ev) => {
+      if (ev.target.matches('.my-selector')) {
+        this.handleClick(ev);
+      }
+    });
+  }
+
+  handleClick(event) {
+    event.preventDefault();
+    // Handle click
+  }
+}
+
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  new MyModule();
+});
+```
+
+### Common Operations
+
+```javascript
+// Show toast notification
+window.showToast('Message', 3000);
+
+// Track event
+window.eventTracker.track('event_name', 'id', { data: 'value' });
+
+// Safe element access
+const element = document.getElementById('my-id');
+if (element) {
+  element.classList.add('active');
+}
+```
+
+## JavaScript Modules
+
+| Module | Purpose | Global Export |
+|--------|---------|--------------|
+| `event-tracker.js` | Analytics tracking | `window.eventTracker` |
+| `theme.js` | Dark/light theme toggle | - |
+| `toast.js` | Notifications | `window.showToast()` |
+| `user-actions.js` | Login/logout | - |
+| `article-actions.js` | Article interactions | - |
+| `admin-modal.js` | Admin operations | - |
+| `paper-submission.js` | Paper submission | - |
+| `mobile-nav.js` | Mobile menu | `window.mobileNav` |
+| `search.js` | Search functionality | - |
+| `password-manager.js` | Password management | - |
+| `abstract-viewer.js` | Abstract display | - |
+| `deep-read-status.js` | Status bar | `window.deepReadStatusBar` |
+| `trending.js` | Trending tabs | - |
+
+## Theme System (Important!)
+
+### Why the Inline Script?
+
+**Problem**: Without inline script, page flashes light mode before JS loads dark theme.
+
+**Solution**: Inline script in `<head>` applies theme **before** page renders.
+
+```html
+<head>
+  <!-- This MUST be before stylesheets -->
+  <script>
+    (function() {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const saved = localStorage.getItem('theme');
+      const theme = saved === 'dark' || saved === 'light' ? saved : (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  
+  <link rel="stylesheet" href="...">
+</head>
+```
+
+**Result**: No flash, smooth experience in dark mode! 🎉
+
+## Development Workflow
+
+### 1. Adding a Component
+
+```bash
+# Create files
+touch ui/components/my-component.html
+# Add styles to ui/css/components.css
+# Add JS if needed: touch ui/js/my-component.js
+```
+
+```html
+<!-- Include in page -->
+{% include 'components/my-component.html' %}
+```
+
+### 2. Testing Checklist
+
+- [ ] Light mode works
+- [ ] Dark mode works  
+- [ ] Theme toggle (no flash)
+- [ ] Desktop (>1200px)
+- [ ] Tablet (768-1200px)
+- [ ] Mobile (<768px)
+- [ ] No console errors
+
+### 3. Common Issues & Fixes
+
+| Issue | Fix |
+|-------|-----|
+| Theme flash | Add inline script to `<head>` |
+| Styles not working | Check CSS load order (base.css first) |
+| JS not running | Use `DOMContentLoaded` or event delegation |
+| Dark mode wrong colors | Use CSS variables, not hard-coded colors |
+
+## File Loading Order
+
+### CSS (Critical!)
+1. `base.css` - Core + variables
+2. `badges.css` - Badges
+3. `components.css` - Components
+4. `modal.css` - Modals
+
+### JavaScript
+1. `event-tracker.js` - Analytics (first!)
+2. `theme.js` - Theme toggle
+3. `toast.js` - Notifications
+4. Other modules (order doesn't matter)
+
+## Architecture Principles
+
+### Separation of Concerns
+- **HTML**: Structure only
+- **CSS**: Styling only  
+- **JavaScript**: Behavior only
+
+### Modularity
+- Components are self-contained
+- Styles organized by feature
+- JS classes encapsulate functionality
+
+### Progressive Enhancement
+- Core works without JS
+- JS enhances experience
+- Styles degrade gracefully
+
+## Responsive Design
+
+| Breakpoint | Layout |
+|------------|--------|
+| < 768px | Mobile: stacked, hamburger menu, FAB |
+| 768-1200px | Tablet: no sidebar, FAB |
+| > 1200px | Desktop: sidebar, full nav |
+
+## Best Practices
+
+### Do ✅
+- Use CSS variables for colors
+- Use event delegation
+- Add JSDoc comments
+- Test both themes
+- Test all breakpoints
+- Use semantic HTML
+
+### Don't ❌
+- Hard-code colors
+- Bind events directly to elements
+- Forget inline theme script
+- Skip mobile testing
+- Use inline styles
+- Mix concerns (HTML/CSS/JS)
+
+## Quick Commands
+
+```bash
+# Find hard-coded colors (should be empty!)
+grep -r "color: #" ui/css/
+
+# Find missing CSS variables
+grep -r "#[0-9a-f]\{6\}" ui/css/
+```
+
+## Resources
+
+- **CSS Variables**: See `ui/base.css` lines 1-100
+- **Component Examples**: Check existing components in `ui/components/`
+- **JS Patterns**: Look at `ui/js/theme.js` for well-documented example
+
+---
+
+**Remember**: When in doubt, check existing code for patterns! Keep it simple, keep it modular.

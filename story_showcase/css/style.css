@@ -104,7 +104,7 @@ h1 {
 /* --- Stats Section --- */
 .stats-container {
     max-width: 1000px;
-    margin: -4rem auto 4rem; /* Overlap header slightly or push up */
+    margin: -6rem auto 4rem; /* Lifted higher for better integration */
     padding: 0 2rem;
     position: relative;
     z-index: 5;
@@ -113,57 +113,123 @@ h1 {
 }
 
 .section-title {
-    font-size: 2rem;
+    font-size: 1rem;
+    font-weight: 600;
     margin-bottom: 2rem;
     text-align: center;
-    color: var(--text-primary);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.section-title::before, .section-title::after {
+    content: '';
+    height: 1px;
+    width: 60px;
+    background: linear-gradient(to right, transparent, var(--timeline-line));
+}
+
+.section-title::after {
+    background: linear-gradient(to left, transparent, var(--timeline-line));
 }
 
 .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    margin-bottom: 3rem;
 }
 
 .stat-card {
-    background: var(--card-bg);
-    padding: 1.5rem;
-    border-radius: 1rem;
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 2.5rem 1.5rem;
+    border-radius: 1.5rem;
     text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.1), transparent);
+    pointer-events: none;
+}
+
+.stat-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    border-color: var(--accent);
+    background: rgba(30, 41, 59, 0.9);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), 0 0 20px var(--accent-glow);
 }
 
 .stat-value {
-    font-size: 2.5rem;
+    font-size: 3rem;
     font-weight: 800;
-    color: var(--accent);
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.05rem;
+    background: linear-gradient(to bottom, #fff, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .stat-label {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
     margin-top: 0.5rem;
 }
 
 .charts-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 2rem;
+    gap: 3rem;
 }
 
 .chart-box {
-    background: var(--card-bg);
-    padding: 1.5rem;
-    border-radius: 1rem;
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(10px);
+    padding: 2rem;
+    border-radius: 1.5rem;
     border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
 .chart-box h3 {
-    margin-bottom: 1.5rem;
-    font-size: 1.1rem;
-    color: var(--text-primary);
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.chart-box h3::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
 }
 
 /* --- Heatmap Calendar --- */
@@ -236,6 +302,8 @@ h1 {
     color: var(--text-secondary);
     justify-content: flex-end;
 }
+
+/* Weekday/work-rhythm visuals removed to keep dashboard focused */
 
 /* Time Chart */
 .time-bar-group {
@@ -413,23 +481,28 @@ footer {
     }
 
     .stats-container {
-        margin-top: -2rem;
+        margin-top: -3rem;
         padding: 0 1rem;
         width: 100%;
         box-sizing: border-box;
     }
 
     .section-title {
-        font-size: 1.5rem;
-        margin-bottom: 1.5rem;
+        font-size: 0.8rem;
+        margin-bottom: 2rem;
+    }
+
+    .metrics-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
     }
 
     .stat-card {
-        padding: 1rem;
+        padding: 2rem 1rem;
     }
 
     .stat-value {
-        font-size: 2rem;
+        font-size: 2.5rem;
     }
 
     .timeline-container {

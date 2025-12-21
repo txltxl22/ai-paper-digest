@@ -76,50 +76,23 @@ The system was becoming more robust and user-friendly. After this burst of activ
 
 ---
 
-## Chapter 3: PDF Processing and LLM Expansion (August 24-26, 2025)
+## Chapter 3: The Heartbeat and the Crowd (August 2025)
 
-### August 24, 2025 - Enhanced PDF Handling
+### The Automated Pulse: RSS Feed Service
 
-A day of significant improvements to PDF processing and LLM support:
+As the paper volume grew, manual processing became impossible. The system needed a heartbeat. In mid-August, we introduced the **RSS Feed Service** (`feed_paper_summarizer_service.py`). This was a major architectural shift. Instead of waiting for a developer to run a script, the system began to autonomously "pulse" every day, reaching out to Hugging Face and ArXiv to fetch the latest breakthroughs.
 
-**14:36** - **"增强PDF处理与日志系统"** (Enhance PDF processing and logging system) - Better PDF handling and logging.
+It wasn't just about fetching; it was about orchestration. The service learned to handle parallel workers, managing multiple LLM calls simultaneously, and aggregating results into a beautiful daily digest. This transformed the project from a reactive tool into a proactive knowledge engine.
 
-**15:03** - **"扩展PDF链接解析逻辑，支持tldr.takara.ai的URL转换"** (Extend PDF link parsing logic, support tldr.takara.ai URL conversion) - Support for additional URL formats.
+### Empowering the Crowd: Paper Submission
 
-**15:21** - **"调整代理配置：默认不使用代理，并添加警告日志"** (Adjust proxy configuration: default to no proxy, add warning logs) - Proxy configuration improvements.
+By late August, we realized that the best research often hides in niches our automated feeds might miss. We launched the **Paper Submission** feature. This turned our users from passive readers into active contributors. 
 
-**15:33** - **"feat: 添加Ollama LLM支持"** - **MAJOR MILESTONE**: Support for local LLM deployment via Ollama. This opened up the possibility of running the system entirely locally, without API costs.
+Building it was a challenge: how do we ensure submissions are actually AI-related? We implemented an **AI Judgment** layer that acts as a gatekeeper, validating papers before they ever hit the summarization pipeline. By December, this evolved into a sophisticated asynchronous system with progress tracking and tiered quota management, ensuring a fair and high-quality experience for everyone.
 
-**16:13** - **"增强PDF下载与验证：添加完整性检查、重试机制和临时文件下载；修复参数类型转换和链接更新；优化错误日志记录"** (Enhance PDF download and validation: add integrity checks, retry mechanism, and temporary file downloads) - Robust PDF downloading with error handling.
+### Multi-Provider LLM Support
 
-**22:49** - **"修复Ollama输出清理问题并更新提示词"** (Fix Ollama output cleaning issues and update prompts) - Fixes for the new Ollama integration.
-
-### August 25, 2025 - Multi-Provider LLM Support
-
-This was a pivotal day for LLM flexibility:
-
-**00:23** - **"feat: 添加管理员功能支持获取最新论文摘要"** (Add admin functionality to get latest paper summaries) - Admin features for managing the system.
-
-**09:23** - **"bug fix"** - Quick bug fix.
-
-**09:26** - **"添加MIT许可证文件"** - Open source commitment with MIT license.
-
-**09:45** - **"feat: 支持OpenAI兼容API及多LLM提供商"** - **MAJOR MILESTONE**: Support for OpenAI-compatible APIs. This was huge - it meant the system could work with any API that followed OpenAI's interface.
-
-**09:59** - **"改进跨平台兼容性和错误处理"** (Improve cross-platform compatibility and error handling) - Continued focus on reliability.
-
-**23:20** - **"feat: 新增OpenAI兼容API支持，统一LLM提供商配置"** (Add OpenAI-compatible API support, unify LLM provider configuration) - Unified configuration system for all LLM providers.
-
-The system now supported:
-- DeepSeek (default)
-- OpenAI-compatible APIs (any provider)
-- Ollama (local deployment)
-
-This flexibility allowed users to choose their preferred LLM provider based on cost, performance, or privacy requirements.
-
-### August 26, 2025 - Windows Compatibility
-
-**08:16** - **"增强Windows兼容性：添加UTF-8编码支持、跨平台命令执行逻辑、备用获取方式按钮和错误处理优化"** (Enhance Windows compatibility: add UTF-8 encoding support, cross-platform command execution logic, fallback fetch button, and error handling optimization) - Comprehensive Windows support.
+This was also a pivotal period for LLM flexibility. On August 25, we achieved a major milestone: support for OpenAI-compatible APIs and local LLMs via Ollama. This meant the system could work with any provider, from DeepSeek to local models, giving users full control over cost, privacy, and performance.
 
 After this, another pause - 4 days before the biggest refactoring effort in the project's history.
 
@@ -241,165 +214,21 @@ A day of major UX improvements with **7 commits**:
 
 ---
 
-## Chapter 6: Advanced Features (October-November 2025)
+## Chapter 6: The Intelligence Leap (November-December 2025)
 
-### October 10, 2025 - Abstract and Model Refactoring
+### Understanding the Reader: Personalization
 
-A busy day with **7 commits** focused on abstracts and code quality:
+In late November, the system underwent a profound change. It was no longer a passive library; it became an intelligent assistant. We introduced **Personalized Recommendations** and the **Deep Read** feature. 
 
-**22:25** - **"Refactor ConfigManager for improved configuration handling"** - Better configuration management.
+The recommendation system (`recommendation_system.py`) was the culmination of months of event tracking. By analyzing what papers users favorited, what they read, and what they marked as "Interested" or "Not Interested," the AI began to learn individual preferences. It shifted from "showing everything" to "showing what matters."
 
-**22:28** - **"Update Python version requirement in pyproject.toml"** - Python version update.
+### The Deep Read: Beyond the Abstract
 
-**22:28** - **"Update tags generation prompt for clarity and specificity"** - Improved tag prompts.
+The **Deep Read** feature brought the ability to go beyond surface-level summaries. By processing papers at a section level and tracking the progress asynchronously, users could finally dive deep into the methodology and results without reading the entire 20-page PDF.
 
-**22:44** - **"重构: 将 summary_to_markdown 函数替换为 StructuredSummary 类的 to_markdown 方法"** (Refactor: Replace summary_to_markdown function with StructuredSummary class to_markdown method) - Model refactoring.
+### Community Pulse: Trending Topics
 
-**23:11** - **"Enhance summary handling by updating titles for existing summaries"** - Title handling improvements.
-
-**23:21** - **"Implement abstract fetching and display functionality"** - **FEATURE**: Abstract display. Papers could now show abstracts.
-
-**23:51** - **"Enhance abstract handling and English title integration"** - Abstract and title integration.
-
-### October 11, 2025 - Todo Lists
-
-**00:06** - **"Add todo functionality for managing papers"** - **MAJOR FEATURE**: Todo lists for papers. Users could now create reading lists.
-
-**00:09** - **"Enhance user interaction with article cards"** - Improved interactivity.
-
-### November 9, 2025 - Bug Fixes
-
-**21:34** - Merge commits (WIP/index)
-
-**21:56** - **"Fix favorite feature bugs"** - Bug fixes for favorites.
-
-**22:23** - **"Add PDF URL resolution for arXiv identifiers"** - PDF URL improvements.
-
-**22:34** - **"Add mark read and favorite buttons to todo list page"** - Todo list enhancements (appears twice, likely a duplicate).
-
-### November 10, 2025 - Information Extraction
-
-**00:34** - **"优化论文信息提取：重构提取器以单次获取内容并提取标题和摘要，更新现有摘要时添加摘要信息"** (Optimize paper info extraction: refactor extractor to fetch content once and extract title and abstract) - Efficient information extraction.
-
-**00:43** - **"Enhance tag generation for existing summaries in paper summarizer"** - Tag generation improvements.
-
-### November 24, 2025 - PWA and Recommendations
-
-**10:42** - **"Add PWA support and enhance SEO with sitemap, robots.txt, and structured data"** - **FEATURE**: PWA support. The app could now be installed as a progressive web app.
-
-**12:54** - **"Implement personalized recommendations for paper summaries"** - **MILESTONE**: The recommendation system was born! Papers could now be recommended based on user preferences.
-
-**13:00** - **"Refactor sorting logic for indexed entries"** - Sorting improvements.
-
-### November 27, 2025 - Performance
-
-**10:17** - **"Enhance paper summarization by caching metadata retrieval"** - Performance optimization through caching.
-
-### November 30, 2025 - Personalization Explosion
-
-A massive day with **9 commits** focused on personalization:
-
-**16:38** - **"Refactor summarization process and introduce migration script for JSON files"** - Migration tools.
-
-**17:22** - **"Enhance paper summarization with abstract-only mode and tag generation"** - Abstract-only mode.
-
-**17:36** - **"Integrate current user ID retrieval for deep read feature in summary detail"** - User integration for deep read.
-
-**17:41** - **"Update terminology for user interaction with papers"** - Terminology updates.
-
-**17:58** - **"Enhance personalization features in index routes and UI"** - Personalization enhancements.
-
-**21:58** - **"Add recommendation systems"** - **MAJOR FEATURE**: Full recommendation system implementation.
-
-**22:13** - **"Enhance index page with update statistics and latest paper information"** - Statistics and information display.
-
-**22:15** - **"Update index routes to use specific entry metadata for tag clouds"** - Tag cloud improvements.
-
-**22:23** - **"Refactor markdown content display for unavailable summaries"** - Markdown display improvements.
-
-**22:37** - **"Refactor UI styles and enhance layout consistency"** - UI consistency.
-
-**23:26** - **"Enhance deep read functionality with processing tracker and status updates"** - **FEATURE**: Deep read functionality with tracking.
-
-**23:39** - **"Refactor index routes to improve filter application and latest paper retrieval"** - Filtering improvements.
-
----
-
-## Chapter 7: Deep Read and Polish (December 2025)
-
-### December 1, 2025 - Deep Read Feature
-
-**00:07** - **"Enhance summary detail processing and UI responsiveness"** - Detail page improvements.
-
-**00:12** - **"Refactor deep read status polling and UI updates"** - Deep read status improvements.
-
-### December 12, 2025 - Dependencies and Caching
-
-**23:24** - **"Update Python version requirements and enhance package dependencies"** - Dependency updates.
-
-**23:29** - **"Add CSS versioning for cache invalidation"** - Cache invalidation for CSS updates.
-
-### December 13, 2025 - Interest Tracking
-
-**09:56** - **"Add interested/not interested buttons to detail page"** - **MAJOR FEATURE**: User preference tracking. Users could now mark papers as interested or not interested, feeding into recommendations.
-
-**10:05** - **"Fix deep read button error handling and add completion notifications"** - Deep read improvements.
-
-**10:18** - **"Enhance paper summarization with submission date extraction and handling"** - Submission date tracking.
-
-### December 14, 2025 - User Data Management
-
-**22:36** - **"Refactor index page routes and article actions for improved interest handling"** - Interest handling improvements.
-
-**23:35** - **"Enhance deep read functionality and user interest tracking"** - Deep read and interest integration.
-
-**23:36** - **"Add user data management script and documentation"** - User data management tools.
-
-### December 15, 2025 - Article Actions
-
-**00:02** - **"Update article actions and detail page for improved user interaction"** - Interaction improvements.
-
-**00:15** - **"Refactor article actions initialization and improve service worker caching strategy"** - Service worker improvements.
-
-### December 16, 2025 - Trending Feature
-
-**09:50** - **"feat: Add Trending feature with tag analytics and UI improvements"** - **MAJOR FEATURE**: Trending analysis. Users could now see what topics were hot in AI research.
-
-**09:58** - **"fix: Update trending section UI and JavaScript for period handling"** - Trending fixes.
-
-### December 17, 2025 - Navigation and Integration
-
-**09:37** - **"feat: Implement scroll-to-first functionality for article navigation"** - Navigation improvements.
-
-**09:42** - **"feat: Add rybbit_site_id configuration and integration"** - External analytics integration.
-
-**09:43** - **"feat: Enhance deep read status and article title extraction"** - Title extraction improvements.
-
-### December 19, 2025 - External Integration
-
-**09:29** - **"feat: Integrate Rybbit script for dynamic site functionality"** - External service integration.
-
-### December 20, 2025 - Testing and Search Enhancement
-
-**17:10** - **"feat: Add installation script and pre-commit hook for automated testing"** - Development workflow improvements with automated testing.
-
-**17:27** - **"feat: Refactor entry filtering and recommendation context handling"** - Recommendation improvements.
-
-**22:13** - **"feat: Expand search functionality to include arxiv_id and abstract"** - **FEATURE**: Enhanced search. Users could now search by arXiv ID and abstract content.
-
-### December 21, 2025 - Quota System and Final Polish
-
-The final day of development with **5 commits**:
-
-**00:08** - **"feat: Enhance paper submission and summary detail modules with user service integration"** - User service integration.
-
-**01:15** - **"feat: Introduce tiered quota management system for user access control"** - **MAJOR FEATURE**: Quota management. The system could now control access based on user tiers.
-
-**01:41** - **"feat: Enhance paper submission process with asynchronous handling and improved progress tracking"** - Async processing improvements.
-
-**11:15** - **"feat: Improve paper submission UI and error handling with enhanced status visibility"** - UI improvements.
-
-**11:24** - **"feat: Implement inline theme script for consistent dark/light mode experience"** - Theme consistency improvements.
+Finally, in mid-December, we added the **Trending** feature. This connected individual interests with the broader community, showing what topics were gaining traction over 7 and 30-day windows. It turned the platform into a real-time monitor for the AI research landscape.
 
 ---
 

@@ -23,7 +23,6 @@ def create_story_showcase_routes() -> Blueprint:
     bp = Blueprint('story_showcase', __name__, url_prefix='/story')
     
     @bp.route('/')
-    @bp.route('')
     def story_index():
         """Serve the story showcase index page."""
         index_path = story_dir / "index.html"

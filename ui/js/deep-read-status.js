@@ -158,6 +158,17 @@ class DeepReadStatusBar {
       this.statusBar.style.display = 'none';
     }
 
+    // Trigger header state update for modern layered design
+    // This ensures the status bar positioning is recalculated
+    if (window.updateHeaderState) {
+      setTimeout(window.updateHeaderState, 0);
+    }
+
+    // Adjust layout for fixed header (legacy support)
+    if (window.adjustLayout) {
+      setTimeout(window.adjustLayout, 0);
+    }
+
     // Stop polling if there are no processing jobs
     // (Completed jobs don't need polling, user can dismiss them)
     if (processing.length === 0) {

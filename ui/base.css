@@ -183,15 +183,11 @@ header {
     flex-direction: column;
     width: 100%;
     box-sizing: border-box;
-    position: -webkit-sticky; /* Safari support */
     position: sticky;
     top: 0;
     z-index: 1000;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    /* Ensure it works on mobile */
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-    will-change: transform;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .header-main-row {
@@ -214,6 +210,48 @@ header {
     padding: 0.5rem 2rem;
     width: 100%;
     box-sizing: border-box;
+}
+
+/* Deep Read Status Bar - Modern layered design */
+.deep-read-status-bar-fixed {
+    position: fixed;
+    left: 0;
+    right: 0;
+    width: 100%;
+    background: var(--header-bg);
+    color: var(--header-text);
+    padding: 0.5rem 2rem;
+    box-sizing: border-box;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: top 0.3s cubic-bezier(0.4, 0, 0.2, 1), z-index 0s;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: top, z-index;
+}
+
+/* Desktop: When header is visible, status bar below it (even if covered) */
+@media (min-width: 769px) {
+    body.header-visible .deep-read-status-bar-fixed {
+        top: var(--header-height, 0px);
+        z-index: 999; /* Below header */
+    }
+    
+    /* When header scrolls out, status bar moves to top if it has items */
+    body.header-hidden .deep-read-status-bar-fixed {
+        top: 0;
+        z-index: 1001; /* Above everything */
+    }
+}
+
+/* Mobile: Same behavior - status bar below header when visible */
+@media (max-width: 768px) {
+    body.header-visible .deep-read-status-bar-fixed {
+        top: var(--header-height, 0px);
+        z-index: 999; /* Below header */
+    }
+    
+    /* When header scrolls out, status bar below mini-header if it has items */
+    /* Note: JavaScript handles the actual positioning based on mini-header presence */
 }
 
 .status-bar-content {
@@ -251,56 +289,81 @@ header {
 }
 
 /* Status items in header (dark theme) */
-.header-status-bar .deep-read-status-item {
+.header-status-bar .deep-read-status-item,
+.deep-read-status-bar-fixed .deep-read-status-item {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
     padding: 0.375rem 0.625rem;
     border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
-.header-status-bar .deep-read-status-item.processing {
+/* Spinner for processing items */
+.header-status-bar .deep-read-status-item .spinner,
+.deep-read-status-bar-fixed .deep-read-status-item .spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    border-top-color: rgba(59, 130, 246, 0.9);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.header-status-bar .deep-read-status-item.processing,
+.deep-read-status-bar-fixed .deep-read-status-item.processing {
     background: rgba(59, 130, 246, 0.2);
     border: 1px solid rgba(59, 130, 246, 0.4);
     color: var(--header-text);
 }
 
-.header-status-bar .deep-read-status-item.processing a {
+.header-status-bar .deep-read-status-item.processing a,
+.deep-read-status-bar-fixed .deep-read-status-item.processing a {
     color: #93c5fd;
     text-decoration: none;
     font-weight: 500;
 }
 
-.header-status-bar .deep-read-status-item.processing a:hover {
+.header-status-bar .deep-read-status-item.processing a:hover,
+.deep-read-status-bar-fixed .deep-read-status-item.processing a:hover {
     color: #dbeafe;
     text-decoration: underline;
 }
 
-.header-status-bar .deep-read-status-item.completed {
+.header-status-bar .deep-read-status-item.completed,
+.deep-read-status-bar-fixed .deep-read-status-item.completed {
     background: rgba(16, 185, 129, 0.2);
     border: 1px solid rgba(16, 185, 129, 0.4);
     color: var(--header-text);
     cursor: pointer;
 }
 
-.header-status-bar .deep-read-status-item.completed:hover {
+.header-status-bar .deep-read-status-item.completed:hover,
+.deep-read-status-bar-fixed .deep-read-status-item.completed:hover {
     background: rgba(16, 185, 129, 0.3);
 }
 
-.header-status-bar .deep-read-status-item.completed a {
+.header-status-bar .deep-read-status-item.completed a,
+.deep-read-status-bar-fixed .deep-read-status-item.completed a {
     color: #6ee7b7;
     text-decoration: none;
     font-weight: 500;
 }
 
-.header-status-bar .deep-read-status-item.completed a:hover {
+.header-status-bar .deep-read-status-item.completed a:hover,
+.deep-read-status-bar-fixed .deep-read-status-item.completed a:hover {
     color: #d1fae5;
     text-decoration: underline;
 }
 
-.header-status-bar .deep-read-status-item.completed button {
+.header-status-bar .deep-read-status-item.completed button,
+.deep-read-status-bar-fixed .deep-read-status-item.completed button {
     background: none;
     border: none;
     color: rgba(255, 255, 255, 0.6);
@@ -312,16 +375,13 @@ header {
     transition: color 0.2s;
 }
 
-.header-status-bar .deep-read-status-item.completed button:hover {
+.header-status-bar .deep-read-status-item.completed button:hover,
+.deep-read-status-bar-fixed .deep-read-status-item.completed button:hover {
     color: rgba(255, 255, 255, 0.9);
 }
 
-.header-status-bar .deep-read-status-item .spinner {
-    border-color: rgba(59, 130, 246, 0.6);
-    border-top-color: transparent;
-}
-
-.header-status-bar .deep-read-status-item span[style*="color: var(--muted-text)"] {
+.header-status-bar .deep-read-status-item span[style*="color: var(--muted-text)"],
+.deep-read-status-bar-fixed .deep-read-status-item span[style*="color: var(--muted-text)"] {
     color: rgba(255, 255, 255, 0.6) !important;
     font-size: var(--font-size-xs);
 }
@@ -333,7 +393,8 @@ header {
         min-height: 45px;
     }
     
-    .header-status-bar {
+    .header-status-bar,
+    .deep-read-status-bar-fixed {
         padding: 0.4rem 1rem;
     }
     
@@ -361,7 +422,8 @@ header {
         width: 100%;
     }
     
-    .header-status-bar .deep-read-status-item {
+    .header-status-bar .deep-read-status-item,
+    .deep-read-status-bar-fixed .deep-read-status-item {
         font-size: var(--font-size-xs);
         padding: 0.2rem 0.4rem;
     }
@@ -384,9 +446,142 @@ header {
     gap: 4px;
 }
 
+/* Mobile Mini-Header - Modern design: compact bar appears when header scrolls away */
+.mobile-mini-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: var(--header-bg);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    z-index: 1002; /* Above status bar and main header */
+    opacity: 0;
+    transform: translateY(-100%);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    justify-content: space-between;
+}
+
+/* Show mini-header on mobile when main header is hidden */
+@media (max-width: 768px) {
+    body.header-hidden .mobile-mini-header {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+}
+
+.mini-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mini-header-logo {
+    font-size: var(--font-size-base);
+    color: var(--header-text);
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mini-logo-img {
+    height: 24px;
+    width: 24px;
+    object-fit: contain;
+}
+
+.header-logo-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+}
+
+.header-logo-img {
+    height: 32px;
+    width: 32px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+@media (max-width: 768px) {
+    .header-logo-img {
+        height: 24px;
+        width: 24px;
+    }
+    
+    .header-logo-container {
+        gap: 0.5rem;
+    }
+}
+
+.mini-header-menu-btn {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 36px;
+    height: 36px;
+    background: var(--header-btn-bg);
+    border: 1px solid var(--header-btn-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    gap: 3px;
+}
+
+.mini-header-menu-btn:hover {
+    background: var(--header-btn-hover-bg);
+}
+
+.mini-header-menu-btn .hamburger-line {
+    width: 16px;
+    height: 2px;
+    background: var(--header-text);
+    border-radius: 1px;
+    transition: all 0.3s ease;
+}
+
+/* Animate hamburger lines when menu is active */
+.mini-header-menu-btn.active .hamburger-line:nth-child(1) {
+    transform: rotate(45deg) translate(4px, 4px);
+}
+
+.mini-header-menu-btn.active .hamburger-line:nth-child(2) {
+    opacity: 0;
+}
+
+.mini-header-menu-btn.active .hamburger-line:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* Adjust status bar position when mini-header is visible */
+@media (max-width: 768px) {
+    body.header-hidden .deep-read-status-bar-fixed {
+        top: 48px; /* Below mini-header */
+        z-index: 1001; /* Below mini-header */
+    }
+}
+
 /* Ensure mobile menu button is hidden on desktop */
 @media (min-width: 769px) {
     .mobile-menu-btn {
+        display: none !important;
+    }
+    .mobile-mini-header {
         display: none !important;
     }
 }

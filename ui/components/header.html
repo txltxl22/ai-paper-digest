@@ -6,7 +6,10 @@
       {% if show_back_link %}
         <a href='{{ url_for("index_page.index") }}' class="back-link" onclick="if(document.referrer.includes(window.location.host)) { history.back(); return false; }">← 返回列表</a>
       {% else %}
-        <a href='{{ url_for("index_page.index") }}'>📚 arXiv最新AI论文速览速学</a>
+        <a href='{{ url_for("index_page.index") }}' class="header-logo-container">
+          <img src="/static/favicon.svg" alt="Logo" class="header-logo-img">
+          <span>arXiv最新AI论文速览速学</span>
+        </a>
       {% endif %}
     </h1>
   </div>
@@ -44,37 +47,51 @@
     <span class="hamburger-line"></span>
   </button>
   </div>
-  
-  <!-- Deep Read Status Bar (inside header) -->
-  {% if uid %}
-      <div id="deep-read-status-bar" class="header-status-bar" style="display: none;">
-        <div class="status-bar-content">
-          <span class="status-bar-label">
-            <svg class="ai-sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 1.1em; height: 1.1em; color: white;">
-              <path d="M12 3L14.5 9L21 11.5L14.5 14L12 21L9.5 14L3 11.5L9.5 9L12 3Z" fill="currentColor"/>
-              <path d="M18 3L19.14 5.86L22 7L19.14 8.14L18 11L16.86 8.14L14 7L16.86 5.86L18 3Z" fill="currentColor" opacity="0.7"/>
-            </svg> AI 研读状态:
-          </span>
-      
-      <!-- Processing Section -->
-      <div id="deep-read-processing" class="status-section" style="display: none;">
-        <span class="status-label">生成中:</span>
-        <div id="deep-read-processing-list" class="status-items">
-          <!-- Processing items will be inserted here -->
-        </div>
+</header>
+
+<!-- Mobile Mini-Header - Modern compact bar when main header scrolls away -->
+<div class="mobile-mini-header">
+  <button class="mini-header-menu-btn" id="mini-header-menu-btn" aria-label="打开菜单" title="打开菜单">
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+  </button>
+  <a href='{{ url_for("index_page.index") }}' class="mini-header-logo">
+    <img src="/static/favicon.svg" alt="Logo" class="mini-logo-img">
+    <span>AI论文速览速学</span>
+  </a>
+  <div style="width: 36px;"></div> <!-- Spacer for centering -->
+</div>
+
+<!-- Deep Read Status Bar (fixed at top, independent of header) -->
+{% if uid %}
+    <div id="deep-read-status-bar" class="deep-read-status-bar-fixed" style="display: none;">
+      <div class="status-bar-content">
+        <span class="status-bar-label">
+          <svg class="ai-sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 1.1em; height: 1.1em; color: white;">
+            <path d="M12 3L14.5 9L21 11.5L14.5 14L12 21L9.5 14L3 11.5L9.5 9L12 3Z" fill="currentColor"/>
+            <path d="M18 3L19.14 5.86L22 7L19.14 8.14L18 11L16.86 8.14L14 7L16.86 5.86L18 3Z" fill="currentColor" opacity="0.7"/>
+          </svg> AI 研读状态:
+        </span>
+    
+    <!-- Processing Section -->
+    <div id="deep-read-processing" class="status-section" style="display: none;">
+      <span class="status-label">生成中:</span>
+      <div id="deep-read-processing-list" class="status-items">
+        <!-- Processing items will be inserted here -->
       </div>
-      
-      <!-- Completed Section -->
-      <div id="deep-read-completed" class="status-section" style="display: none;">
-        <span class="status-label">已完成:</span>
-        <div id="deep-read-completed-list" class="status-items">
-          <!-- Completed items will be inserted here -->
-        </div>
+    </div>
+    
+    <!-- Completed Section -->
+    <div id="deep-read-completed" class="status-section" style="display: none;">
+      <span class="status-label">已完成:</span>
+      <div id="deep-read-completed-list" class="status-items">
+        <!-- Completed items will be inserted here -->
       </div>
     </div>
   </div>
-  {% endif %}
-</header>
+</div>
+{% endif %}
 
 <!-- Password Management Modal -->
 <div id="password-modal" class="modal" style="display: none;">

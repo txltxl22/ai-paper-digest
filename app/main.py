@@ -332,7 +332,12 @@ def test_endpoint():
 @app.get("/assets/base.css")
 def base_css():
     """Serve base.css with cache control headers."""
-    response = Response(BASE_CSS, mimetype="text/css")
+    # Read dynamically in debug mode to pick up changes
+    if app.debug:
+        css_content = open(os.path.join('ui', 'base.css'), 'r', encoding='utf-8').read()
+    else:
+        css_content = BASE_CSS
+    response = Response(css_content, mimetype="text/css")
     # Set cache headers - allow caching but with validation
     response.headers['Cache-Control'] = 'public, max-age=31536000, must-revalidate'
     return response

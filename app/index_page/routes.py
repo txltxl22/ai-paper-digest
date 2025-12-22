@@ -18,6 +18,7 @@ def create_index_routes(
     paper_config=None,
     search_service=None,
     recommendation_engine: RecommendationEngine | None = None,
+    trending_service=None,
 ) -> Blueprint:
     """Create index page routes."""
     bp = Blueprint('index_page', __name__)
@@ -52,21 +53,19 @@ def create_index_routes(
         }
     
     def _apply_filters(entries: List[Dict], filters: Dict[str, Any]) -> List[Dict]:
-        """Apply all filters to entries."""
-        active_tag = filters.get('active_tag')
-        if active_tag:
-            entries = EntryFilter.filter_by_tag(entries, active_tag)
-        if filters.get('tag_query'):
-            entries = EntryFilter.filter_by_tag_query(entries, filters['tag_query'])
-        if filters.get('active_tops'):
-            entries = EntryFilter.filter_by_top_tags(entries, filters['active_tops'])
+        """Apply all filters to entries.
         
-        # Apply search filter if search service is available
+        Args:
+            entries: The entries to filter. When search is active, the caller should
+                     pass all_entries to allow searching across all papers.
+            filters: Filter parameters.
+        """
+        # Apply search filter first if search service is available
         if filters['search_query'] and search_service:
             # Determine search fields based on search type
             search_fields = []
             if filters['search_type'] == 'all':
-                search_fields = ['title', 'content', 'tags']
+                search_fields = ['title', 'content', 'tags', 'arxiv_id', 'abstract']
             elif filters['search_type'] == 'content':
                 search_fields = ['title', 'content']
             elif filters['search_type'] == 'tags':
@@ -76,6 +75,15 @@ def create_index_routes(
                 search_results = search_service.search(filters['search_query'], search_fields)
                 search_ids = {result['id'] for result in search_results}
                 entries = [e for e in entries if e['id'] in search_ids]
+        
+        # Apply other filters (tag filters) after search
+        active_tag = filters.get('active_tag')
+        if active_tag:
+            entries = EntryFilter.filter_by_tag(entries, active_tag)
+        if filters.get('tag_query'):
+            entries = EntryFilter.filter_by_tag_query(entries, filters['tag_query'])
+        if filters.get('active_tops'):
+            entries = EntryFilter.filter_by_top_tags(entries, filters['active_tops'])
         
         return entries
     
@@ -93,6 +101,8 @@ def create_index_routes(
         papers_updated_24h: int = 0,
         papers_updated_72h: int = 0,
         latest_paper: Optional[Dict[str, Any]] = None,
+        trending_7d: Optional[List[Dict]] = None,
+        trending_30d: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         """Build the template context with all necessary data."""
         # Build tag clouds from all entries (not just filtered ones)
@@ -161,6 +171,12 @@ def create_index_routes(
             'latest_paper': latest_paper,
         })
         
+        # Add trending data
+        context.update({
+            'trending_7d': trending_7d or [],
+            'trending_30d': trending_30d or [],
+        })
+        
         return context
     
     def _apply_recommendations(
@@ -169,7 +185,10 @@ def create_index_routes(
         favorites_map: Dict[str, Optional[str]],
         read_meta: List[Dict[str, Any]],
         read_map: Dict[str, Optional[str]],
+        deep_read_meta: List[Dict[str, Any]],
+        deep_read_map: Dict[str, Optional[str]],
         uid: Optional[str],
+        all_candidates: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         if (
             not recommendation_engine
@@ -179,12 +198,18 @@ def create_index_routes(
         ):
             return entries, {'active': False}
 
+        # Use all_candidates for recommendation context if provided, otherwise use filtered entries.
+        # This allows us to detect when all recommended papers have been read.
+        context_candidates = all_candidates if all_candidates is not None else entries
+        
         context = RecommendationContext(
-            candidate_entries=entries,
+            candidate_entries=context_candidates,
             favorites_meta=favorites_meta,
             favorites_map=favorites_map,
             read_meta=read_meta,
             read_map=read_map,
+            deep_read_meta=deep_read_meta,
+            deep_read_map=deep_read_map,
             extra={'uid': uid} if uid else {},
         )
         response: RecommendationResponse = recommendation_engine.recommend(context)
@@ -231,12 +256,21 @@ def create_index_routes(
 
         annotated.sort(key=_sort_key)
 
+        # Detect if all recommended papers have been read
+        # Count how many entries have recommendations
+        recommended_entry_ids = set(response.scores.keys())
+        # Check if any recommended entries are still in the unread list
+        unread_recommended_ids = {e.get("id") for e in annotated if e.get("id") in recommended_entry_ids}
+        # If we have recommendations but none are in the unread list, they're all exhausted
+        recommendations_exhausted = len(recommended_entry_ids) > 0 and len(unread_recommended_ids) == 0
+
         tag_profile = response.profiles.get("tag_preference") if response.profiles else {}
         personalization = {
             'active': True,
             'matched_entries': len(response.scores),
             'top_tags': (tag_profile or {}).get("top_tags", []),
             'generated_at': response.generated_at.isoformat(),
+            'recommendations_exhausted': recommendations_exhausted,
         }
         return annotated, personalization
 
@@ -276,21 +310,35 @@ def create_index_routes(
         personalization = {'active': False}
         favorites_map: Dict[str, Optional[str]] = {}
         user_data = user_service.get_user_data(uid) if uid else None
+        
+        # Check if search is active - if so, skip read/favorite/todo filtering
+        # to allow search to find all papers regardless of status
+        is_search_active = bool(filters.get('search_query'))
+        
         if user_data:
             read_map = user_data.load_read_map()
             favorites_map = user_data.load_favorites_map()
             todo_map = user_data.load_todo_map()
             
-            # For index page: filter out read papers and todo papers
-            read_ids = set(read_map.keys())
+            # For index page: filter out read (not interested), favorites (interested), and todo papers
+            # BUT skip this filtering when search is active, so search can find all papers
+            read_ids = set(read_map.keys())  # "not interested" papers
+            favorite_ids = set(favorites_map.keys())  # "interested" papers
             todo_ids = set(todo_map.keys())
             
-            # Filter out read entries and todo entries
-            entries_meta = EntryFilter.filter_by_read_status(all_entries_meta, read_ids, show_read=False)
-            entries_meta = [e for e in entries_meta if e["id"] not in todo_ids]
+            if is_search_active:
+                # When search is active, don't filter by read/favorite/todo
+                # Search will be performed across all papers
+                entries_meta = all_entries_meta
+            else:
+                # Filter out read, favorite, and todo entries from main index
+                entries_meta = EntryFilter.filter_by_read_status(all_entries_meta, read_ids, show_read=False)
+                entries_meta = [e for e in entries_meta if e["id"] not in favorite_ids]  # Also exclude favorites
+                entries_meta = [e for e in entries_meta if e["id"] not in todo_ids]
             
-            # Calculate stats - separate read, favorite, and todo counts
-            unread_count = len([e for e in all_entries_meta if e["id"] not in read_ids])
+            # Calculate stats - unread excludes read, favorites, and todo
+            processed_ids = read_ids.union(favorite_ids)  # Both "interested" and "not interested" are processed
+            unread_count = len([e for e in all_entries_meta if e["id"] not in processed_ids and e["id"] not in todo_ids])
             todo_count = len(todo_ids)
             stats = user_data.get_read_stats()
             
@@ -305,7 +353,11 @@ def create_index_routes(
             favorites_map = {}
         
         # Apply filters
-        filtered_entries_meta = _apply_filters(entries_meta, filters)
+        # When search is active, pass all_entries_meta so search can find all papers
+        if is_search_active:
+            filtered_entries_meta = _apply_filters(all_entries_meta, filters)
+        else:
+            filtered_entries_meta = _apply_filters(entries_meta, filters)
         
         # Find latest paper by first_created_time (use filtered entries if filter is active)
         latest_paper = None
@@ -328,9 +380,14 @@ def create_index_routes(
                 # Build read_meta for negative signals
                 read_meta: List[Dict[str, Any]] = []
                 read_map: Dict[str, Optional[str]] = {}
+                # Build deep_read_meta for strong interest signals
+                deep_read_meta: List[Dict[str, Any]] = []
+                deep_read_map: Dict[str, Optional[str]] = {}
                 if user_data:
                     read_map = user_data.load_read_map()
                     read_meta = [e for e in all_entries_meta if e["id"] in read_map]
+                    deep_read_map = user_data.load_deep_read_map()
+                    deep_read_meta = [e for e in all_entries_meta if e["id"] in deep_read_map]
                 
                 filtered_entries_meta, personalization = _apply_recommendations(
                     filtered_entries_meta,
@@ -338,8 +395,16 @@ def create_index_routes(
                     favorites_map,
                     read_meta,
                     read_map,
+                    deep_read_meta,
+                    deep_read_map,
                     uid,
+                    all_candidates=all_entries_meta,  # Pass all entries to detect exhaustion
                 )
+                
+                # If search is active, we don't want to show the personalization banner,
+                # but we still want the recommendation scores/annotations on the papers.
+                if is_search_active:
+                    personalization['active'] = False
             else:
                 # User has favorites but they don't exist in summary directory
                 personalization = {
@@ -353,6 +418,18 @@ def create_index_routes(
                 'active': False,
                 'promotional': True,
             }
+        
+        # Get trending data
+        trending_7d = []
+        trending_30d = []
+        if trending_service:
+            try:
+                trending_7d = trending_service.get_trending_tags(period_days=7, limit=15)
+                trending_30d = trending_service.get_trending_tags(period_days=30, limit=15)
+            except Exception as e:
+                # Log error but don't fail the page
+                import logging
+                logging.error(f"Error getting trending data: {e}")
         
         # Pagination
         pagination = Pagination(len(filtered_entries_meta), pagination_params['page'], pagination_params['per_page'])
@@ -373,6 +450,8 @@ def create_index_routes(
             papers_updated_24h=papers_updated_24h,
             papers_updated_72h=papers_updated_72h,
             latest_paper=latest_paper,
+            trending_7d=trending_7d,
+            trending_30d=trending_30d,
         )
         return make_response(render_template_string(index_template, **context))
     
@@ -383,18 +462,19 @@ def create_index_routes(
         if not isinstance(uid, str):
             return uid  # This will be a redirect response
         
-        # Get read entries (include both explicitly read and favorited papers)
+        # Get read entries (only explicitly marked as "not interested", exclude favorites)
         user_data = user_service.get_user_data(uid)
         read_map = user_data.load_read_map()
         favorites_map = user_data.load_favorites_map()
         
-        # Combine read and favorite IDs (favorites are considered read)
+        # Only show papers that are explicitly read but NOT favorited
+        # (favorites are "interested", read-only are "not interested")
         read_ids = set(read_map.keys())
         favorite_ids = set(favorites_map.keys())
-        all_read_ids = read_ids.union(favorite_ids)
+        not_interested_ids = read_ids - favorite_ids  # Exclude favorites from read list
         
         all_entries_meta = entry_scanner.scan_entries_meta()
-        read_entries_meta = [e for e in all_entries_meta if e["id"] in all_read_ids]
+        read_entries_meta = [e for e in all_entries_meta if e["id"] in not_interested_ids]
         
         # Apply filters
         filters = _get_filter_params()
@@ -406,9 +486,9 @@ def create_index_routes(
         pagination = Pagination(len(filtered_read_entries_meta), pagination_params['page'], pagination_params['per_page'])
         page_entries = pagination.get_page_items(filtered_read_entries_meta)
         
-        # Render entries (show both read and favorite timestamps in read list)
+        # Render entries (show read timestamps for "not interested" list)
         user_data = user_service.get_user_data(uid)
-        entries = entry_renderer.render_page_entries(page_entries, user_data, show_read_time=True, show_favorite_time=True)
+        entries = entry_renderer.render_page_entries(page_entries, user_data, show_read_time=True)
         
         # Build context and render - use read_entries_meta for tag cloud (only tags from read papers)
         context = _build_template_context(entries, uid, filters, pagination, show_read=True, all_entries=read_entries_meta)

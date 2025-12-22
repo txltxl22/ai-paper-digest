@@ -1,11 +1,8 @@
 // Article Actions Module
 class ArticleActions {
   constructor() {
-    this.init();
-  }
-
-  init() {
-    document.addEventListener('click', this.handleClick.bind(this));
+    this.boundHandleClick = this.handleClick.bind(this);
+    document.addEventListener('click', this.boundHandleClick);
   }
 
   // Save current scroll position relative to the target element
@@ -29,34 +26,123 @@ class ArticleActions {
     }
   }
 
+  // Check if we're on the first page
+  isOnFirstPage() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    // First page if no page param or page=1
+    return !pageParam || pageParam === '1';
+  }
+
+  // Get the actual header height dynamically (including status bar if visible)
+  getHeaderHeight() {
+    const header = document.querySelector('header');
+    if (!header) {
+      return 100; // Fallback to approximate height
+    }
+    // Get the actual computed height of the header (includes status bar if visible)
+    return header.offsetHeight;
+  }
+
+  // Scroll to first paper on the page
+  scrollToFirstPaper() {
+    const articles = document.querySelectorAll('article');
+    if (articles.length > 0) {
+      const firstArticle = articles[0];
+      const rect = firstArticle.getBoundingClientRect();
+      // Calculate scroll position to show the first paper card completely
+      // Account for sticky header height (dynamically calculated)
+      const headerOffset = this.getHeaderHeight() + 10; // Add 10px padding for better visibility
+      const scrollTop = window.pageYOffset + rect.top - headerOffset;
+      
+      // Ensure we don't scroll to negative position
+      const finalScrollTop = Math.max(0, scrollTop);
+      
+      window.scrollTo({
+        top: finalScrollTop,
+        behavior: 'smooth' // Use smooth for better UX
+      });
+      return true;
+    }
+    return false;
+  }
+
+  // Restore scroll position to the last viewed article
+  restoreLastViewedPosition() {
+    const scrollToId = sessionStorage.getItem('scroll_to_arxiv_id');
+    if (scrollToId) {
+      // Clear it so it doesn't happen again on refresh
+      sessionStorage.removeItem('scroll_to_arxiv_id');
+      
+      // Wait for DOM to be fully ready and articles rendered
+      setTimeout(() => {
+        const targetArticle = document.querySelector(`article[data-id="${scrollToId}"]`);
+        if (targetArticle) {
+          const rect = targetArticle.getBoundingClientRect();
+          const headerOffset = this.getHeaderHeight() + 20; // Extra padding
+          const scrollTop = window.pageYOffset + rect.top - headerOffset;
+          
+          window.scrollTo({
+            top: Math.max(0, scrollTop),
+            behavior: 'instant' // Instant is better for "back" navigation
+          });
+          
+          // Briefly highlight the card to show user where they are
+          targetArticle.style.transition = 'background-color 0.5s ease';
+          const originalBg = targetArticle.style.backgroundColor;
+          targetArticle.style.backgroundColor = 'var(--primary-light)';
+          setTimeout(() => {
+            targetArticle.style.backgroundColor = originalBg;
+          }, 1000);
+        }
+      }, 100);
+    }
+  }
+
+  // Reload page with scroll_to_first parameter, preserving other URL params
+  reloadWithScrollToFirst() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('scroll_to_first', '1');
+    window.location.href = url.toString();
+  }
+
   // Scroll to target card or find alternative
   scrollToNextCard(targetCard) {
-    if (targetCard && targetCard.tagName === 'ARTICLE') {
-      // Scroll to the target card
-      const rect = targetCard.getBoundingClientRect();
-      const scrollTop = window.pageYOffset + rect.top - 20; // 20px offset for better visibility
-      window.scrollTo({
-        top: scrollTop,
-        behavior: 'instant'
+    // Use double requestAnimationFrame to ensure DOM has fully reflowed after card removal
+    // First rAF schedules for next paint, second ensures layout is computed
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (targetCard && targetCard.tagName === 'ARTICLE') {
+          // Scroll to the target card
+          const rect = targetCard.getBoundingClientRect();
+          // Account for sticky header height dynamically
+          const headerOffset = this.getHeaderHeight();
+          const scrollTop = window.pageYOffset + rect.top - headerOffset;
+          window.scrollTo({
+            top: Math.max(0, scrollTop), // Ensure non-negative
+            behavior: 'instant'
+          });
+        } else {
+          // If no target card, try to find any remaining article
+          const articles = document.querySelectorAll('article');
+          if (articles.length > 0) {
+            const rect = articles[0].getBoundingClientRect();
+            const headerOffset = this.getHeaderHeight();
+            const scrollTop = window.pageYOffset + rect.top - headerOffset;
+            window.scrollTo({
+              top: Math.max(0, scrollTop), // Ensure non-negative
+              behavior: 'instant'
+            });
+          } else {
+            // No cards left, scroll to top
+            window.scrollTo({
+              top: 0,
+              behavior: 'instant'
+            });
+          }
+        }
       });
-    } else {
-      // If no target card, try to find any remaining article
-      const articles = document.querySelectorAll('article');
-      if (articles.length > 0) {
-        const rect = articles[0].getBoundingClientRect();
-        const scrollTop = window.pageYOffset + rect.top - 20;
-        window.scrollTo({
-          top: scrollTop,
-          behavior: 'instant'
-        });
-      } else {
-        // No cards left, scroll to top
-        window.scrollTo({
-          top: 0,
-          behavior: 'instant'
-        });
-      }
-    }
+    });
   }
 
   handleClick(ev) {
@@ -143,6 +229,8 @@ class ArticleActions {
       if (!isAbstractOnly) {
         const id = art.getAttribute('data-id') || deepReadElement.getAttribute('data-id');
         if (id) {
+          // Save ID for scroll restoration
+          sessionStorage.setItem('scroll_to_arxiv_id', id);
           window.location.href = `/summary/${id}`;
         }
         return;
@@ -151,6 +239,16 @@ class ArticleActions {
       // If abstract-only, trigger generation (backend will check login)
       this.triggerDeepReadFromIndex(deepReadElement);
       return;
+    }
+
+    // Handle detail page link clicks for scroll restoration
+    let arxivIdLink = ev.target.closest('.arxiv-id-link');
+    if (arxivIdLink) {
+      const art = arxivIdLink.closest('article');
+      const id = art ? art.getAttribute('data-id') : arxivIdLink.getAttribute('data-arxiv-id');
+      if (id) {
+        sessionStorage.setItem('scroll_to_arxiv_id', id);
+      }
     }
   }
 
@@ -187,7 +285,7 @@ class ArticleActions {
           button.textContent = '生成中...';
           button.style.opacity = '0.7';
           button.disabled = true;
-          showToast('深度阅读正在生成中，请稍候');
+          showToast('AI 全文研读正在生成中，请稍候');
           // Trigger status bar update
           if (window.deepReadStatusBar) {
             window.deepReadStatusBar.updateStatus();
@@ -225,7 +323,7 @@ class ArticleActions {
         button.textContent = originalText;
         button.style.opacity = '';
         button.disabled = false;
-          this.guideToLogin('使用深度阅读');
+          this.guideToLogin('使用 AI 全文研读');
         } else if (r.ok && data.success) {
         // Keep button in "生成中" state
         button.textContent = '生成中...';
@@ -233,13 +331,15 @@ class ArticleActions {
         button.disabled = true;
         
         if (data.already_processing) {
-          showToast('深度阅读正在生成中，请稍候');
+          showToast('AI 全文研读正在生成中，请稍候');
         } else {
-          showToast('深度阅读生成已开始，请稍候');
+          showToast('AI 全文研读已开始，请稍候');
         }
         
         // Trigger status bar update and start polling
         if (window.deepReadStatusBar) {
+          // Register this job so we can detect when it completes
+          window.deepReadStatusBar.registerProcessingJob(id);
           // Update status and start polling (will check if already polling)
           window.deepReadStatusBar.updateStatus().then(() => {
             // Start polling to track the new job
@@ -251,45 +351,95 @@ class ArticleActions {
         button.textContent = originalText;
         button.style.opacity = '';
         button.disabled = false;
-        showToast(data.message || '深度阅读生成失败，请稍后重试');
+        showToast(data.message || 'AI 全文研读生成失败，请稍后重试');
       }
     } catch (error) {
       // Restore button state on error
       button.textContent = originalText;
       button.style.opacity = '';
       button.disabled = false;
-        showToast('网络错误，无法触发深度阅读');
+        showToast('网络错误，无法触发 AI 全文研读');
     }
   }
 
   markRead(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[markRead] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
     
-    // Save scroll position before removal
-    this.saveScrollPosition(art);
+    // Add loading state
+    const originalText = link.textContent;
+    link.textContent = '标记中...';
+    link.style.opacity = '0.6';
+    link.style.pointerEvents = 'none';
+    
+    // Save scroll position before removal (only if not on detail page)
+    if (!isOnDetailPage) {
+      this.saveScrollPosition(art);
+    }
     
     // Capture next card reference before removal
-    const nextCard = art.nextElementSibling;
+    const nextCard = !isOnDetailPage ? art.nextElementSibling : null;
     
     fetch(window.appUrls.mark_read + id, { method: 'POST' }).then(r => {
       if (r.ok) {
-        art.remove();
-        this.updateInfoBarCounts(-1, 1);
-        
-        // Scroll to next card after removal
-        setTimeout(() => {
-          this.scrollToNextCard(nextCard);
-        }, 0);
+        if (isOnDetailPage) {
+          // On detail page, just update button and show toast
+          link.textContent = '已标记没兴趣';
+          link.classList.add('disabled');
+          link.style.opacity = '';
+          link.style.pointerEvents = '';
+          showToast('已标记为没兴趣 👋');
+        } else {
+          art.remove();
+          this.updateInfoBarCounts(-1, 1);
+          
+          // Check if we're on first page and no articles remain
+          if (this.isOnFirstPage()) {
+            const remainingArticles = document.querySelectorAll('article');
+            if (remainingArticles.length === 0) {
+              // All papers on first page are marked, refresh and scroll to first paper
+              this.reloadWithScrollToFirst();
+              return; // Exit early, page will reload
+            }
+          }
+          
+          // Scroll to next card after removal
+          setTimeout(() => {
+            this.scrollToNextCard(nextCard);
+          }, 0);
+        }
         
         // Track event using centralized tracker
         window.eventTracker.trackMarkRead(art);
+      } else {
+        // Restore on error
+        link.textContent = originalText;
+        link.style.opacity = '';
+        link.style.pointerEvents = '';
+        showToast('操作失败，请重试');
       }
+    }).catch(() => {
+      // Restore on error
+      link.textContent = originalText;
+      link.style.opacity = '';
+      link.style.pointerEvents = '';
+      showToast('网络错误，请重试');
     });
   }
 
   removeFromRead(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[removeFromRead] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
     
     // Save scroll position before removal
@@ -314,40 +464,65 @@ class ArticleActions {
   }
 
   toggleFavorite(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[toggleFavorite] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
-    const isFavorited = link.getAttribute('data-favorited') === 'true';
+    const isInterested = link.getAttribute('data-favorited') === 'true';
     
-    // Check if we're on todo page (marking as favorite removes from todo)
+    // Check page context to determine behavior
     const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
-    const isMarkingFavorite = !isFavorited;
+    const isOnInterestedPage = window.location.pathname.includes('/favorites');
+    const isOnNotInterestedPage = window.location.pathname.includes('/read');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
+    const isMarkingInterested = !isInterested;
+    
+    console.log('[toggleFavorite] id:', id, 'isInterested:', isInterested, 'isMarkingInterested:', isMarkingInterested, 'pathname:', window.location.pathname);
+    
+    // Should remove card: when marking interested on main/todo page, or unmarking on interested page
+    // Never remove on detail page (we just update the button state)
+    const shouldRemoveCard = !isOnDetailPage && (
+      (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
+      (!isMarkingInterested && isOnInterestedPage)
+    );
+    
+    console.log('[toggleFavorite] shouldRemoveCard:', shouldRemoveCard, 'isOnInterestedPage:', isOnInterestedPage, 'isOnNotInterestedPage:', isOnNotInterestedPage);
     
     // Add loading state
     const originalText = link.textContent;
-    link.textContent = isFavorited ? '取消中...' : '感兴趣中...';
+    link.textContent = isInterested ? '取消中...' : '感兴趣中...';
     link.style.opacity = '0.6';
     link.style.pointerEvents = 'none';
     
-    const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
+    const url = isInterested ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
     
     // Save scroll position before potential removal
-    if (isOnTodoPage && isMarkingFavorite) {
+    if (shouldRemoveCard) {
       this.saveScrollPosition(art);
     }
     
     // Capture next card reference before potential removal
-    const nextCard = isOnTodoPage && isMarkingFavorite ? art.nextElementSibling : null;
+    const nextCard = shouldRemoveCard ? art.nextElementSibling : null;
     
     fetch(url + id, { method: 'POST' }).then(r => {
+      console.log('[toggleFavorite] fetch response ok:', r.ok, 'shouldRemoveCard:', shouldRemoveCard);
       if (r.ok) {
-        const newFavorited = !isFavorited;
+        const newInterested = !isInterested;
         
-        // If on todo page and marking as favorite, remove card (backend removes from todo)
-        if (isOnTodoPage && isMarkingFavorite) {
+        // Remove card from page when appropriate
+        if (shouldRemoveCard) {
+          console.log('[toggleFavorite] Removing card from page');
           art.remove();
           
-          // Update todo count in info bar
-          this.updateInfoBarCounts(0, 0, -1);
+          // Update counts based on page context
+          if (isOnTodoPage) {
+            this.updateInfoBarCounts(0, 0, -1);  // Decrease todo count
+          } else if (!isOnInterestedPage && !isOnNotInterestedPage) {
+            this.updateInfoBarCounts(-1, 0);  // Decrease unread count on main page
+          }
           
           // Scroll to next card after removal
           setTimeout(() => {
@@ -355,17 +530,18 @@ class ArticleActions {
           }, 0);
         } else {
           // Update button state (no removal from page)
-          link.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
-          link.textContent = newFavorited ? '取消感兴趣' : '感兴趣';
+          console.log('[toggleFavorite] Updating button state, not removing');
+          link.setAttribute('data-favorited', newInterested ? 'true' : 'false');
+          link.textContent = newInterested ? '取消感兴趣' : '感兴趣';
           link.style.opacity = '';
           link.style.pointerEvents = '';
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
+        showToast(newInterested ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
-        window.eventTracker.trackFavorite(art, newFavorited);
+        window.eventTracker.trackFavorite(art, newInterested);
       } else {
         // Restore original state on error
         link.textContent = originalText;
@@ -383,39 +559,64 @@ class ArticleActions {
   }
 
   toggleFavoriteStar(button) {
-    const art = button.closest('article');
+    const art = button.closest('article[data-id]') || button.closest('[data-id]');
+    if (!art) {
+      console.error('[toggleFavoriteStar] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = button.getAttribute('data-id') || art.getAttribute('data-id');
-    const isFavorited = button.getAttribute('data-favorited') === 'true';
+    const isInterested = button.getAttribute('data-favorited') === 'true';
     
-    // Check if we're on todo page (marking as favorite removes from todo)
+    // Check page context to determine behavior
     const isOnTodoPage = art.querySelector('.remove-todo-link') !== null;
-    const isMarkingFavorite = !isFavorited;
+    const isOnInterestedPage = window.location.pathname.includes('/favorites');
+    const isOnNotInterestedPage = window.location.pathname.includes('/read');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
+    const isMarkingInterested = !isInterested;
+    
+    console.log('[toggleFavoriteStar] id:', id, 'isInterested:', isInterested, 'isMarkingInterested:', isMarkingInterested);
+    
+    // Should remove card: when marking interested on main/todo page, or unmarking on interested page
+    // Never remove on detail page (we just update the button state)
+    const shouldRemoveCard = !isOnDetailPage && (
+      (isMarkingInterested && !isOnInterestedPage && !isOnNotInterestedPage) || 
+      (!isMarkingInterested && isOnInterestedPage)
+    );
+    
+    console.log('[toggleFavoriteStar] shouldRemoveCard:', shouldRemoveCard);
     
     // Add loading state with animation
     button.style.opacity = '0.5';
     button.style.pointerEvents = 'none';
     button.style.transform = 'scale(0.9)';
     
-    const url = isFavorited ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
+    const url = isInterested ? window.appUrls.unmark_favorite : window.appUrls.mark_favorite;
     
     // Save scroll position before potential removal
-    if (isOnTodoPage && isMarkingFavorite) {
+    if (shouldRemoveCard) {
       this.saveScrollPosition(art);
     }
     
     // Capture next card reference before potential removal
-    const nextCard = isOnTodoPage && isMarkingFavorite ? art.nextElementSibling : null;
+    const nextCard = shouldRemoveCard ? art.nextElementSibling : null;
     
     fetch(url + id, { method: 'POST' }).then(r => {
+      console.log('[toggleFavoriteStar] fetch response ok:', r.ok, 'shouldRemoveCard:', shouldRemoveCard);
       if (r.ok) {
-        const newFavorited = !isFavorited;
+        const newInterested = !isInterested;
         
-        // If on todo page and marking as favorite, remove card (backend removes from todo)
-        if (isOnTodoPage && isMarkingFavorite) {
+        // Remove card from page when appropriate
+        if (shouldRemoveCard) {
+          console.log('[toggleFavoriteStar] Removing card from page');
           art.remove();
           
-          // Update todo count in info bar
-          this.updateInfoBarCounts(0, 0, -1);
+          // Update counts based on page context
+          if (isOnTodoPage) {
+            this.updateInfoBarCounts(0, 0, -1);  // Decrease todo count
+          } else if (!isOnInterestedPage && !isOnNotInterestedPage) {
+            this.updateInfoBarCounts(-1, 0);  // Decrease unread count on main page
+          }
           
           // Scroll to next card after removal
           setTimeout(() => {
@@ -423,21 +624,22 @@ class ArticleActions {
           }, 0);
         } else {
           // Update button state (no removal from page)
-          button.setAttribute('data-favorited', newFavorited ? 'true' : 'false');
+          console.log('[toggleFavoriteStar] Updating button state, not removing');
+          button.setAttribute('data-favorited', newInterested ? 'true' : 'false');
           const svg = button.querySelector('svg');
           if (svg) {
-            svg.style.fill = newFavorited ? '#fbbf24' : 'none';
+            svg.style.fill = newInterested ? '#fbbf24' : 'none';
           }
-          button.style.opacity = newFavorited ? '1' : '0.6';
+          button.style.opacity = newInterested ? '1' : '0.6';
           button.style.pointerEvents = '';
           button.style.transform = '';
         }
         
         // Show success toast
-        showToast(newFavorited ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
+        showToast(newInterested ? '已添加到感兴趣 ⭐' : '已从感兴趣移除');
         
         // Track event
-        window.eventTracker.trackFavorite(art, newFavorited);
+        window.eventTracker.trackFavorite(art, newInterested);
       } else {
         // Restore original state on error
         button.style.opacity = '';
@@ -455,7 +657,12 @@ class ArticleActions {
   }
 
   removeFromFavorites(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[removeFromFavorites] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
     
     // Save scroll position before removal
@@ -480,8 +687,14 @@ class ArticleActions {
   }
 
   addToTodo(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[addToTodo] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
+    const isOnDetailPage = window.location.pathname.startsWith('/summary/');
     
     // Add loading state
     const originalText = link.textContent;
@@ -491,22 +704,31 @@ class ArticleActions {
     
     fetch(window.appUrls.mark_todo + id, { method: 'POST' }).then(r => {
       if (r.ok) {
-        // Save scroll position before removal
-        this.saveScrollPosition(art);
-        
-        // Capture next card reference before removal
-        const nextCard = art.nextElementSibling;
-        
-        art.remove();
-        this.updateInfoBarCounts(-1, 0, 1);
-        
-        // Scroll to next card after removal
-        setTimeout(() => {
-          this.scrollToNextCard(nextCard);
-        }, 0);
-        
-        // Show success toast
-        showToast('已添加到待读列表 📌');
+        if (isOnDetailPage) {
+          // On detail page, just update button and show toast
+          link.textContent = '已加入待读';
+          link.classList.add('disabled');
+          link.style.opacity = '';
+          link.style.pointerEvents = '';
+          showToast('已添加到待读列表 📌');
+        } else {
+          // Save scroll position before removal
+          this.saveScrollPosition(art);
+          
+          // Capture next card reference before removal
+          const nextCard = art.nextElementSibling;
+          
+          art.remove();
+          this.updateInfoBarCounts(-1, 0, 1);
+          
+          // Scroll to next card after removal
+          setTimeout(() => {
+            this.scrollToNextCard(nextCard);
+          }, 0);
+          
+          // Show success toast
+          showToast('已添加到待读列表 📌');
+        }
         
         // Track event
         window.eventTracker.trackAddToTodo(art);
@@ -527,7 +749,12 @@ class ArticleActions {
   }
 
   removeFromTodo(link) {
-    const art = link.closest('article');
+    const art = link.closest('article[data-id]') || link.closest('[data-id]');
+    if (!art) {
+      console.error('[removeFromTodo] No parent element with data-id found');
+      showToast('操作失败，请刷新页面重试');
+      return;
+    }
     const id = art.getAttribute('data-id');
     
     // Save scroll position before removal
@@ -592,4 +819,56 @@ class ArticleActions {
 }
 
 // Initialize article actions
-new ArticleActions();
+(function() {
+  let instance = null;
+  
+  function init() {
+    // Remove old handler if exists
+    if (instance) {
+      document.removeEventListener('click', instance.boundHandleClick);
+    }
+    instance = new ArticleActions();
+    
+    // Check for scroll restoration
+    instance.restoreLastViewedPosition();
+  }
+  
+  // Initialize now
+  init();
+  
+  // Re-initialize on pageshow to handle bfcache (back/forward navigation)
+  window.addEventListener('pageshow', init);
+  
+  // Handle scroll_to_first parameter on page load
+  function handleScrollToFirst() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('scroll_to_first') === '1') {
+      // Remove the parameter from URL to avoid scrolling on subsequent navigations
+      urlParams.delete('scroll_to_first');
+      const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '') + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+      
+      // Wait for DOM to be ready, then scroll to first paper
+      // Use a longer timeout to ensure all content is loaded and rendered
+      setTimeout(() => {
+        if (instance) {
+          const scrolled = instance.scrollToFirstPaper();
+          if (!scrolled) {
+            // No papers found, just scroll to top
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          }
+        }
+      }, 300); // Increased timeout to ensure page is fully rendered
+    }
+  }
+  
+  // Check on DOMContentLoaded and pageshow
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', handleScrollToFirst);
+  } else {
+    handleScrollToFirst();
+  }
+  
+  // Also check on pageshow (for back/forward navigation)
+  window.addEventListener('pageshow', handleScrollToFirst);
+})();

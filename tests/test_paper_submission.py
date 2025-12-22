@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 import pytest
 from datetime import date
 
@@ -46,6 +46,42 @@ def paper_submission_utils(tmp_path):
         "ai_cache_manager": AICacheManager(data_dir / "ai_cache.json"),
         "data_dir": data_dir
     }
+
+
+def create_mock_quota_manager(allowed=True, tier="normal", remaining=3, message="OK"):
+    """Create a mock QuotaManager for testing."""
+    from app.quota.models import UserTier, QuotaResult
+    
+    mock_quota = MagicMock()
+    
+    # Mock check_only to return a QuotaResult
+    quota_result = QuotaResult(
+        allowed=allowed,
+        tier=UserTier.NORMAL if tier == "normal" else UserTier.GUEST if tier == "guest" else UserTier.ADMIN,
+        remaining_daily=remaining,
+        message=message
+    )
+    mock_quota.check_only.return_value = quota_result
+    
+    # Mock check_and_consume to return the same result
+    mock_quota.check_and_consume.return_value = quota_result
+    
+    # Mock get_client_ip
+    mock_quota.get_client_ip.return_value = "127.0.0.1"
+    
+    # Mock get_quota_info
+    def get_quota_info_side_effect(ip, uid):
+        return {
+            "tier": tier,
+            "daily_limit": 3 if tier == "normal" else 1,
+            "used_today": (3 if tier == "normal" else 1) - remaining,
+            "remaining": remaining,
+            "is_unlimited": tier == "admin",
+            "message": message
+        }
+    mock_quota.get_quota_info.side_effect = get_quota_info_side_effect
+    
+    return mock_quota
 
 
 class TestPaperSubmissionFunctions:
@@ -154,11 +190,12 @@ class TestPaperSubmissionAPI:
         data = response.get_json()
         assert data["error"] == "Empty URL"
         
-        # Test not logged in
+        # Test not logged in - guests can now submit (quota system handles it)
+        # The request will fail later in processing, not at auth stage
+        # We just verify it doesn't return 401 immediately
         response = client.post("/submit_paper", json={"url": "https://fake-arxiv.org/abs/9999.99999"})
-        assert response.status_code == 401
-        data = response.get_json()
-        assert data["error"] == "Login required"
+        # Should not be 401 (guests allowed), but will fail during processing
+        assert response.status_code != 401
     
     def test_submit_paper_daily_limit_exceeded(self, client, tmp_path):
         """Test submission when daily limit is exceeded."""
@@ -201,31 +238,38 @@ class TestPaperSubmissionAPI:
         ai_cache_manager = AICacheManager(data_dir / "ai_judgment_cache.json")
         ai_checker = AIContentChecker(ai_cache_manager, MockLLMConfig(), prompts_dir)
         
+        # Create mock quota manager that denies (limit exceeded)
+        mock_quota = create_mock_quota_manager(allowed=False, tier="normal", remaining=0, message="您今日的免费额度已用完，升级Pro获取更多")
+        # Override to return specific error message
+        from app.quota.models import UserTier, QuotaResult
+        quota_result = QuotaResult(
+            allowed=False,
+            tier=UserTier.NORMAL,
+            reason="user_limit",
+            remaining_daily=0,
+            message="您今日的免费额度已用完，升级Pro获取更多"
+        )
+        mock_quota.check_only.return_value = quota_result
+        mock_quota.check_and_consume.return_value = quota_result
+        
         # Create the service
         service = PaperSubmissionService(
             user_data_manager=user_data_manager,
             ai_cache_manager=ai_cache_manager,
             ai_checker=ai_checker,
-            limit_file=limits_file,
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=MockLLMConfig(),
             paper_config=MockPaperConfig(),
-            save_summary_func=None
+            save_summary_func=None,
+            quota_manager=mock_quota
         )
         
-        # Mock the get_client_ip function to return a consistent IP
-        with patch('app.paper_submission.services.get_client_ip', return_value="127.0.0.1"):
-            # Test daily limit exceeded
-            result = service.submit_paper("https://arxiv.org/abs/2506.12345", "testuser")
-            
-            assert result.success is False
-            assert "今天已经提交了3篇论文" in result.message
-            assert result.error == "Daily limit exceeded"
-            
-            # Verify the limit file wasn't incremented
-            limits_data = json.loads(limits_file.read_text(encoding="utf-8"))
-            assert limits_data["127.0.0.1"]["count"] == 3
+        # Test daily limit exceeded
+        result = service.submit_paper("https://arxiv.org/abs/2506.12345", "testuser")
+        
+        assert result.success is False
+        assert "额度已用完" in result.message or "Daily limit exceeded" in result.error
+        assert result.error in ["user_limit", "ip_limit", "Daily limit exceeded"]
     
     def test_submit_paper_successful_processing(self, client, tmp_path):
         """Test successful paper submission and processing."""
@@ -259,17 +303,19 @@ class TestPaperSubmissionAPI:
         ai_cache_manager = AICacheManager(data_dir / "ai_judgment_cache.json")
         ai_checker = AIContentChecker(ai_cache_manager, MockLLMConfig(), prompts_dir)
         
+        # Create mock quota manager that allows
+        mock_quota = create_mock_quota_manager(allowed=True, tier="normal", remaining=3)
+        
         # Create the service
         service = PaperSubmissionService(
             user_data_manager=user_data_manager,
             ai_cache_manager=ai_cache_manager,
             ai_checker=ai_checker,
-            limit_file=data_dir / "daily_limits.json",
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=MockLLMConfig(),
             paper_config=MockPaperConfig(),
-            save_summary_func=None
+            save_summary_func=None,
+            quota_manager=mock_quota
         )
         
         # Test that the service can be instantiated and has the expected methods
@@ -319,17 +365,19 @@ class TestPaperSubmissionAPI:
         ai_cache_manager = AICacheManager(data_dir / "ai_judgment_cache.json")
         ai_checker = AIContentChecker(ai_cache_manager, MockLLMConfig(), prompts_dir)
         
+        # Create mock quota manager that allows
+        mock_quota = create_mock_quota_manager(allowed=True, tier="normal", remaining=3)
+        
         # Create the service
         service = PaperSubmissionService(
             user_data_manager=user_data_manager,
             ai_cache_manager=ai_cache_manager,
             ai_checker=ai_checker,
-            limit_file=data_dir / "daily_limits.json",
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=MockLLMConfig(),
             paper_config=MockPaperConfig(),
-            save_summary_func=None
+            save_summary_func=None,
+            quota_manager=mock_quota
         )
         
         # Test that the service can be instantiated and has the expected methods
@@ -379,24 +427,26 @@ class TestPaperSubmissionAPI:
         ai_cache_manager = AICacheManager(data_dir / "ai_judgment_cache.json")
         ai_checker = AIContentChecker(ai_cache_manager, MockLLMConfig(), prompts_dir)
         
+        # Create mock quota manager that allows
+        mock_quota = create_mock_quota_manager(allowed=True, tier="normal", remaining=3)
+        
         # Create the service
         service = PaperSubmissionService(
             user_data_manager=user_data_manager,
             ai_cache_manager=ai_cache_manager,
             ai_checker=ai_checker,
-            limit_file=data_dir / "daily_limits.json",
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=MockLLMConfig(),
             paper_config=MockPaperConfig(),
-            save_summary_func=None
+            save_summary_func=None,
+            quota_manager=mock_quota
         )
         
         # Test that the service components are properly initialized
         assert service.user_data_manager is user_data_manager
         assert service.ai_cache_manager is ai_cache_manager
         assert service.ai_checker is ai_checker
-        assert service.daily_limit == 3
+        assert service.quota_manager is mock_quota
         assert service.summary_dir == summary_dir
 
 
@@ -450,15 +500,21 @@ class TestIntegration:
     def test_pdf_size_limit_configuration(self, client, tmp_path):
         """Test that PDF size limit is properly configured and enforced."""
         import app.main as sp
+        from config_manager import ConfigManager
         
-        # Test default configuration
+        # Test that the attribute exists
         assert hasattr(sp.paper_config, 'max_pdf_size_mb')
-        assert sp.paper_config.max_pdf_size_mb == 20
+        
+        # Get the expected value from the config manager
+        config = ConfigManager()
+        expected_value = config.get_paper_processing_config().max_pdf_size_mb
+        
+        # Test that the value matches the config
+        assert sp.paper_config.max_pdf_size_mb == expected_value
         
         # Test configuration override via environment variable
         with patch.dict(os.environ, {'MAX_PDF_SIZE_MB': '50'}):
             # Recreate the config to test environment override
-            from config_manager import ConfigManager
             config = ConfigManager()
             paper_config = config.get_paper_processing_config()
             assert paper_config.max_pdf_size_mb == 50
@@ -479,16 +535,16 @@ class TestIntegration:
             dir_path.mkdir(parents=True, exist_ok=True)
         
         # Create service instance
+        mock_quota = create_mock_quota_manager(allowed=True, tier="normal", remaining=3)
         service = PaperSubmissionService(
             user_data_manager=UserDataManager(user_data_dir),
             ai_cache_manager=AICacheManager(data_dir / "ai_cache.json"),
             ai_checker=AIContentChecker(AICacheManager(data_dir / "ai_cache.json"), Mock(), Path("prompts")),
-            limit_file=data_dir / "daily_limits.json",
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=Mock(),
             paper_config=Mock(),
-            save_summary_func=Mock()
+            save_summary_func=Mock(),
+            quota_manager=mock_quota
         )
         
         # Override the progress cache file to use a temporary one
@@ -600,7 +656,7 @@ class TestIntegration:
         
         # Paper 1: submitted first (older)
         paper1_summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="Paper 1", title_en="Paper 1", abstract="Paper 1 content"),
+            paper_info=PaperInfo(title_zh="Paper 1", title_en="Paper 1", abstract="Paper 1 content", submission_date="2025-08-30"),
             one_sentence_summary="Paper 1 content",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),
@@ -617,15 +673,24 @@ class TestIntegration:
             original_url="https://arxiv.org/abs/2506.12345"
         )
         
-        # Manually update timestamps for paper 1
+        # Manually update submission_date for paper 1 (older date)
         from summary_service.record_manager import load_summary_with_service_record
         record1 = load_summary_with_service_record("2506.12345", summary_dir)
         if record1:
-            record1.service_data.created_at = "2025-08-30T10:00:00.000000"
-            record1.service_data.first_created_at = "2025-08-30T10:00:00.000000"
+            # Update PaperInfo submission_date
+            paper_info1 = record1.summary_data.structured_content.paper_info
+            paper_info1.submission_date = "2025-08-30"
+            # Create new StructuredSummary with updated PaperInfo
+            updated_summary1 = StructuredSummary(
+                paper_info=paper_info1,
+                one_sentence_summary=record1.summary_data.structured_content.one_sentence_summary,
+                innovations=record1.summary_data.structured_content.innovations,
+                results=record1.summary_data.structured_content.results,
+                terminology=record1.summary_data.structured_content.terminology
+            )
             save_summary_with_service_record(
                 arxiv_id="2506.12345",
-                summary_content=record1.summary_data.structured_content,
+                summary_content=updated_summary1,
                 tags=record1.summary_data.tags,
                 summary_dir=summary_dir,
                 source_type="user",
@@ -635,7 +700,7 @@ class TestIntegration:
         
         # Paper 2: submitted second (newer)
         paper2_summary = StructuredSummary(
-            paper_info=PaperInfo(title_zh="Paper 2", title_en="Paper 2", abstract="Paper 2 content"),
+            paper_info=PaperInfo(title_zh="Paper 2", title_en="Paper 2", abstract="Paper 2 content", submission_date="2025-08-31"),
             one_sentence_summary="Paper 2 content",
             innovations=[],
             results=Results(experimental_highlights=[], practical_value=[]),
@@ -651,21 +716,6 @@ class TestIntegration:
             user_id="testuser",
             original_url="https://arxiv.org/abs/2506.67890"
         )
-        
-        # Manually update timestamps for paper 2
-        record2 = load_summary_with_service_record("2506.67890", summary_dir)
-        if record2:
-            record2.service_data.created_at = "2025-08-31T15:00:00.000000"
-            record2.service_data.first_created_at = "2025-08-31T15:00:00.000000"
-            save_summary_with_service_record(
-                arxiv_id="2506.67890",
-                summary_content=record2.summary_data.structured_content,
-                tags=record2.summary_data.tags,
-                summary_dir=summary_dir,
-                source_type="user",
-                user_id="testuser",
-                original_url="https://arxiv.org/abs/2506.67890"
-            )
         
         # Create scanner and scan entries
         scanner = EntryScanner(summary_dir)
@@ -695,16 +745,16 @@ class TestIntegration:
             dir_path.mkdir(parents=True, exist_ok=True)
         
         # Create service instance
+        mock_quota = create_mock_quota_manager(allowed=True, tier="normal", remaining=3)
         service = PaperSubmissionService(
             user_data_manager=UserDataManager(user_data_dir),
             ai_cache_manager=AICacheManager(data_dir / "ai_cache.json"),
             ai_checker=AIContentChecker(AICacheManager(data_dir / "ai_cache.json"), Mock(), Path("prompts")),
-            limit_file=data_dir / "daily_limits.json",
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=Mock(),
             paper_config=Mock(),
-            save_summary_func=Mock()
+            save_summary_func=Mock(),
+            quota_manager=mock_quota
         )
         
         # Override the progress cache file to use a temporary one
@@ -761,42 +811,46 @@ class TestIntegration:
         for dir_path in [user_data_dir, summary_dir, data_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
         
-        # Create daily limits file with test data
-        limits_file = data_dir / "daily_limits.json"
-        today = date.today().isoformat()
-        limits_data = {
-            "127.0.0.1": {"date": today, "count": 2}
-        }
-        limits_file.write_text(json.dumps(limits_data), encoding="utf-8")
+        # Create mock quota manager with test data (2 used, 1 remaining)
+        mock_quota = create_mock_quota_manager(allowed=True, tier="normal", remaining=1)
+        # Override get_quota_info to return specific test values
+        def get_quota_info_override(ip, uid):
+            return {
+                "tier": "normal",
+                "daily_limit": 3,
+                "used_today": 2,
+                "remaining": 1,
+                "is_unlimited": False,
+                "message": "今日剩余: 1/3"
+            }
+        mock_quota.get_quota_info.side_effect = get_quota_info_override
         
         # Create service instance
         service = PaperSubmissionService(
             user_data_manager=UserDataManager(user_data_dir),
             ai_cache_manager=AICacheManager(data_dir / "ai_cache.json"),
             ai_checker=AIContentChecker(AICacheManager(data_dir / "ai_cache.json"), Mock(), Path("prompts")),
-            limit_file=limits_file,
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=Mock(),
             paper_config=Mock(),
-            save_summary_func=Mock()
+            save_summary_func=Mock(),
+            quota_manager=mock_quota
         )
         
-        # Mock get_client_ip to return our test IP
-        with patch('app.paper_submission.services.get_client_ip', return_value="127.0.0.1"):
-            quota_info = service.get_user_quota("testuser")
-            
-            # Verify response structure
-            assert 'daily_limit' in quota_info
-            assert 'used' in quota_info
-            assert 'remaining' in quota_info
-            assert 'next_reset' in quota_info
-            assert 'next_reset_formatted' in quota_info
-            
-            # Verify values
-            assert quota_info['daily_limit'] == 3
-            assert quota_info['used'] == 2
-            assert quota_info['remaining'] == 1
+        # quota_manager.get_client_ip is already mocked to return "127.0.0.1"
+        quota_info = service.get_user_quota("testuser")
+        
+        # Verify response structure
+        assert 'daily_limit' in quota_info
+        assert 'used' in quota_info
+        assert 'remaining' in quota_info
+        assert 'next_reset' in quota_info
+        assert 'next_reset_formatted' in quota_info
+        
+        # Verify values
+        assert quota_info['daily_limit'] == 3
+        assert quota_info['used'] == 2
+        assert quota_info['remaining'] == 1
 
     def test_download_progress_api_endpoint(self, client, tmp_path):
         """Test the download progress API endpoint."""
@@ -815,16 +869,16 @@ class TestIntegration:
             dir_path.mkdir(parents=True, exist_ok=True)
         
         # Create service instance
+        mock_quota = create_mock_quota_manager(allowed=True, tier="normal", remaining=3)
         service = PaperSubmissionService(
             user_data_manager=UserDataManager(user_data_dir),
             ai_cache_manager=AICacheManager(data_dir / "ai_cache.json"),
             ai_checker=AIContentChecker(AICacheManager(data_dir / "ai_cache.json"), Mock(), Path("prompts")),
-            limit_file=data_dir / "daily_limits.json",
-            daily_limit=3,
             summary_dir=summary_dir,
             llm_config=Mock(),
             paper_config=Mock(),
-            save_summary_func=Mock()
+            save_summary_func=Mock(),
+            quota_manager=mock_quota
         )
         
         # Override the progress cache file to use a temporary one

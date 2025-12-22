@@ -132,7 +132,15 @@ def load_summary_with_service_record(arxiv_id: str, summary_dir: Path) -> Option
             data = json.load(f)
         
         # Use Pydantic's model_validate - the saved format matches SummaryRecord exactly
-        return SummaryRecord.model_validate(data)
+        record = SummaryRecord.model_validate(data)
+        
+        # Rebuild markdown_content if it's missing but structured_content is present
+        # Handle cases where markdown_content is None, empty, or just whitespace
+        has_content = record.summary_data.markdown_content and record.summary_data.markdown_content.strip()
+        if record.summary_data.structured_content and not has_content:
+            record.summary_data.markdown_content = record.summary_data.structured_content.to_markdown()
+            
+        return record
     except Exception as e:
         print(f"Error loading service record for {arxiv_id}: {e}")
         return None

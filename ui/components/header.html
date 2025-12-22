@@ -1,22 +1,24 @@
 <!-- Mobile-Responsive Header -->
 <header>
   <div class="header-main-row">
-    <div class="header-left">
-      <h1>
-        {% if show_back_link %}
-          <a href='{{ url_for("index_page.index") }}'>← 返回列表</a>
-        {% else %}
-          <a href='{{ url_for("index_page.index") }}'>📚 arXiv最新AI论文速览速学</a>
-        {% endif %}
-      </h1>
-    </div>
-    
-    <!-- Desktop Navigation -->
-    <div class="page-header-right desktop-nav">
+  <div class="header-left">
+    <h1>
+      {% if show_back_link %}
+        <a href='{{ url_for("index_page.index") }}' class="back-link" onclick="if(document.referrer.includes(window.location.host)) { history.back(); return false; }">← 返回列表</a>
+      {% else %}
+        <a href='{{ url_for("index_page.index") }}' class="header-logo-container">
+          <img src="/static/favicon.svg" alt="Logo" class="header-logo-img">
+          <span>arXiv最新AI论文速览速学</span>
+        </a>
+      {% endif %}
+    </h1>
+  </div>
+  
+  <!-- Desktop Navigation -->
+  <div class="page-header-right desktop-nav">
     {% if uid and not show_back_link %}
       <a href="{{ url_for('index_page.read_papers') }}" class="nav-btn">没兴趣论文</a>
       <a href="{{ url_for('index_page.favorite_papers') }}" class="nav-btn">感兴趣论文</a>
-      <a href="{{ url_for('index_page.todo_papers') }}" class="nav-btn">待读论文</a>
       {% if uid in admin_users %}
       <button id='admin-fetch-btn' class="nav-btn admin-btn" title="获取最新论文摘要">获取最新</button>
       <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="nav-btn" title="访问统计">访问统计</a>
@@ -31,42 +33,65 @@
       </form>
     {% endif %}
     
-      <button id="theme-toggle" class="theme-btn" type="button" aria-label="切换主题" title="切换主题" data-icon-light="🌙" data-icon-dark="☀️">🌙</button>
-    </div>
+    {% if not show_back_link %}
+      <a href="{{ url_for('story_showcase.story_index') }}" class="nav-btn" target="_blank">关于</a>
+    {% endif %}
+    
+    <button id="theme-toggle" class="theme-btn" type="button" aria-label="切换主题" title="切换主题" data-icon-light="🌙" data-icon-dark="☀️">🌙</button>
+  </div>
 
-    <!-- Mobile Menu Button -->
-    <button id="mobile-menu-toggle" class="mobile-menu-btn" aria-label="打开菜单" title="打开菜单">
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-    </button>
+  <!-- Mobile Menu Button -->
+  <button id="mobile-menu-toggle" class="mobile-menu-btn" aria-label="打开菜单" title="打开菜单">
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+  </button>
   </div>
-  
-  <!-- Deep Read Status Bar (inside header) -->
-  {% if uid %}
-  <div id="deep-read-status-bar" class="header-status-bar" style="display: none;">
-    <div class="status-bar-content">
-      <span class="status-bar-label">🤖 深度阅读状态:</span>
-      
-      <!-- Processing Section -->
-      <div id="deep-read-processing" class="status-section" style="display: none;">
-        <span class="status-label">生成中:</span>
-        <div id="deep-read-processing-list" class="status-items">
-          <!-- Processing items will be inserted here -->
-        </div>
+</header>
+
+<!-- Mobile Mini-Header - Modern compact bar when main header scrolls away -->
+<div class="mobile-mini-header">
+  <button class="mini-header-menu-btn" id="mini-header-menu-btn" aria-label="打开菜单" title="打开菜单">
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+    <span class="hamburger-line"></span>
+  </button>
+  <a href='{{ url_for("index_page.index") }}' class="mini-header-logo">
+    <img src="/static/favicon.svg" alt="Logo" class="mini-logo-img">
+    <span>AI论文速览速学</span>
+  </a>
+  <div style="width: 36px;"></div> <!-- Spacer for centering -->
+</div>
+
+<!-- Deep Read Status Bar (fixed at top, independent of header) -->
+{% if uid %}
+    <div id="deep-read-status-bar" class="deep-read-status-bar-fixed" style="display: none;">
+      <div class="status-bar-content">
+        <span class="status-bar-label">
+          <svg class="ai-sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 1.1em; height: 1.1em; color: white;">
+            <path d="M12 3L14.5 9L21 11.5L14.5 14L12 21L9.5 14L3 11.5L9.5 9L12 3Z" fill="currentColor"/>
+            <path d="M18 3L19.14 5.86L22 7L19.14 8.14L18 11L16.86 8.14L14 7L16.86 5.86L18 3Z" fill="currentColor" opacity="0.7"/>
+          </svg> AI 研读状态:
+        </span>
+    
+    <!-- Processing Section -->
+    <div id="deep-read-processing" class="status-section" style="display: none;">
+      <span class="status-label">生成中:</span>
+      <div id="deep-read-processing-list" class="status-items">
+        <!-- Processing items will be inserted here -->
       </div>
-      
-      <!-- Completed Section -->
-      <div id="deep-read-completed" class="status-section" style="display: none;">
-        <span class="status-label">已完成:</span>
-        <div id="deep-read-completed-list" class="status-items">
-          <!-- Completed items will be inserted here -->
-        </div>
+    </div>
+    
+    <!-- Completed Section -->
+    <div id="deep-read-completed" class="status-section" style="display: none;">
+      <span class="status-label">已完成:</span>
+      <div id="deep-read-completed-list" class="status-items">
+        <!-- Completed items will be inserted here -->
       </div>
     </div>
   </div>
-  {% endif %}
-</header>
+</div>
+{% endif %}
 
 <!-- Password Management Modal -->
 <div id="password-modal" class="modal" style="display: none;">
@@ -141,61 +166,65 @@
       <button id="mobile-nav-close" class="mobile-nav-close" aria-label="关闭菜单">×</button>
     </div>
     
-    <div class="mobile-nav-body">
-      {% if uid and not show_back_link %}
-        <a href="{{ url_for('index_page.read_papers') }}" class="mobile-nav-item">
-          <span class="nav-icon">📖</span>
-          <span class="nav-text">没兴趣论文</span>
-        </a>
-        <a href="{{ url_for('index_page.favorite_papers') }}" class="mobile-nav-item">
-          <span class="nav-icon">⭐</span>
-          <span class="nav-text">感兴趣论文</span>
-        </a>
-        <a href="{{ url_for('index_page.todo_papers') }}" class="mobile-nav-item">
-          <span class="nav-icon">📌</span>
-          <span class="nav-text">待读论文</span>
-        </a>
-        {% if uid in admin_users %}
-        <button id='mobile-admin-fetch-btn' class="mobile-nav-item mobile-nav-btn">
-          <span class="nav-icon">🔄</span>
-          <span class="nav-text">获取最新</span>
-        </button>
-        <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="mobile-nav-item">
-          <span class="nav-icon">📊</span>
-          <span class="nav-text">访问统计</span>
-        </a>
-        {% endif %}
-        <div class="mobile-nav-divider"></div>
-        <div class="mobile-nav-item mobile-user-info">
-          <span class="nav-icon">👤</span>
-          <span class="nav-text">{{ uid }}</span>
-        </div>
-        <button id='mobile-logout-btn' class="mobile-nav-item mobile-nav-btn mobile-logout-btn">
-          <span class="nav-icon">🚪</span>
-          <span class="nav-text">退出</span>
-        </button>
-      {% elif not show_back_link %}
-        <form id='mobile-user-form' method='POST' action='{{ url_for("user_management.set_user") }}' class="mobile-login-form">
-          <div class="mobile-nav-item mobile-login-item">
-            <span class="nav-icon">👤</span>
-            <input name='uid' placeholder='输入用户名' required class="mobile-login-input">
-          </div>
-          <div class="mobile-nav-item mobile-login-item" id="mobile-password-item" style="display: none;">
-            <span class="nav-icon">🔒</span>
-            <input name='password' type='password' placeholder='密码（管理员必填）' class="mobile-login-input" id="mobile-password-input">
-          </div>
-          <button type='submit' class="mobile-nav-item mobile-nav-btn mobile-login-btn">
-            <span class="nav-icon">🚀</span>
-            <span class="nav-text">进入</span>
+        <div class="mobile-nav-body">
+          {% if uid and not show_back_link %}
+            <a href="{{ url_for('index_page.read_papers') }}" class="mobile-nav-item">
+              <span class="nav-icon">📖</span>
+              <span class="nav-text">没兴趣论文</span>
+            </a>
+            <a href="{{ url_for('index_page.favorite_papers') }}" class="mobile-nav-item">
+              <span class="nav-icon">⭐</span>
+              <span class="nav-text">感兴趣论文</span>
+            </a>
+            {% if uid in admin_users %}
+            <button id='mobile-admin-fetch-btn' class="mobile-nav-item mobile-nav-btn">
+              <span class="nav-icon">🔄</span>
+              <span class="nav-text">获取最新</span>
+            </button>
+            <a href="{{ url_for('visitor_stats.stats_dashboard') }}" class="mobile-nav-item">
+              <span class="nav-icon">📊</span>
+              <span class="nav-text">访问统计</span>
+            </a>
+            {% endif %}
+            <div class="mobile-nav-divider"></div>
+            <div class="mobile-nav-item mobile-user-info">
+              <span class="nav-icon">👤</span>
+              <span class="nav-text">{{ uid }}</span>
+            </div>
+            <button id='mobile-logout-btn' class="mobile-nav-item mobile-nav-btn mobile-logout-btn">
+              <span class="nav-icon">🚪</span>
+              <span class="nav-text">退出</span>
+            </button>
+          {% elif not show_back_link %}
+            <form id='mobile-user-form' method='POST' action='{{ url_for("user_management.set_user") }}' class="mobile-login-form">
+              <div class="mobile-nav-item mobile-login-item">
+                <span class="nav-icon">👤</span>
+                <input name='uid' placeholder='输入用户名' required class="mobile-login-input">
+              </div>
+              <div class="mobile-nav-item mobile-login-item" id="mobile-password-item" style="display: none;">
+                <span class="nav-icon">🔒</span>
+                <input name='password' type='password' placeholder='密码（管理员必填）' class="mobile-login-input" id="mobile-password-input">
+              </div>
+              <button type='submit' class="mobile-nav-item mobile-nav-btn mobile-login-btn">
+                <span class="nav-icon">🚀</span>
+                <span class="nav-text">进入</span>
+              </button>
+            </form>
+          {% endif %}
+          
+          <div class="mobile-nav-divider"></div>
+          <button id="mobile-theme-toggle" class="mobile-nav-item mobile-nav-btn">
+            <span class="nav-icon">🌙</span>
+            <span class="nav-text">切换主题</span>
           </button>
-        </form>
-      {% endif %}
-      
-      <div class="mobile-nav-divider"></div>
-      <button id="mobile-theme-toggle" class="mobile-nav-item mobile-nav-btn">
-        <span class="nav-icon">🌙</span>
-        <span class="nav-text">切换主题</span>
-      </button>
-    </div>
+          <a href="{{ url_for('story_showcase.story_index') }}" class="mobile-nav-item" target="_blank">
+            <span class="nav-icon">✨</span>
+            <span class="nav-text">关于</span>
+          </a>
+          <a href="https://github.com/JY0284/ai-paper-digest" class="mobile-nav-item" target="_blank">
+            <span class="nav-icon">🐙</span>
+            <span class="nav-text">GitHub</span>
+          </a>
+        </div>
   </div>
 </div>

@@ -6,6 +6,7 @@
 class MobileNavigation {
     constructor() {
         this.mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+        this.miniHeaderMenuBtn = document.getElementById('mini-header-menu-btn');
         this.mobileNavOverlay = document.getElementById('mobile-nav-overlay');
         this.mobileNavClose = document.getElementById('mobile-nav-close');
         this.mobileNavContent = document.querySelector('.mobile-nav-content');
@@ -36,6 +37,11 @@ class MobileNavigation {
         // Menu toggle events
         if (this.mobileMenuToggle) {
             this.mobileMenuToggle.addEventListener('click', () => this.toggleMenu());
+        }
+        
+        // Mini-header menu button (appears when main header scrolls away)
+        if (this.miniHeaderMenuBtn) {
+            this.miniHeaderMenuBtn.addEventListener('click', () => this.toggleMenu());
         }
         
         if (this.mobileNavClose) {
@@ -125,7 +131,12 @@ class MobileNavigation {
     
     openMenu() {
         this.isMenuOpen = true;
-        this.mobileMenuToggle.classList.add('active');
+        if (this.mobileMenuToggle) {
+            this.mobileMenuToggle.classList.add('active');
+        }
+        if (this.miniHeaderMenuBtn) {
+            this.miniHeaderMenuBtn.classList.add('active');
+        }
         this.mobileNavOverlay.classList.add('active');
         
         // Update theme button icon in mobile menu
@@ -134,7 +145,12 @@ class MobileNavigation {
     
     closeMenu() {
         this.isMenuOpen = false;
-        this.mobileMenuToggle.classList.remove('active');
+        if (this.mobileMenuToggle) {
+            this.mobileMenuToggle.classList.remove('active');
+        }
+        if (this.miniHeaderMenuBtn) {
+            this.miniHeaderMenuBtn.classList.remove('active');
+        }
         this.mobileNavOverlay.classList.remove('active');
     }
     

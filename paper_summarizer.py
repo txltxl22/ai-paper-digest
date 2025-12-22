@@ -177,7 +177,8 @@ def summarize_paper_url(
                         paper_info=PaperInfo(
                             title_zh="",  # Will be filled by LLM later
                             title_en=paper_info.title_en or "",
-                            abstract=paper_info.abstract or ""
+                            abstract=paper_info.abstract or "",
+                            submission_date=paper_info.submission_date  # Include submission date
                         ),
                         one_sentence_summary="",
                         innovations=[],
@@ -227,25 +228,36 @@ def summarize_paper_url(
             existing_tags = existing_summary_record.summary_data.tags
 
             try:
-                # Check if paper info is missing
-                paper_info = None
-                if existing_structured_summary.paper_info.title_en:
-                    paper_info = existing_structured_summary.paper_info
+                # Check if paper info needs updating (missing title, abstract, or submission_date)
+                existing_paper_info = existing_structured_summary.paper_info
+                needs_update = (
+                    not existing_paper_info.title_en or 
+                    not existing_paper_info.abstract or 
+                    not existing_paper_info.submission_date
+                )
 
-                # If paper info is missing, extract and save it
-                updated_abstract = False
-                if not paper_info:
-                    _LOG.info("📄 Paper info missing for %s, extracting and saving...", pdf_path.stem)
-                    paper_info = _get_paper_info_once()
-                    # Save paper info if we extracted it
-                    if paper_info and paper_info.abstract:
+                # If paper info is missing or incomplete, extract and save it
+                updated_paper_info = False
+                paper_info = existing_paper_info
+                if needs_update:
+                    _LOG.info("📄 Paper info incomplete for %s, extracting...", pdf_path.stem)
+                    extracted_info = _get_paper_info_once()
+                    paper_info = extracted_info
+                    # Update only missing fields
+                    if extracted_info:
                         try:
-                            existing_structured_summary.paper_info.title_en = paper_info.title_en
-                            existing_structured_summary.paper_info.abstract = paper_info.abstract
-                            updated_abstract = True
-                            _LOG.info("💾 Saved extracted paper info for %s", pdf_path.stem)
+                            if not existing_paper_info.title_en and extracted_info.title_en:
+                                existing_structured_summary.paper_info.title_en = extracted_info.title_en
+                                updated_paper_info = True
+                            if not existing_paper_info.abstract and extracted_info.abstract:
+                                existing_structured_summary.paper_info.abstract = extracted_info.abstract
+                                updated_paper_info = True
+                            if not existing_paper_info.submission_date and extracted_info.submission_date:
+                                existing_structured_summary.paper_info.submission_date = extracted_info.submission_date
+                                updated_paper_info = True
+                                _LOG.info("📅 Updated submission date to %s for %s", extracted_info.submission_date, pdf_path.stem)
                         except Exception as exc:
-                            _LOG.warning("Failed to save paper info in extract_only mode: %s", exc)
+                            _LOG.warning("Failed to update paper info: %s", exc)
 
                 # Generate tags if they are empty (always, not just in local mode)
                 tags_to_save = existing_tags
@@ -271,8 +283,8 @@ def summarize_paper_url(
                         )
                     tags_to_save = tags_raw
 
-                # Save updated summary if title/abstract were updated or tags were generated
-                if updated_abstract or (tags_to_save != existing_tags):
+                # Save updated summary if paper info was updated or tags were generated
+                if updated_paper_info or (tags_to_save != existing_tags):
                     save_summary_with_service_record(
                         arxiv_id=pdf_path.stem,
                         summary_content=existing_structured_summary,
@@ -286,10 +298,11 @@ def summarize_paper_url(
                         is_abstract_only=existing_summary_record.service_data.is_abstract_only
                     )
 
-                    if updated_abstract:
-                        update_msg = "✅  Updated abstract for existing summary %s"
+                    update_msg = "✅  Updated existing summary %s"
+                    if updated_paper_info:
+                        update_msg += " (paper info)"
                     if tags_to_save != existing_tags:
-                        update_msg += " and tags generated"
+                        update_msg += " (tags)"
 
                     _LOG.info(update_msg, pdf_path.stem)
                 else:
@@ -378,6 +391,10 @@ def summarize_paper_url(
                     if paper_abstract:
                         summary.paper_info.abstract = paper_abstract
                         _LOG.info("📄 Extracted abstract for %s", pdf_path.stem)
+                    # Apply submission date from arXiv
+                    if paper_info.submission_date:
+                        summary.paper_info.submission_date = paper_info.submission_date
+                        _LOG.info("📅 Extracted submission date %s for %s", paper_info.submission_date, pdf_path.stem)
 
                     # Save using the new service record format immediately
                     # Abstract is already in summary.paper_info.abstract

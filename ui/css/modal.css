@@ -70,21 +70,21 @@
 }
 
 .header-icon {
-  font-size: 1.2rem;
+  font-size: var(--font-size-lg);
   opacity: 0.8;
 }
 
 .header-title {
   margin: 0;
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
 }
 
 .close-btn {
   background: var(--action-bg);
   border: 1px solid var(--btn-border);
-  font-size: 1.2rem;
+  font-size: var(--font-size-lg);
   cursor: pointer;
   color: var(--action-text);
   padding: var(--spacing-sm);
@@ -103,7 +103,7 @@
 }
 
 .close-icon {
-  font-size: 1.2rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
 }
 
@@ -137,7 +137,7 @@
   border: 1px solid var(--danger);
   border-radius: var(--radius-md);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -150,11 +150,11 @@
 }
 
 .cancel-icon {
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .cancel-text {
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 /* Progress styling */
@@ -174,13 +174,13 @@
 }
 
 .status-icon {
-  font-size: 1.2rem;
+  font-size: var(--font-size-lg);
 }
 
 .status-text {
   font-weight: 600;
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--font-size-base);
 }
 
 .command-section {
@@ -195,13 +195,13 @@
 }
 
 .command-icon {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
 }
 
 .command-label {
   color: var(--text);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .command-display {
@@ -218,7 +218,7 @@
   border-radius: var(--radius-sm);
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   color: var(--action-text);
-  font-size: 0.85rem;
+  font-size: var(--font-size-xs);
   display: block;
   word-break: break-all;
 }
@@ -227,7 +227,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-md);
-  font-size: 0.8rem;
+  font-size: var(--font-size-xs);
   color: var(--muted-text);
 }
 
@@ -248,7 +248,7 @@
   border-radius: var(--radius-sm);
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   color: var(--action-text);
-  font-size: 0.8rem;
+  font-size: var(--font-size-xs);
 }
 
 /* Log section styling */
@@ -274,13 +274,13 @@
 }
 
 .log-icon {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
 }
 
 .log-text {
   font-weight: 600;
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .clear-btn {
@@ -294,7 +294,7 @@
   color: var(--action-text);
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 0.8rem;
+  font-size: var(--font-size-xs);
 }
 
 .clear-btn:hover {
@@ -303,11 +303,11 @@
 }
 
 .clear-icon {
-  font-size: 0.8rem;
+  font-size: var(--font-size-xs);
 }
 
 .clear-text {
-  font-size: 0.8rem;
+  font-size: var(--font-size-xs);
 }
 
 .log-output {
@@ -315,8 +315,8 @@
   max-height: 300px;
   overflow-y: auto;
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-base);
   color: var(--text);
   background-color: var(--bg);
 }
@@ -352,13 +352,13 @@
 }
 
 .stats-icon {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
 }
 
 .stats-title {
   font-weight: 600;
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .stats-content {
@@ -381,13 +381,13 @@
 .stat-label {
   font-weight: 500;
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .stat-value {
   color: var(--action-text);
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
@@ -403,14 +403,14 @@
 .password-status h4 {
   margin: 0 0 var(--spacing-sm) 0;
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
 }
 
 .password-status p {
   margin: 0;
   color: var(--muted-text);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .form-group {
@@ -422,7 +422,7 @@
   margin-bottom: var(--spacing-sm);
   color: var(--text);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .form-group input {
@@ -432,7 +432,7 @@
   border-radius: var(--radius-md);
   background: var(--bg);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--font-size-base);
   transition: all 0.2s ease;
 }
 
@@ -450,7 +450,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: all 0.2s ease;
   text-decoration: none;
@@ -512,7 +512,7 @@
 
 .close {
   color: var(--muted-text);
-  font-size: 1.5rem;
+  font-size: var(--font-size-xl);
   font-weight: bold;
   cursor: pointer;
   transition: color 0.2s ease;
@@ -557,14 +557,14 @@
 .notification-message {
   flex: 1;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .notification-close {
   background: none;
   border: none;
   color: inherit;
-  font-size: 1.2rem;
+  font-size: var(--font-size-lg);
   font-weight: bold;
   cursor: pointer;
   margin-left: var(--spacing-sm);
@@ -676,12 +676,12 @@
   gap: var(--spacing-sm);
   margin: 0;
   color: var(--text);
-  font-size: 1.1rem;
+  font-size: var(--font-size-md);
   font-weight: 600;
 }
 
 .abstract-modal-icon {
-  font-size: 1.2rem;
+  font-size: var(--font-size-lg);
   opacity: 0.8;
 }
 
@@ -692,9 +692,9 @@
 }
 
 .abstract-modal-text {
-  line-height: 1.7;
+  line-height: var(--line-height-relaxed);
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   margin: 0;
   padding: 0;
 }
@@ -720,18 +720,18 @@
 }
 
 .abstract-modal-error-icon {
-  font-size: 2rem;
+  font-size: var(--font-size-2xl);
   margin-bottom: var(--spacing-md);
   opacity: 0.7;
 }
 
 .abstract-modal-error-message {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   margin-bottom: var(--spacing-md);
 }
 
 .abstract-modal-error-details {
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   color: var(--muted-text);
 }
 
@@ -754,7 +754,7 @@
   border: 1px solid var(--btn-border);
   border-radius: var(--radius-md);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -778,10 +778,10 @@
   }
   
   .abstract-modal-title {
-    font-size: 1rem;
+    font-size: var(--font-size-base);
   }
   
   .abstract-modal-text {
-    font-size: 0.95rem;
+    font-size: var(--font-size-sm);
   }
 }

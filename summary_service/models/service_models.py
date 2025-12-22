@@ -26,7 +26,7 @@ class ServiceRecord(BaseModel):
 class SummaryData(BaseModel):
     """Summary data container matching the saved JSON format."""
     structured_content: StructuredSummary = Field(description="Structured summary content")
-    markdown_content: str = Field(description="Markdown representation of the summary")
+    markdown_content: Optional[str] = Field(default=None, description="Markdown representation of the summary")
     tags: Tags = Field(description="Tags object")
     updated_at: str = Field(description="Last update time (ISO format)")
 

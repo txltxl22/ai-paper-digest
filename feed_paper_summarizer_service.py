@@ -431,7 +431,7 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
     # 2. Parallel summarization
     # ------------------------------------------------------------------
     _LOG.info("🧵  Starting summarization with %d worker(s)…", args.workers)
-    produced: List[Tuple[Optional[Path], Optional[str]]] = [(None, None)] * len(links)
+    produced: List[SummarizationResult] = [SummarizationResult.failure()] * len(links)
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {
@@ -464,7 +464,7 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
                         links[idx] if idx < len(links) else "unknown",
                         exc,
                     )
-                    produced[idx] = (None, None, None)  # Mark as failed
+                    produced[idx] = SummarizationResult.failure()  # Mark as failed
         except KeyboardInterrupt:
             _LOG.warning(
                 "🛑  Processing interrupted by user. Cancelling remaining tasks..."
@@ -479,8 +479,8 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
             time.sleep(2)
             raise  # Re-raise to be caught by main handler
 
-    successes = [p for p in produced if p[0]]
-    success_summaries_paths = [s[0] for s in successes]
+    successes = [p for p in produced if p.is_success]
+    success_summaries_paths = [s.summary_path for s in successes if s.summary_path]
     if args.extract_only:
         _LOG.info(
             "✔️  %d/%d papers extracted to markdown successfully",
@@ -509,8 +509,14 @@ def main(argv: List[str] | None = None) -> None:  # noqa: D401
     # 4. Generate rss xml file (skip in extract_only mode)
     # ------------------------------------------------------------------
     if not args.extract_only:
+        # Convert SummarizationResult objects to tuples for generate_rss_feed
+        success_tuples = [
+            (s.summary_path, s.pdf_url or "", s.paper_subject or "Unknown Title")
+            for s in successes
+            if s.summary_path
+        ]
         total_entries = generate_rss_feed(
-            successes=successes,
+            successes=success_tuples,
             rss_file_path=args.output_rss_path,
             rebuild=args.rebuild,
             max_items=30,

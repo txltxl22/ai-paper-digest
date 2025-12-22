@@ -29,6 +29,7 @@ class AppConfig:
     port: int
     debug: bool
     admin_user_ids: list[str]
+    rybbit_site_id: str
 
 
 @dataclass
@@ -37,8 +38,16 @@ class PaperProcessingConfig:
     max_workers: int
     chunk_size: int
     max_tags: int
-    daily_submission_limit: int
+    daily_submission_limit: int  # Deprecated: use QuotaConfig instead
     max_pdf_size_mb: int
+
+
+@dataclass
+class QuotaConfig:
+    """Quota configuration for tiered user access."""
+    guest_daily_limit: int
+    normal_daily_limit: int
+    pro_users: list[str]
 
 
 @dataclass
@@ -93,7 +102,8 @@ class ConfigManager:
                 "host": "0.0.0.0",
                 "port": 22581,
                 "debug": False,
-                "admin_user_ids": []
+                "admin_user_ids": [],
+                "rybbit_site_id": ""
             },
             "paper_processing": {
                 "max_workers": 4,
@@ -107,6 +117,11 @@ class ConfigManager:
                 "user_data_dir": "user_data",
                 "papers_dir": "papers",
                 "markdown_dir": "markdown"
+            },
+            "quota": {
+                "guest_daily_limit": 1,
+                "normal_daily_limit": 3,
+                "pro_users": []
             }
         }
 
@@ -154,6 +169,9 @@ class ConfigManager:
                 uid.strip() for uid in os.getenv("ADMIN_USER_IDS").split(",") if uid.strip()
             ]
 
+        if os.getenv("RYBBIT_SITE_ID"):
+            self._config["app"]["rybbit_site_id"] = os.getenv("RYBBIT_SITE_ID")
+
         # Paper processing settings
         if os.getenv("MAX_WORKERS"):
             self._config["paper_processing"]["max_workers"] = int(os.getenv("MAX_WORKERS"))
@@ -169,6 +187,18 @@ class ConfigManager:
 
         if os.getenv("MAX_PDF_SIZE_MB"):
             self._config["paper_processing"]["max_pdf_size_mb"] = int(os.getenv("MAX_PDF_SIZE_MB"))
+
+        # Quota settings
+        if os.getenv("GUEST_DAILY_LIMIT"):
+            self._config["quota"]["guest_daily_limit"] = int(os.getenv("GUEST_DAILY_LIMIT"))
+
+        if os.getenv("NORMAL_DAILY_LIMIT"):
+            self._config["quota"]["normal_daily_limit"] = int(os.getenv("NORMAL_DAILY_LIMIT"))
+
+        if os.getenv("PRO_USERS"):
+            self._config["quota"]["pro_users"] = [
+                uid.strip() for uid in os.getenv("PRO_USERS").split(",") if uid.strip()
+            ]
 
     def get_llm_config(self) -> LLMConfig:
         """Get LLM configuration."""
@@ -190,7 +220,8 @@ class ConfigManager:
             host=app_config["host"],
             port=app_config["port"],
             debug=app_config["debug"],
-            admin_user_ids=app_config["admin_user_ids"]
+            admin_user_ids=app_config["admin_user_ids"],
+            rybbit_site_id=app_config.get("rybbit_site_id", "")
         )
 
     def get_paper_processing_config(self) -> PaperProcessingConfig:
@@ -212,6 +243,15 @@ class ConfigManager:
             user_data_dir=paths_config["user_data_dir"],
             papers_dir=paths_config["papers_dir"],
             markdown_dir=paths_config["markdown_dir"]
+        )
+
+    def get_quota_config(self) -> QuotaConfig:
+        """Get quota configuration."""
+        quota_config = self._config.get("quota", {})
+        return QuotaConfig(
+            guest_daily_limit=quota_config.get("guest_daily_limit", 1),
+            normal_daily_limit=quota_config.get("normal_daily_limit", 3),
+            pro_users=quota_config.get("pro_users", [])
         )
 
     def get_config(self) -> Dict[str, Any]:
@@ -250,6 +290,11 @@ def get_paper_processing_config() -> PaperProcessingConfig:
 def get_paths_config() -> PathsConfig:
     """Get paths configuration."""
     return config_manager.get_paths_config()
+
+
+def get_quota_config() -> QuotaConfig:
+    """Get quota configuration."""
+    return config_manager.get_quota_config()
 
 
 def reload_config() -> None:

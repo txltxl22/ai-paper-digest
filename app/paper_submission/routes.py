@@ -30,10 +30,11 @@ def create_paper_submission_routes(paper_submission_service: PaperSubmissionServ
     
     @paper_submission_bp.route("/quota", methods=["GET"])
     def get_user_quota():
-        """Get user's current quota information."""
-        uid = request.cookies.get("uid")
-        if not uid:
-            return jsonify({"error": "Login required"}), 401
+        """Get user's current quota information.
+        
+        Works for both logged-in users and guests.
+        """
+        uid = request.cookies.get("uid")  # None for guests
         
         try:
             quota_info = paper_submission_service.get_user_quota(uid)
@@ -64,7 +65,14 @@ def create_paper_submission_routes(paper_submission_service: PaperSubmissionServ
     
     @paper_submission_bp.route("/submit_paper", methods=["POST"])
     def submit_paper():
-        """Handle paper URL submission from users."""
+        """Handle paper URL submission from users.
+        
+        Supports both logged-in users and guests:
+        - Guests: IP-based quota (1/day default)
+        - Normal users: User-based quota (3/day default)
+        - Pro users: Quota-based (no daily limit)
+        - Admins: Unlimited
+        """
         try:
             data = request.get_json()
             if not data or 'url' not in data:
@@ -74,15 +82,10 @@ def create_paper_submission_routes(paper_submission_service: PaperSubmissionServ
             if not paper_url:
                 return jsonify({"error": "Empty URL"}), 400
             
-            # Check if user is logged in
+            # Get user ID (None for guests - they use IP-based tracking)
             uid = request.cookies.get("uid")
-            if not uid:
-                return jsonify({
-                    "error": "Login required",
-                    "message": "请先登录后再提交论文。"
-                }), 401
             
-            # Submit the paper
+            # Submit the paper (service handles quota for both guests and users)
             result = paper_submission_service.submit_paper(paper_url, uid)
             
             if result.success:

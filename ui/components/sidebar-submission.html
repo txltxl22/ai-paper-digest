@@ -1,0 +1,298 @@
+<!-- Sidebar Paper Submission Component -->
+
+<!-- Desktop Sidebar (starts collapsed) -->
+<aside class="sidebar-submission collapsed" id="sidebar-submission">
+  <div class="sidebar-header">
+    <span class="sidebar-icon">📄</span>
+    <h3 class="sidebar-title">提交论文</h3>
+    <button class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="收起侧边栏">
+      <span class="collapse-icon">→</span>
+    </button>
+  </div>
+  
+  <div class="sidebar-content">
+    {% if uid %}
+      <!-- Compact Quota Display -->
+      <div class="sidebar-quota">
+        <div class="quota-mini">
+          <span class="quota-mini-label">今日剩余</span>
+          <span class="quota-mini-value" id="sidebar-remaining">...</span>
+        </div>
+      </div>
+      
+      <!-- Compact Form -->
+      <form id="sidebar-paper-form" class="sidebar-form">
+        <div class="sidebar-input-group">
+          <input 
+            type="url" 
+            id="sidebar-paper-url" 
+            name="paper_url" 
+            placeholder="粘贴论文URL..." 
+            required
+            class="sidebar-input"
+          />
+          <button type="submit" class="sidebar-submit-btn" title="提交处理">
+            <span class="submit-icon">🚀</span>
+          </button>
+        </div>
+        <div class="sidebar-hints">
+          <span class="hint-item">支持 arXiv、HuggingFace</span>
+          <span class="hint-sep">·</span>
+          <span class="hint-item">限{{ max_pdf_size_mb or 20 }}MB</span>
+        </div>
+      </form>
+      
+      <!-- Processing Status -->
+      <div id="sidebar-status" class="sidebar-status" style="display: none;">
+        <div class="status-mini-header">
+          <span class="status-spinner">⏳</span>
+          <span class="status-mini-text" id="sidebar-step">处理中...</span>
+        </div>
+        <div class="progress-mini">
+          <div class="progress-mini-fill" id="sidebar-progress"></div>
+        </div>
+      </div>
+    {% else %}
+      <!-- Login Required -->
+      <div class="sidebar-login-prompt">
+        <span class="login-prompt-icon">🔐</span>
+        <p class="login-prompt-text">登录后可提交论文</p>
+      </div>
+    {% endif %}
+  </div>
+</aside>
+
+<!-- Sidebar Expand Button (when collapsed) -->
+<button class="sidebar-expand-btn" id="sidebar-expand-btn" title="展开提交论文">
+  <span class="expand-btn-icon">📄</span>
+  <span class="expand-btn-text">提交</span>
+</button>
+
+<!-- Mobile Floating Action Button -->
+<button class="fab-submission" id="fab-submission" title="提交新论文">
+  <span class="fab-icon">📄</span>
+  <span class="fab-badge" id="fab-badge" style="display: none;"></span>
+</button>
+
+<!-- Mobile Submission Modal -->
+<div class="mobile-submission-overlay" id="mobile-submission-overlay">
+  <div class="mobile-submission-panel">
+    <div class="mobile-submission-header">
+      <h3 class="mobile-submission-title">📄 提交新论文</h3>
+      <button class="mobile-submission-close" id="mobile-submission-close">✕</button>
+    </div>
+    
+    <div class="mobile-submission-content">
+      {% if uid %}
+        <!-- Quota -->
+        <div class="mobile-quota">
+          <div class="mobile-quota-item">
+            <span class="mobile-quota-label">今日剩余</span>
+            <span class="mobile-quota-value" id="mobile-remaining">...</span>
+          </div>
+          <div class="mobile-quota-item">
+            <span class="mobile-quota-label">重置时间</span>
+            <span class="mobile-quota-value" id="mobile-reset-time">...</span>
+          </div>
+        </div>
+        
+        <!-- Form -->
+        <form id="mobile-paper-form" class="mobile-submission-form">
+          <input 
+            type="url" 
+            id="mobile-paper-url" 
+            name="paper_url" 
+            placeholder="输入论文URL (arXiv、HuggingFace等)" 
+            required
+            class="mobile-url-input"
+          />
+          <button type="submit" class="mobile-submit-btn">
+            <span class="btn-icon">🚀</span>
+            <span class="btn-text">提交处理</span>
+          </button>
+          <p class="mobile-form-hint">仅限AI相关论文，文件限制 {{ max_pdf_size_mb or 20 }}MB</p>
+        </form>
+        
+        <!-- Status -->
+        <div id="mobile-status" class="mobile-status" style="display: none;">
+          <div class="mobile-status-header">
+            <span class="status-icon">⏳</span>
+            <span class="status-text" id="mobile-step">处理中...</span>
+          </div>
+          <div class="mobile-progress">
+            <div class="mobile-progress-fill" id="mobile-progress"></div>
+          </div>
+          <p class="mobile-progress-text" id="mobile-progress-text">0%</p>
+        </div>
+      {% else %}
+        <div class="mobile-login-required">
+          <span class="login-icon-large">🔐</span>
+          <h4>需要登录</h4>
+          <p>请先登录后再提交论文</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Sidebar toggle functionality
+  const sidebar = document.getElementById('sidebar-submission');
+  const collapseBtn = document.getElementById('sidebar-collapse-btn');
+  const expandBtn = document.getElementById('sidebar-expand-btn');
+  
+  if (collapseBtn && sidebar && expandBtn) {
+    // Sidebar starts collapsed - show expand button
+    if (sidebar.classList.contains('collapsed')) {
+      expandBtn.style.display = 'flex';
+    }
+    
+    collapseBtn.addEventListener('click', function() {
+      sidebar.classList.add('collapsed');
+      expandBtn.style.display = 'flex';
+    });
+    
+    expandBtn.addEventListener('click', function() {
+      sidebar.classList.remove('collapsed');
+      expandBtn.style.display = 'none';
+      
+      // If there's an ongoing submission, make sure status is visible
+      if (window.paperSubmissionHandler && window.paperSubmissionHandler.currentTaskId) {
+        const sidebarStatus = document.getElementById('sidebar-status');
+        if (sidebarStatus) {
+          sidebarStatus.style.display = 'block';
+        }
+      }
+    });
+  }
+  
+  // Mobile FAB and modal
+  const fab = document.getElementById('fab-submission');
+  const overlay = document.getElementById('mobile-submission-overlay');
+  const closeBtn = document.getElementById('mobile-submission-close');
+  
+  if (fab && overlay) {
+    fab.addEventListener('click', function() {
+      overlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      
+      // If there's an ongoing submission, make sure status is visible
+      if (window.paperSubmissionHandler && window.paperSubmissionHandler.currentTaskId) {
+        const mobileStatus = document.getElementById('mobile-status');
+        if (mobileStatus) {
+          mobileStatus.style.display = 'block';
+        }
+      }
+    });
+    
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+      });
+    }
+    
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) {
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    });
+  }
+  
+  // Form submission handlers (delegate to main paper-submission.js)
+  const sidebarForm = document.getElementById('sidebar-paper-form');
+  const mobileForm = document.getElementById('mobile-paper-form');
+  
+  function handleFormSubmit(form, urlInput, statusEl, progressEl, stepEl) {
+    if (!form || !urlInput) return;
+    
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const url = urlInput.value.trim();
+      if (!url) return;
+      
+      // Delegate to the main submission handler if available
+      if (window.paperSubmissionHandler) {
+        window.paperSubmissionHandler.submitPaper(url, {
+          statusEl: statusEl,
+          progressEl: progressEl,
+          stepEl: stepEl
+        });
+      } else {
+        // Fallback: direct API call (should not happen if paper-submission.js is loaded)
+        // This is just a safety fallback
+        try {
+          if (statusEl) statusEl.style.display = 'block';
+          const response = await fetch('/submit_paper', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url })
+          });
+          const data = await response.json();
+          if (data.error) {
+            if (window.showToast) {
+              showToast('❌ 提交失败: ' + data.error);
+            } else {
+              console.error('提交失败:', data.error);
+            }
+          } else {
+            if (window.showToast) {
+              showToast('✅ 提交成功！正在处理中...');
+            }
+            urlInput.value = '';
+          }
+        } catch (err) {
+          if (window.showToast) {
+            showToast('❌ 提交失败: ' + err.message);
+          } else {
+            console.error('提交失败:', err.message);
+          }
+        }
+        // Don't hide status - let the main handler manage it
+      }
+    });
+  }
+  
+  handleFormSubmit(
+    sidebarForm,
+    document.getElementById('sidebar-paper-url'),
+    document.getElementById('sidebar-status'),
+    document.getElementById('sidebar-progress'),
+    document.getElementById('sidebar-step')
+  );
+  
+  handleFormSubmit(
+    mobileForm,
+    document.getElementById('mobile-paper-url'),
+    document.getElementById('mobile-status'),
+    document.getElementById('mobile-progress'),
+    document.getElementById('mobile-step')
+  );
+  
+  // Sync quota values from main form
+  function syncQuota() {
+    const mainRemaining = document.getElementById('remaining-uploads');
+    const mainResetTime = document.getElementById('reset-time');
+    const sidebarRemaining = document.getElementById('sidebar-remaining');
+    const mobileRemaining = document.getElementById('mobile-remaining');
+    const mobileResetTime = document.getElementById('mobile-reset-time');
+    
+    if (mainRemaining) {
+      const value = mainRemaining.textContent;
+      if (sidebarRemaining) sidebarRemaining.textContent = value;
+      if (mobileRemaining) mobileRemaining.textContent = value;
+    }
+    
+    if (mainResetTime && mobileResetTime) {
+      mobileResetTime.textContent = mainResetTime.textContent;
+    }
+  }
+  
+  // Run sync periodically
+  setInterval(syncQuota, 1000);
+  setTimeout(syncQuota, 500);
+})();
+</script>
+

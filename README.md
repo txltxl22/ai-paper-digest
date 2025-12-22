@@ -16,6 +16,10 @@
 - **并行处理**：多线程并发处理，批量生成摘要效率高
 
 ### 🆕 最新更新 (v0.3.0+)
+- **热门趋势功能**：追踪研究领域热点话题
+  - 7天/30天趋势分析：基于论文提交时间统计标签热度
+  - 增长指标：显示NEW/上升/下降趋势标志
+  - 一键筛选：点击趋势标签快速过滤相关论文
 - **智能推荐系统**：基于用户兴趣的个性化论文推荐
   - 双信号推荐：结合"感兴趣"和"没兴趣"信号，精准匹配用户偏好
   - 标签权重算法：基于标签重叠和时间衰减的智能评分
@@ -32,6 +36,10 @@
 - **DeepSeek API兼容性修复**：解决LangChain DeepSeek集成问题
 - **多提供商无缝切换**：支持OpenAI、DeepSeek、Anthropic等主流API
 - **增强的错误处理**：更友好的错误提示和故障排除指南
+- **UI/UX优化**：更现代化的界面设计
+  - 可折叠筛选面板：默认显示搜索栏，高级筛选可展开
+  - 侧边栏论文提交：桌面端固定侧边栏，移动端浮动按钮
+  - 响应式设计优化：适配桌面、平板、手机多种设备
 
 ### 🌐 现代化Web界面
 - **响应式设计**：支持桌面和移动设备
@@ -119,6 +127,8 @@ ai-paper-digest/
 │   ├── __init__.py                       # Python包初始化
 │   ├── main.py                          # Flask Web应用主程序
 │   ├── index_page/                      # 首页和推荐逻辑
+│   ├── trending/                        # 热门趋势分析
+│   ├── search/                          # 搜索功能
 │   ├── user_management/                 # 用户管理
 │   ├── summary_detail/                  # 论文详情页
 │   └── ...                              # 其他子系统
@@ -224,10 +234,15 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
 
 ### Web界面功能
 
+#### 热门趋势
+- **趋势分析**：展示7天/30天内热门标签
+- **增长指标**：显示NEW、上升、下降等趋势标志
+- **快速筛选**：点击趋势标签快速过滤论文
+
 #### 论文浏览
 - **首页**：显示最新论文摘要，支持标签筛选
 - **标签系统**：顶级分类（LLM、CV、NLP等）+ 细分标签
-- **搜索功能**：基于标签的模糊搜索
+- **搜索功能**：基于标签的模糊搜索，可折叠高级筛选
 - **分页浏览**：支持自定义每页显示数量
 
 #### 个人管理
@@ -260,6 +275,9 @@ python feed_paper_summarizer_service.py https://papers.takara.ai/api/feed \
     - **`engine.py`**：推荐引擎和标签偏好策略
     - **`embedding_strategy_example.py`**：嵌入推荐策略示例
 - **`app/main.py`**：Flask Web应用
+- **`app/trending/`**：热门趋势分析模块
+  - **`services.py`**：趋势计算服务
+  - **`routes.py`**：API端点
 - **`debug/`**：调试和性能分析工具
 
 ### 🏗️ 解耦架构设计
@@ -442,8 +460,43 @@ cd ai-paper-digest
 # 安装开发依赖
 uv sync
 
+# 安装Git钩子（推荐）
+# 这将配置pre-commit钩子，在每次提交前自动运行测试
+./install-hooks.sh
+
 # 运行测试
 python -m pytest tests/
+# 或使用便捷脚本
+./run_tests.sh
+```
+
+### Git钩子设置
+
+项目包含pre-commit钩子，用于在提交代码前自动运行测试，确保代码质量。
+
+**安装钩子：**
+```bash
+./install-hooks.sh
+```
+
+安装后，每次执行 `git commit` 时，会自动运行测试套件：
+- ✅ 如果所有测试通过，提交将正常进行
+- ❌ 如果测试失败，提交将被阻止
+
+**手动运行测试：**
+```bash
+./run_tests.sh
+```
+
+**跳过钩子（不推荐）：**
+如果确实需要跳过测试（例如紧急修复），可以使用：
+```bash
+git commit --no-verify -m "your message"
+```
+
+**卸载钩子：**
+```bash
+git config --unset core.hooksPath
 ```
 
 ## 📄 许可证

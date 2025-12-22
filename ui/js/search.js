@@ -28,8 +28,10 @@ class SearchManager {
         
         // Hide suggestions when clicking outside
         document.addEventListener('click', (e) => {
-            if (!this.searchInput.contains(e.target) && !this.searchSuggestions.contains(e.target)) {
-                this.hideSuggestions();
+            if (this.searchInput && this.searchSuggestions) {
+                if (!this.searchInput.contains(e.target) && !this.searchSuggestions.contains(e.target)) {
+                    this.hideSuggestions();
+                }
             }
         });
     }

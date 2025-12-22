@@ -3,11 +3,14 @@
   <!-- Header Section -->
   <div class="article-header">
     <div class="header-left">
-      <div class="document-icon">📄</div>
       <h2>
-        <a href='{{ url_for("summary_detail.view_summary", arxiv_id=e.id) }}'>{{ e.id }}</a>
-        <button class="abstract-trigger" title="查看摘要" data-arxiv-id="{{ e.id }}" data-abstract="{{ e.abstract or '' }}" data-english-title="{{ e.english_title or '' }}">
-          <span class="abstract-trigger-icon">📝</span>
+        <div class="arxiv-id-container">
+          <span class="id-label">arXiv ID:</span>
+          <a href='{{ url_for("summary_detail.view_summary", arxiv_id=e.id) }}' class="arxiv-id-link" title="点击查看详情, 该 ID 也可用于搜索">{{ e.id }}</a>
+        </div>
+        <button class="abstract-pill-btn abstract-trigger" title="点击查看论文原始摘要" data-arxiv-id="{{ e.id }}" data-abstract="{{ e.abstract or '' }}" data-english-title="{{ e.english_title or '' }}">
+          <span class="pill-icon">👀</span>
+          <span class="pill-text">Abstract</span>
         </button>
         {% if uid %}
           <button class="favorite-star-btn" title="{{ '已感兴趣 - 点击取消' if e.is_favorited else '感兴趣这篇论文' }}" data-id="{{ e.id }}" data-favorited="{{ 'true' if e.is_favorited else 'false' }}">
@@ -19,48 +22,44 @@
       </h2>
     </div>
     <div class="header-right">
-      <div class="source-badge">
-        {% if e.source_type == "user" %}
-          <span class="user-chip" title="用户上传">👤 {{ e.user_id or "用户" }}</span>
-        {% else %}
-          <span class="user-chip" title="系统自动处理">🤖 系统</span>
-        {% endif %}
-      </div>
-      <div class="update-time">{{ e.submission_time.strftime('%m-%d %H:%M') }}</div>
+      {% if e.submission_time %}
+      <div class="update-time" title="arXiv提交日期">arXiv 提交日期: {{ e.submission_time.strftime('%Y-%m-%d') }}</div>
+      {% endif %}
     </div>
   </div>
-  {% if e.recommendation %}
-  <div class="recommendation-row">
-    <span class="personalization-pill small">🎯 为你推荐</span>
-    {% if e.recommendation.matched_tags %}
-    <span class="recommendation-note">匹配标签:</span>
-    {% for tag in e.recommendation.matched_tags[:4] %}
-      <span class="match-chip">#{{ tag }}</span>
-    {% endfor %}
+  <!-- Unified Tags Row - All tags in one scrollable line -->
+  {% if e.recommendation or (e.top_tags and e.top_tags|length) or (e.detail_tags and e.detail_tags|length) %}
+  <div class="tag-row unified-tags">
+    {% set search_q = search_query or '' %}
+    {% set tag_q = tag_query or '' %}
+    {% set matched_tags = e.recommendation.matched_tags if e.recommendation and e.recommendation.matched_tags else [] %}
+    
+    {# Recommendation indicator #}
+    {% if e.recommendation %}
+      <span class="personalization-pill small">🎯 为你推荐</span>
     {% endif %}
-  </div>
-  {% endif %}
-  
-  <!-- Tags Section -->
-  {% if e.top_tags and e.top_tags|length %}
-  <div class="tag-row top-tags">
-    {% set search_q = search_query or '' %}
-    {% set tag_q = tag_query or '' %}
-    {% for tg in e.top_tags %}
-      <a class="top-chip {% if search_q and (search_q.lower() in tg.lower()) %}search-hit{% elif tag_q and (tag_q in tg) %}query-hit{% endif %}" href='{{ url_for("index_page.index") }}?top={{ tg }}'>{{ tg }}</a>
-    {% endfor %}
-  </div>
-  {% endif %}
-  
-  {% if e.detail_tags and e.detail_tags|length %}
-  <div class="tag-row detail-tags">
-    {% set search_q = search_query or '' %}
-    {% set tag_q = tag_query or '' %}
-    {% for tg in e.detail_tags[:18] %}
-      <a class="tag-chip {% if search_q and (search_q.lower() in tg.lower()) %}search-hit{% elif tag_q and (tag_q in tg) %}query-hit{% endif %}" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>{{ tg }}</a>
-    {% endfor %}
-    {% if e.detail_tags|length > 18 %}
-      <span class="muted">+{{ e.detail_tags|length - 18 }}</span>
+    
+    {# Top tags (green) #}
+    {% if e.top_tags and e.top_tags|length %}
+      {% for tg in e.top_tags %}
+        {% set is_matched = tg in matched_tags %}
+        <a class="top-chip {% if search_q and (search_q.lower() in tg.lower()) %}search-hit{% elif tag_q and (tag_q in tg) %}query-hit{% elif is_matched %}match-hit{% endif %}" href='{{ url_for("index_page.index") }}?top={{ tg }}'>
+          {% if is_matched %}✓ {% endif %}{{ tg }}
+        </a>
+      {% endfor %}
+    {% endif %}
+    
+    {# Detail tags (blue) #}
+    {% if e.detail_tags and e.detail_tags|length %}
+      {% for tg in e.detail_tags[:12] %}
+        {% set is_matched = tg in matched_tags %}
+        <a class="tag-chip {% if search_q and (search_q.lower() in tg.lower()) %}search-hit{% elif tag_q and (tag_q in tg) %}query-hit{% elif is_matched %}match-hit{% endif %}" href='{{ url_for("index_page.index") }}?tag={{ tg }}'>
+          {% if is_matched %}✓ {% endif %}{{ tg }}
+        </a>
+      {% endfor %}
+      {% if e.detail_tags|length > 12 %}
+        <span class="muted-chip">+{{ e.detail_tags|length - 12 }}</span>
+      {% endif %}
     {% endif %}
   </div>
   {% endif %}
@@ -73,8 +72,9 @@
   </div>
   
   <!-- Footer Section -->
-  <div class='card-actions'>
-    <div class="primary-actions">
+  <div class='card-actions-container'>
+    <!-- Priority 1: Core Decisions -->
+    <div class="action-row primary-decisions">
       {% if show_read %}
         <a class='remove-read-link action-btn secondary-btn'>从没兴趣列表移除</a>
       {% elif show_favorites %}
@@ -92,30 +92,44 @@
         {% else %}
           <a class='mark-read-link action-btn secondary-btn disabled'>👋 没兴趣</a>
         {% endif %}
+        {% if uid %}
+          <a class='favorite-link action-btn secondary-btn' data-favorited='{{ 'true' if e.is_favorited else 'false' }}'>
+            {% if e.is_favorited %}⭐ 取消感兴趣{% else %}☆ 感兴趣{% endif %}
+          </a>
+        {% else %}
+          <a class='favorite-link action-btn secondary-btn disabled'>☆ 感兴趣</a>
+        {% endif %}
       {% endif %}
-      {% if uid and (not show_favorites) %}
-        <a class='favorite-link action-btn secondary-btn' data-favorited='{{ 'true' if e.is_favorited else 'false' }}'>
-          {% if e.is_favorited %}⭐ 取消感兴趣{% else %}☆ 感兴趣{% endif %}
-        </a>
-      {% elif not uid and (not show_favorites) %}
-        <a class='favorite-link action-btn secondary-btn disabled'>☆ 感兴趣</a>
-      {% endif %}
-      {% if uid and (not show_favorites) and (not show_todo) and (not show_read) %}
-        <a class='add-todo-link action-btn secondary-btn'>📌 待读</a>
-      {% elif not uid and (not show_favorites) and (not show_todo) and (not show_read) %}
-        <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
-      {% endif %}
+    </div>
 
-      <button type="button" class='deep-read-link action-btn secondary-btn' data-id='{{ e.id }}' style="color: var(--primary); border-color: var(--primary);">
-        <span>🤖</span> Deep Read
+    <!-- Priority 2: Key Feature -->
+    <div class="action-row main-feature">
+      <button type="button" class='deep-read-link action-btn primary-btn' data-id='{{ e.id }}'>
+        <svg class="ai-sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: white;">
+          <path d="M12 3L14.5 9L21 11.5L14.5 14L12 21L9.5 14L3 11.5L9.5 9L12 3Z" fill="currentColor"/>
+          <path d="M18 3L19.14 5.86L22 7L19.14 8.14L18 11L16.86 8.14L14 7L16.86 5.86L18 3Z" fill="currentColor" opacity="0.7"/>
+        </svg> AI 研读全文
       </button>
     </div>
-    <div class="secondary-actions">
-      <a target='_blank' href='https://arxiv.org/pdf/{{ e.id }}.pdf' class='action-btn'>
-        📄 打开原文 PDF
+
+    <!-- Priority 3: Utilities -->
+    <div class="action-row utilities">
+      {% if not show_favorites and not show_todo and not show_read %}
+        {% if uid %}
+          <a class='add-todo-link action-btn secondary-btn'>📌 待读</a>
+        {% else %}
+          <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
+        {% endif %}
+      {% endif %}
+      <a target='_blank' href='https://arxiv.org/pdf/{{ e.id }}.pdf' class='action-btn secondary-btn'>
+        <svg class="pdf-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 1.2em; height: 1.2em; vertical-align: middle; margin-right: 0.25rem;">
+          <path d="M7 18H17V16H7V18Z" fill="currentColor" />
+          <path d="M17 14H7V12H17V14Z" fill="currentColor" />
+          <path d="M7 10H11V8H7V10Z" fill="currentColor" />
+          <path d="M6 2C4.34315 2 3 3.34315 3 5V19C3 20.6569 4.34315 22 6 22H18C19.6569 22 21 20.6569 21 19V9L14 2H6ZM6 4H13V9H19V19C19 19.5523 18.5523 20 18 20H6C5.44772 20 5 19.5523 5 19V5C5 4.44772 5.44772 4 6 4Z" fill="currentColor" />
+        </svg> PDF
       </a>
     </div>
-    
   </div>
   
   <!-- Metadata Section -->

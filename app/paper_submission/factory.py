@@ -1,11 +1,14 @@
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, TYPE_CHECKING
 
 from .ai_cache import AICacheManager
 from .user_data import UserDataManager
 from .ai_checker import AIContentChecker
 from .services import PaperSubmissionService
 from .routes import create_paper_submission_routes
+
+if TYPE_CHECKING:
+    from app.quota import QuotaManager
 
 
 def create_paper_submission_module(
@@ -15,11 +18,27 @@ def create_paper_submission_module(
     prompts_dir: Path,
     llm_config,
     paper_config,
-    daily_limit: int,
     save_summary_func=None,
-    index_page_module=None
+    index_page_module=None,
+    processing_tracker=None,
+    user_service=None,
+    quota_manager: "QuotaManager" = None
 ) -> Dict[str, Any]:
-    """Create and configure all paper submission components."""
+    """Create and configure all paper submission components.
+    
+    Args:
+        user_data_dir: Directory for user data
+        data_dir: Directory for data files
+        summary_dir: Directory for paper summaries
+        prompts_dir: Directory for LLM prompts
+        llm_config: LLM configuration
+        paper_config: Paper processing configuration
+        save_summary_func: Function to save summaries
+        index_page_module: Index page module for cache invalidation
+        processing_tracker: Tracker for deep read processing
+        user_service: User management service
+        quota_manager: QuotaManager for tiered access control
+    """
     
     # Create managers
     ai_cache_manager = AICacheManager(data_dir / "ai_judgment_cache.json")
@@ -31,14 +50,15 @@ def create_paper_submission_module(
         user_data_manager=user_data_manager,
         ai_cache_manager=ai_cache_manager,
         ai_checker=ai_checker,
-        limit_file=data_dir / "daily_limits.json",
-        daily_limit=daily_limit,
         summary_dir=summary_dir,
         llm_config=llm_config,
         paper_config=paper_config,
         save_summary_func=save_summary_func,
         max_pdf_size_mb=paper_config.max_pdf_size_mb,
-        index_page_module=index_page_module
+        index_page_module=index_page_module,
+        processing_tracker=processing_tracker,
+        user_service=user_service,
+        quota_manager=quota_manager
     )
     
     # Create routes

@@ -1,9 +1,7 @@
 ---
 description: comprehensive architecture introduction and development guide
-globs: 
-alwaysApply: true
+alwaysApply: false
 ---
-
 # AI-paper-digest - Architecture Guide
 
 ## Overview
@@ -31,9 +29,15 @@ AI-powered research paper summarization system: RSS feeds → PDF download → t
 
 ### 4. Web App (`app/main.py`)
 **Flask server**: User interface and API endpoints
-**Subsystems**: `fetch/`, `paper_submission/`, `summary_detail/`, `user_management/`, `event_tracking/`, `index_page/`
+**Subsystems**: `fetch/`, `paper_submission/`, `summary_detail/`, `user_management/`, `event_tracking/`, `index_page/`, `trending/`, `search/`
 
-### 5. Config (`config_manager.py`)
+### 5. Trending Module (`app/trending/`)
+**Tag trend analysis**: Analyzes paper tags over time periods (7d, 30d)
+**Key components**: `TrendingService` (aggregates tags by submission date), `routes.py` (API endpoints)
+**Features**: Growth indicators (up/down/new), period comparison, caching
+**API**: `GET /api/trending/?period=7|30`, `GET /api/trending/summary`
+
+### 6. Config (`config_manager.py`)
 **Centralized settings**: `LLMConfig`, `AppConfig`, `PaperProcessingConfig`, `PathsConfig`
 
 ## Data Flow
@@ -63,13 +67,28 @@ RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → summar
 │   ├── summary_detail/              # Summary display
 │   ├── user_management/             # User auth & data
 │   ├── event_tracking/              # Analytics
-│   └── index_page/                  # Main page
+│   ├── index_page/                  # Main page
+│   ├── trending/                    # Tag trend analysis
+│   └── search/                      # Search functionality
 ├── papers/                          # Downloaded PDFs
 ├── markdown/                        # Extracted text
 ├── summary/                         # Generated summaries
 ├── user_data/                       # User-specific data
 ├── prompts/                         # LLM prompt templates
 ├── ui/                              # Frontend templates
+│   ├── index.html                   # Main page template
+│   ├── detail.html                  # Paper detail template
+│   ├── base.css                     # Base styles
+│   ├── css/                         # Component styles
+│   │   └── components.css           # UI component styles
+│   ├── js/                          # JavaScript modules
+│   │   ├── trending.js              # Trending section logic
+│   │   └── article-actions.js       # Article interaction logic
+│   └── components/                  # Reusable HTML components
+│       ├── trending-section.html    # Trending tags display
+│       ├── tag-filter.html          # Collapsible search/filter
+│       ├── sidebar-submission.html  # Desktop sidebar + mobile FAB
+│       └── paper-submission.html    # Paper submission form
 └── tests/                           # Test suite
 ```
 
@@ -87,8 +106,10 @@ RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → summar
 2. **RSS Processing Logic**: `feed_paper_summarizer_service.py` pipeline
 3. **Shared Components**: `summary_service/` modules
 4. **Web Features**: `app/main.py` routes + subsystem modules
-5. **UI**: `ui/` directory templates
-6. **Config**: `config_manager.py` settings
+5. **Trending Logic**: `app/trending/` module
+6. **UI Templates**: `ui/` directory templates and components
+7. **UI Styles**: `ui/css/components.css` for component styles
+8. **Config**: `config_manager.py` settings
 
 ### Where to Test
 1. **Unit Tests**: `tests/` directory
@@ -104,6 +125,10 @@ RSS Feed → feed_paper_summarizer_service.py → paper_summarizer.py → summar
 5. **Logging**: Use thread-safe patterns
 6. **Delegation**: Feed service delegates to paper summarizer for single URL processing
 7. **Personalization**: The web index builds a `RecommendationContext` and calls `summary_service.recommendations` for ordering; keep engines strategy-based to support future LLM-backed recommenders.
+8. **UI Components**: Use CSS variables for theming (`var(--card-bg)`, `var(--text)`, etc.) to support light/dark modes
+9. **Responsive Design**: Desktop-first with mobile breakpoints at 768px and 480px; use collapsible sections for mobile
+10. **New Subsystems**: Follow factory pattern (`factory.py`, `services.py`, `routes.py`) like `app/trending/`
+11. **Typography & Styling**: Don't use absolute values for styling (like font sizes in `px` or `rem`) in component CSS or inline styles. Instead, use the centralized typography system in `ui/base.css` (e.g., `var(--font-size-base)`) to ensure maintainability and consistent responsive scaling.
 
 ### Running
 - **Dev**: `uv run python run_app.py` (foreground)

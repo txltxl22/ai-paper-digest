@@ -12,7 +12,8 @@
     "host": "0.0.0.0",
     "port": 22581,
     "debug": false,
-    "admin_user_ids": []
+    "admin_user_ids": [],
+    "rybbit_site_id": ""
   },
   "paper_processing": {
     "max_workers": 4,

@@ -129,6 +129,21 @@ from app.summary_detail.factory import create_summary_detail_module
 # Initialize fetch module
 from app.fetch.factory import create_fetch_module
 
+# Initialize quota module
+from app.quota.factory import create_quota_module
+
+# Get quota configuration
+quota_config = config_manager.get_quota_config()
+
+# Create quota module - the unified quota management system
+quota_module = create_quota_module(
+    data_dir=DATA_DIR,
+    guest_daily_limit=quota_config.guest_daily_limit,
+    normal_daily_limit=quota_config.normal_daily_limit,
+    pro_users=quota_config.pro_users,
+    admin_users=app_config.admin_user_ids  # Share admin list from app config
+)
+
 # Load templates
 with open(Path(__file__).parent.parent / "ui" / "index.html", "r", encoding="utf-8") as f:
     INDEX_TEMPLATE = f.read()
@@ -141,19 +156,33 @@ from app.search.factory import create_search_module
 
 search_module = create_search_module(summary_dir=SUMMARY_DIR)
 
+# Create a temporary scanner for trending service
+from app.index_page.services import EntryScanner
+temp_scanner = EntryScanner(SUMMARY_DIR)
+
+# Initialize trending module
+from app.trending.factory import create_trending_module
+
+trending_module = create_trending_module(
+    entry_scanner=temp_scanner
+)
+
 index_page_module = create_index_page_module(
     summary_dir=SUMMARY_DIR,
     user_service=user_management_module["service"],
     index_template=INDEX_TEMPLATE,
     detail_template=DETAIL_TEMPLATE,
     paper_config=paper_config,
-    search_service=search_module["service"]
+    search_service=search_module["service"],
+    trending_service=trending_module["service"]
 )
 
 summary_detail_module = create_summary_detail_module(
     summary_dir=SUMMARY_DIR,
     detail_template=DETAIL_TEMPLATE,
-    data_dir=DATA_DIR
+    data_dir=DATA_DIR,
+    user_service=user_management_module["service"],
+    quota_manager=quota_module["manager"]  # Use new tiered quota system
 )
 
 fetch_module = create_fetch_module(
@@ -172,9 +201,11 @@ paper_submission_module = create_paper_submission_module(
     prompts_dir=Path(__file__).parent.parent / "summary_service" / "prompts",
     llm_config=llm_config,
     paper_config=paper_config,
-    daily_limit=paper_config.daily_submission_limit,
     save_summary_func=save_summary_with_service_record,
-    index_page_module=index_page_module
+    index_page_module=index_page_module,
+    processing_tracker=summary_detail_module["processing_tracker"],
+    user_service=user_management_module["service"],
+    quota_manager=quota_module["manager"]  # Use new tiered quota system
 )
 
 # Register blueprints
@@ -226,11 +257,60 @@ app.register_blueprint(visitor_stats_module["blueprint"])
 # Register search blueprint
 app.register_blueprint(search_module["blueprint"])
 
+# Register trending blueprint
+app.register_blueprint(trending_module["blueprint"])
+
+# Initialize story showcase module
+from app.story_showcase.factory import create_story_showcase_module
+
+story_showcase_module = create_story_showcase_module()
+
+# Register story showcase blueprint
+app.register_blueprint(story_showcase_module["blueprint"])
+
 # -----------------------------------------------------------------------------
 # Templates (plain strings — no Python f-strings)                               
 # -----------------------------------------------------------------------------
 
 BASE_CSS = open(os.path.join('ui', 'base.css'), 'r', encoding='utf-8').read()
+
+# -----------------------------------------------------------------------------
+# Template Context Processors (for cache busting)
+# -----------------------------------------------------------------------------
+
+def get_file_version(filepath: str) -> str:
+    """Get version string based on file modification time for cache busting."""
+    try:
+        full_path = Path(__file__).parent.parent / filepath
+        if full_path.exists():
+            mtime = full_path.stat().st_mtime
+            # Use modification time as version (hex format for shorter URLs)
+            return hex(int(mtime))[2:]
+    except Exception:
+        pass
+    # Fallback to timestamp if file doesn't exist
+    return hex(int(datetime.now().timestamp()))[2:]
+
+@app.context_processor
+def inject_versioned_urls():
+    """Inject versioned URL helpers into template context."""
+    def static_css_versioned(filename: str) -> str:
+        """Generate versioned URL for CSS files."""
+        base_url = url_for('static_css', filename=filename)
+        version = get_file_version(f'ui/css/{filename}')
+        return f"{base_url}?v={version}"
+    
+    def base_css_versioned() -> str:
+        """Generate versioned URL for base.css."""
+        base_url = url_for('base_css')
+        version = get_file_version('ui/base.css')
+        return f"{base_url}?v={version}"
+    
+    return {
+        'static_css_versioned': static_css_versioned,
+        'base_css_versioned': base_css_versioned,
+        'rybbit_site_id': app_config.rybbit_site_id,
+    }
 
 # -----------------------------------------------------------------------------
 # Routes
@@ -251,13 +331,25 @@ def test_endpoint():
 
 @app.get("/assets/base.css")
 def base_css():
-    return Response(BASE_CSS, mimetype="text/css")
+    """Serve base.css with cache control headers."""
+    # Read dynamically in debug mode to pick up changes
+    if app.debug:
+        css_content = open(os.path.join('ui', 'base.css'), 'r', encoding='utf-8').read()
+    else:
+        css_content = BASE_CSS
+    response = Response(css_content, mimetype="text/css")
+    # Set cache headers - allow caching but with validation
+    response.headers['Cache-Control'] = 'public, max-age=31536000, must-revalidate'
+    return response
 
 # Unified static file routes for consistent url_for usage
 @app.get("/static/css/<path:filename>")
 def static_css(filename):
-    """Serve CSS files from the ui/css directory."""
-    return send_from_directory('../ui/css', filename, mimetype="text/css")
+    """Serve CSS files from the ui/css directory with cache control headers."""
+    response = send_from_directory('../ui/css', filename, mimetype="text/css")
+    # Set cache headers - allow caching but with validation
+    response.headers['Cache-Control'] = 'public, max-age=31536000, must-revalidate'
+    return response
 
 
 @app.get("/static/js/<path:filename>")
@@ -427,9 +519,13 @@ if __name__ == "__main__":
     print(f"   - LLM Provider: {llm_config.provider}")
     print(f"   - Base URL: {llm_config.base_url}")
     print(f"   - Model: {llm_config.model}")
-    print(f"   - Daily Limit: {paper_config.daily_submission_limit}")
     print(f"   - Max Workers: {paper_config.max_workers}")
     print(f"   - Server: {app_config.host}:{app_config.port}")
+    print(f"📊 Quota Configuration:")
+    print(f"   - Guest Daily Limit: {quota_config.guest_daily_limit}")
+    print(f"   - Normal User Daily Limit: {quota_config.normal_daily_limit}")
+    print(f"   - Pro Users: {len(quota_config.pro_users)}")
+    print(f"   - Admin Users: {len(app_config.admin_user_ids)}")
     app.run(
         host=app_config.host, 
         port=app_config.port, 

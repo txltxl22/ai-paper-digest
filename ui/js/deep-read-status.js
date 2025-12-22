@@ -11,6 +11,8 @@ class DeepReadStatusBar {
     // Recommended range: 2000-5000ms (2-5 seconds)
     this.pollIntervalMs = 5000; // Poll every 5 seconds
     this.dismissedItems = new Set(); // Track dismissed items
+    this.previousProcessing = new Set(); // Track previously processing items to detect completion
+    this.notifiedCompletions = new Set(); // Track already notified completions
     this.init();
   }
 
@@ -65,6 +67,13 @@ class DeepReadStatusBar {
     }, this.pollIntervalMs);
   }
 
+  // Register a new processing job to track for completion
+  registerProcessingJob(arxivId) {
+    this.previousProcessing.add(arxivId);
+    // Clear from notified in case it was previously notified
+    this.notifiedCompletions.delete(arxivId);
+  }
+
   stopPolling() {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
@@ -106,6 +115,24 @@ class DeepReadStatusBar {
       item => !this.dismissedItems.has(`completed-${item.arxiv_id}`)
     );
 
+    // Detect newly completed items (were processing, now in completed)
+    const currentProcessingIds = new Set(processing.map(p => p.arxiv_id));
+    const currentCompletedIds = new Set(completed.map(c => c.arxiv_id));
+    
+    // Find items that were previously processing but are now completed
+    for (const arxivId of this.previousProcessing) {
+      if (currentCompletedIds.has(arxivId) && !this.notifiedCompletions.has(arxivId)) {
+        // This item just completed! Find the completed item to get its title
+        const completedItem = completed.find(c => c.arxiv_id === arxivId);
+        const title = completedItem?.title || arxivId;
+        this.notifiedCompletions.add(arxivId);
+        this.onJobCompleted(arxivId, title);
+      }
+    }
+    
+    // Update previous processing set for next comparison
+    this.previousProcessing = currentProcessingIds;
+
     // Show/hide processing section
     const processingSection = document.getElementById('deep-read-processing');
     if (processing.length > 0) {
@@ -131,10 +158,108 @@ class DeepReadStatusBar {
       this.statusBar.style.display = 'none';
     }
 
+    // Trigger header state update for modern layered design
+    // This ensures the status bar positioning is recalculated
+    if (window.updateHeaderState) {
+      setTimeout(window.updateHeaderState, 0);
+    }
+
+    // Adjust layout for fixed header (legacy support)
+    if (window.adjustLayout) {
+      setTimeout(window.adjustLayout, 0);
+    }
+
     // Stop polling if there are no processing jobs
     // (Completed jobs don't need polling, user can dismiss them)
     if (processing.length === 0) {
       this.stopPolling();
+    }
+  }
+
+  // Called when a deep read job completes
+  onJobCompleted(arxivId, title = null) {
+    // Check if we're on the detail page for this paper
+    const currentPath = window.location.pathname;
+    const isOnDetailPage = currentPath === `/summary/${arxivId}`;
+    
+    // Use provided title or fallback to arxivId
+    const displayTitle = title || arxivId;
+    
+    if (isOnDetailPage) {
+      // We're on the detail page for this paper - auto refresh after showing notification
+      this.showCompletionNotification(arxivId, displayTitle, true);
+    } else {
+      // We're on another page - show notification with link
+      this.showCompletionNotification(arxivId, displayTitle, false);
+    }
+  }
+
+  // Show a beautiful completion notification
+  showCompletionNotification(arxivId, title = null, autoRefresh = false) {
+    // Remove any existing notification
+    const existingNotification = document.getElementById('deep-read-notification');
+    if (existingNotification) {
+      existingNotification.remove();
+    }
+
+    // Use provided title or fallback to arxivId
+    const displayTitle = title || arxivId;
+    const subtitleText = title ? `论文《${displayTitle}》的 AI 全文精读已完成` : `论文 ${arxivId} 的 AI 全文精读已完成`;
+
+    // Create the notification element
+    const notification = document.createElement('div');
+    notification.id = 'deep-read-notification';
+    notification.className = 'deep-read-notification';
+    
+    if (autoRefresh) {
+      notification.innerHTML = `
+        <div class="notification-content">
+          <div class="notification-icon">🎉</div>
+          <div class="notification-text">
+            <div class="notification-title">AI 全文研读完成！</div>
+            <div class="notification-subtitle">${subtitleText}</div>
+            <div class="notification-action">页面将自动刷新...</div>
+          </div>
+        </div>
+        <div class="notification-progress"></div>
+      `;
+    } else {
+      notification.innerHTML = `
+        <div class="notification-content">
+          <div class="notification-icon">🎉</div>
+          <div class="notification-text">
+            <div class="notification-title">AI 全文研读完成！</div>
+            <div class="notification-subtitle">${subtitleText}</div>
+          </div>
+          <a href="/summary/${arxivId}" class="notification-btn">
+            <span>查看详情</span>
+            <span>→</span>
+          </a>
+          <button class="notification-close" onclick="this.closest('.deep-read-notification').remove()">×</button>
+        </div>
+      `;
+    }
+
+    document.body.appendChild(notification);
+
+    // Trigger animation
+    requestAnimationFrame(() => {
+      notification.classList.add('show');
+    });
+
+    if (autoRefresh) {
+      // Auto refresh the page after 2 seconds
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } else {
+      // Auto hide after 10 seconds if not clicked
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.classList.remove('show');
+          setTimeout(() => notification.remove(), 300);
+        }
+      }, 10000);
     }
   }
 
@@ -144,10 +269,11 @@ class DeepReadStatusBar {
     this.processingList.innerHTML = processing
       .map(item => {
         const timeAgo = this.getTimeAgo(item.started_at);
+        const displayText = item.title || item.arxiv_id;
         return `
           <span class="deep-read-status-item processing">
             <span class="spinner"></span>
-            <a href="/summary/${item.arxiv_id}">${item.arxiv_id}</a>
+            <a href="/summary/${item.arxiv_id}">${displayText}</a>
             <span class="time-ago">${timeAgo}</span>
           </span>
         `;
@@ -161,10 +287,11 @@ class DeepReadStatusBar {
     this.completedList.innerHTML = completed
       .map(item => {
         const timeAgo = this.getTimeAgo(item.completed_at);
+        const displayText = item.title || item.arxiv_id;
         return `
           <span class="deep-read-status-item completed" data-arxiv-id="${item.arxiv_id}">
             <span>✓</span>
-            <a href="/summary/${item.arxiv_id}">${item.arxiv_id}</a>
+            <a href="/summary/${item.arxiv_id}">${displayText}</a>
             <span class="time-ago">${timeAgo}</span>
             <button onclick="window.deepReadStatusBar.dismissCompleted('${item.arxiv_id}'); event.stopPropagation();" title="关闭">×</button>
           </span>

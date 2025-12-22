@@ -1,0 +1,82 @@
+<!-- Trending Topics Section -->
+<section class="trending-section" id="trending-section">
+  <div class="trending-header">
+    <div class="trending-title">
+      <span class="trending-icon">📈</span>
+      <h2>热门趋势</h2>
+    </div>
+    <div class="trending-tabs" role="tablist">
+      <button class="trending-tab" data-period="7d" role="tab" aria-selected="false">
+        <span class="tab-text">近7天</span>
+      </button>
+      <button class="trending-tab active" data-period="30d" role="tab" aria-selected="true">
+        <span class="tab-text">近30天</span>
+      </button>
+    </div>
+  </div>
+  
+  <div class="trending-content">
+    <div class="trending-tags-container" id="trending-tags-7d" data-period="7d" style="display: none;">
+      {% if trending_7d %}
+        {% for tag in trending_7d %}
+        <a href="{{ url_for('index_page.index') }}?tag={{ tag.name }}" class="trending-chip {% if tag.is_new %}is-new{% endif %}">
+          <span class="chip-name">#{{ tag.name }}</span>
+          <span class="chip-count">{{ tag.count }}</span>
+          {% if tag.growth_direction == 'up' %}
+          <span class="growth-indicator growth-up" title="+{{ tag.growth_diff }} 较上期">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+              <path d="M5 2L9 7H1L5 2Z"/>
+            </svg>
+            {% if tag.is_new %}<span class="growth-label">NEW</span>{% elif tag.growth_percent > 0 %}+{{ tag.growth_percent }}%{% endif %}
+          </span>
+          {% elif tag.growth_direction == 'down' %}
+          <span class="growth-indicator growth-down" title="{{ tag.growth_diff }} 较上期">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+              <path d="M5 8L1 3H9L5 8Z"/>
+            </svg>
+            <span class="growth-label">-{{ tag.growth_percent }}%</span>
+          </span>
+          {% endif %}
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="trending-empty">
+          <span class="empty-icon">📊</span>
+          <span class="empty-text">暂无趋势数据</span>
+        </div>
+      {% endif %}
+    </div>
+    
+    <div class="trending-tags-container" id="trending-tags-30d" data-period="30d">
+      {% if trending_30d %}
+        {% for tag in trending_30d %}
+        <a href="{{ url_for('index_page.index') }}?tag={{ tag.name }}" class="trending-chip {% if tag.is_new %}is-new{% endif %}">
+          <span class="chip-name">#{{ tag.name }}</span>
+          <span class="chip-count">{{ tag.count }}</span>
+          {% if tag.growth_direction == 'up' %}
+          <span class="growth-indicator growth-up" title="+{{ tag.growth_diff }} 较上期">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+              <path d="M5 2L9 7H1L5 2Z"/>
+            </svg>
+            {% if tag.is_new %}<span class="growth-label">NEW</span>{% elif tag.growth_percent > 0 %}+{{ tag.growth_percent }}%{% endif %}
+          </span>
+          {% elif tag.growth_direction == 'down' %}
+          <span class="growth-indicator growth-down" title="{{ tag.growth_diff }} 较上期">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+              <path d="M5 8L1 3H9L5 8Z"/>
+            </svg>
+            <span class="growth-label">-{{ tag.growth_percent }}%</span>
+          </span>
+          {% endif %}
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="trending-empty">
+          <span class="empty-icon">📊</span>
+          <span class="empty-text">暂无趋势数据</span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+

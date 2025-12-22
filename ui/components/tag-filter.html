@@ -1,74 +1,141 @@
-<!-- Modern Tag Filter Component -->
+<!-- Modern Collapsible Tag Filter Component -->
 <form id="tag-filter" method="GET" action="{{ url_for('index_page.index') }}" class="filters-panel">
-  <div class="filter-header">
-    <div class="filter-title">
-      <span class="filter-icon">🔍</span>
-      <span class="filter-text">搜索与筛选</span>
+  <!-- Always Visible: Search Bar -->
+  <div class="filter-search-always">
+    <div class="search-group-compact">
+      <div class="search-input-wrapper">
+        <span class="search-prefix-icon">🔍</span>
+        <input type="text" name="search" placeholder="搜索论文标题、内容或标签..." value="{{ search_query or '' }}" class="search-input-main" id="search-input" />
+        <input type="hidden" name="search_type" value="{{ search_type or 'all' }}" id="search-type-hidden" />
+      </div>
+      <button type="submit" class="search-btn-compact">
+        <span class="search-text">搜索</span>
+      </button>
+      <button type="button" class="filter-expand-btn" id="filter-expand-btn" aria-expanded="false" aria-controls="filter-expandable">
+        <span class="expand-icon">▼</span>
+        <span class="expand-text">筛选</span>
+      </button>
     </div>
-    <div class="filter-actions">
-      <a href="{{ url_for('index_page.index') }}" class="filter-btn clear-btn">清除筛选</a>
-    </div>
-  </div>
-
-  <div class="filter-content">
-    <!-- Unified Search Input -->
-    <div class="search-section">
-      <!-- Search Scope Selector -->
-      <div class="search-scope">
-        <label class="scope-label">搜索范围：</label>
-        <select name="search_type" class="scope-select" id="search-type-select">
-          <option value="all" {% if search_type == 'all' or not search_type %}selected{% endif %}>全部内容（标题、内容、标签）</option>
-          <option value="content" {% if search_type == 'content' %}selected{% endif %}>标题和内容</option>
-          <option value="tags" {% if search_type == 'tags' %}selected{% endif %}>仅标签</option>
-        </select>
-      </div>
-      
-      <div class="search-group">
-        <input type="text" name="search" placeholder="搜索论文..." value="{{ search_query or '' }}" class="search-input" id="search-input" />
-        <button type="submit" class="search-btn">
-          <span class="search-icon">🔍</span>
-          <span class="search-text">搜索</span>
-        </button>
-      </div>
-      
-      <div class="search-suggestions" id="search-suggestions" style="display: none;"></div>
-    </div>
-
-    <!-- Top Tags -->
-    {% if top_cloud and top_cloud|length %}
-    <div class="filter-section top-tags-section">
-      <div class="section-header">
-        <span class="section-title">大类标签</span>
-      </div>
-      <div class="top-chips">
-        {% for t in top_cloud %}
-          <label class="top-chip {% if active_tops and (t.name in active_tops) %}checked{% endif %}">
-            <input type="checkbox" name="top" value="{{ t.name }}" {% if active_tops and (t.name in active_tops) %}checked{% endif %}>
-            <span class="chip-text">{{ t.name }}</span>
-            <span class="chip-count">{{ t.count }}</span>
-          </label>
-        {% endfor %}
-      </div>
+    {% if active_tag or tag_query or active_tops or search_query %}
+    <div class="active-filters-row">
+      {% if search_query %}
+      <span class="active-filter-chip search-chip">
+        <span class="chip-label">搜索:</span>
+        <span class="chip-value">"{{ search_query }}"</span>
+      </span>
+      {% endif %}
+      {% if active_tag %}
+      <span class="active-filter-chip tag-chip-active">
+        <span class="chip-label">标签:</span>
+        <span class="chip-value">#{{ active_tag }}</span>
+      </span>
+      {% endif %}
+      {% for top in active_tops %}
+      <span class="active-filter-chip top-chip-active">
+        <span class="chip-value">{{ top }}</span>
+      </span>
+      {% endfor %}
+      <a href="{{ url_for('index_page.index') }}" class="clear-filters-btn">✕ 清除筛选</a>
     </div>
     {% endif %}
+  </div>
 
-    <!-- Detail Tags -->
-    <div class="filter-section detail-tags-section">
-      <div class="section-header">
-        <span class="section-title">所有标签</span>
-        <button type="button" id="toggle-detail-chips" class="toggle-btn" style="display:none;">
-          <span class="toggle-text">展开全部</span>
-          <span class="toggle-icon">▾</span>
-        </button>
+  <!-- Expandable: Advanced Filters -->
+  <div class="filter-expandable" id="filter-expandable">
+    <div class="filter-divider"></div>
+    
+    <div class="filter-content">
+      <!-- Search Scope Selector -->
+      <div class="search-scope-section">
+        <span class="scope-label">搜索范围：</span>
+        <div class="scope-options">
+          <label class="scope-option">
+            <input type="radio" name="search_type_radio" value="all" {% if search_type == 'all' or not search_type %}checked{% endif %}>
+            <span class="option-text">全部</span>
+          </label>
+          <label class="scope-option">
+            <input type="radio" name="search_type_radio" value="content" {% if search_type == 'content' %}checked{% endif %}>
+            <span class="option-text">标题和内容</span>
+          </label>
+          <label class="scope-option">
+            <input type="radio" name="search_type_radio" value="tags" {% if search_type == 'tags' %}checked{% endif %}>
+            <span class="option-text">仅标签</span>
+          </label>
+        </div>
       </div>
-      <div class="detail-chips" id="detail-chips" data-query="{{ tag_query or '' }}">
-        {% for t in tag_cloud %}
-          <a href="{{ url_for('index_page.index') }}?tag={{ t.name }}" class="tag-chip {% if active_tag == t.name %}active{% endif %} {% if tag_query and (tag_query in t.name) %}query-hit{% endif %}">
-            <span class="chip-text">{{ t.name }}</span>
-            <span class="chip-count">{{ t.count }}</span>
-          </a>
-        {% endfor %}
+
+      <!-- Top Tags -->
+      {% if top_cloud and top_cloud|length %}
+      <div class="filter-section top-tags-section">
+        <div class="section-header">
+          <span class="section-title">📁 大类标签</span>
+        </div>
+        <div class="top-chips">
+          {% for t in top_cloud %}
+            <label class="top-chip {% if active_tops and (t.name in active_tops) %}checked{% endif %}">
+              <input type="checkbox" name="top" value="{{ t.name }}" {% if active_tops and (t.name in active_tops) %}checked{% endif %}>
+              <span class="chip-text">{{ t.name }}</span>
+              <span class="chip-count">{{ t.count }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Detail Tags -->
+      <div class="filter-section detail-tags-section">
+        <div class="section-header">
+          <span class="section-title">🏷️ 所有标签</span>
+          <button type="button" id="toggle-detail-chips" class="toggle-btn" style="display:none;">
+            <span class="toggle-text">展开全部</span>
+            <span class="toggle-icon">▾</span>
+          </button>
+        </div>
+        <div class="detail-chips" id="detail-chips" data-query="{{ tag_query or '' }}">
+          {% for t in tag_cloud %}
+            <a href="{{ url_for('index_page.index') }}?tag={{ t.name }}" class="tag-chip {% if active_tag == t.name %}active{% endif %} {% if tag_query and (tag_query in t.name) %}query-hit{% endif %}">
+              <span class="chip-text">{{ t.name }}</span>
+              <span class="chip-count">{{ t.count }}</span>
+            </a>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </div>
 </form>
+
+<script>
+(function() {
+  // Filter expand/collapse functionality
+  const expandBtn = document.getElementById('filter-expand-btn');
+  const expandable = document.getElementById('filter-expandable');
+  const searchTypeHidden = document.getElementById('search-type-hidden');
+  const searchTypeRadios = document.querySelectorAll('input[name="search_type_radio"]');
+  
+  if (expandBtn && expandable) {
+    // Check if there are active filters - if so, expand by default
+    const hasActiveFilters = {{ 'true' if (active_tag or tag_query or active_tops) else 'false' }};
+    
+    if (hasActiveFilters) {
+      expandable.classList.add('expanded');
+      expandBtn.setAttribute('aria-expanded', 'true');
+      expandBtn.querySelector('.expand-icon').textContent = '▲';
+    }
+    
+    expandBtn.addEventListener('click', function() {
+      const isExpanded = expandable.classList.toggle('expanded');
+      expandBtn.setAttribute('aria-expanded', isExpanded);
+      expandBtn.querySelector('.expand-icon').textContent = isExpanded ? '▲' : '▼';
+    });
+  }
+  
+  // Sync radio buttons with hidden field
+  searchTypeRadios.forEach(radio => {
+    radio.addEventListener('change', function() {
+      if (searchTypeHidden) {
+        searchTypeHidden.value = this.value;
+      }
+    });
+  });
+})();
+</script>

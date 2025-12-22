@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# Pre-commit hook to run tests before allowing commit
+# This hook will abort the commit if tests fail
+#
+# To install: Run ./install-hooks.sh or manually:
+#   git config core.hooksPath hooks
+
+# Redirect output to stderr so it appears in the commit output
+exec 1>&2
+
+# Get the repository root directory
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT" || exit 1
+
+echo "Running checks before commit..."
+echo "================================"
+
+# 1. Font-size variable check
+echo "Checking font-size variable usage in staged files..."
+uv run python scripts/check_font_size.py --staged
+CHECK_EXIT_CODE=$?
+
+if [ $CHECK_EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "❌ Font-size check failed! Commit aborted."
+    echo "Please use CSS variables for all font-size declarations."
+    echo "To bypass this hook (not recommended), use: git commit --no-verify"
+    exit 1
+fi
+
+echo ""
+
+# 2. Run tests
+echo "Running tests..."
+./run_tests.sh
+TEST_EXIT_CODE=$?
+
+# Check the exit status
+if [ $TEST_EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "❌ Tests failed! Commit aborted."
+    echo "Fix the failing tests before committing."
+    echo "To bypass this hook (not recommended), use: git commit --no-verify"
+    exit 1
+fi
+
+echo ""
+echo "✅ All tests passed! Proceeding with commit..."
+exit 0
+

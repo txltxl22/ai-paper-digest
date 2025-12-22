@@ -5,6 +5,10 @@
     <meta charset='utf-8'>
     <meta name='viewport' content='width=device-width,initial-scale=1'>
     
+    {% if rybbit_site_id %}
+    <script src="https://app.rybbit.io/api/script.js" data-site-id="{{ rybbit_site_id }}" defer></script>
+    {% endif %}
+    
     <!-- Dynamic Title -->
     <title>{% if english_title %}{{ english_title }}{% else %}{{ arxiv_id }}{% endif %} – AI Paper Summary</title>
     
@@ -27,7 +31,7 @@
     <meta property="og:description" content="{% if abstract %}{{ abstract[:300] }}{% elif one_sentence_summary %}{{ one_sentence_summary[:300] }}{% else %}AI research paper summary and analysis{% endif %}">
     <meta property="og:image" content="https://arxiv.org/pdf/{{ arxiv_id }}.pdf">
     <meta property="og:site_name" content="AI Papers Reader">
-    <meta property="article:published_time" content="{{ service_data.get('created_at', '') if service_data else '' }}">
+    <meta property="article:published_time" content="{{ created_at if created_at else '' }}">
     {% if top_tags %}
     {% for tag in top_tags %}
     <meta property="article:tag" content="{{ tag }}">
@@ -47,15 +51,26 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="AI Papers">
     
+    <!-- Inline Theme Script - Prevents Flash of Light Mode -->
+    <script>
+      (function() {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const saved = localStorage.getItem('theme');
+        const theme = saved === 'dark' || saved === 'light' ? saved : (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+    
     <!-- Stylesheets -->
-    <link rel="stylesheet" href="{{ url_for('base_css') }}">
-    <link rel="stylesheet" href="{{ url_for('static_css', filename='badges.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static_css', filename='components.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static_css', filename='modal.css') }}">
+    <link rel="stylesheet" href="{{ base_css_versioned() }}">
+    <link rel="stylesheet" href="{{ static_css_versioned('badges.css') }}">
+    <link rel="stylesheet" href="{{ static_css_versioned('components.css') }}">
+    <link rel="stylesheet" href="{{ static_css_versioned('modal.css') }}">
     <link rel="icon" href="{{ url_for('static_favicon_svg') }}?v=2" type="image/svg+xml">
     
     <!-- Structured Data - ScholarlyArticle -->
@@ -122,16 +137,13 @@
 <body>
     {% set show_back_link = true %}
     {% include 'components/header.html' %}
-    <main>
+    <main data-id="{{ arxiv_id }}">
         <div class="summary-header">
-          <div class="source-info">
-            {% if source_type == "user" %}
-              <span class="user-chip" title="用户上传">👤 {{ user_id or "用户" }}</span>
-              {% if original_url %}
-                <span class="muted">来源: <a href="{{ original_url }}" target="_blank" class="source-link">{{ original_url }}</a></span>
-              {% endif %}
-            {% else %}
-              <span class="user-chip" title="系统自动处理">🤖 系统</span>
+          <div class="submission-info" style="margin-bottom: 1rem;">
+            {% if submission_date %}
+              <div class="update-time" style="font-size: var(--font-size-sm); color: var(--muted-text); font-weight: 500;">
+                arXiv 提交日期: {{ submission_date }}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -182,29 +194,34 @@
         </form>
         {% endif %}
         
-        <!-- Deep Read Control Section -->
+        <!-- AI Study Control Section -->
         <div class="deep-read-control" style="text-align:center; padding: var(--spacing-2xl) 0; display: none;" id="deep-read-control-container">
             <div class="deep-read-card" style="background: var(--card-bg); border: 1px solid var(--btn-border); border-radius: var(--radius-md); padding: var(--spacing-xl); max-width: 600px; margin: 0 auto;">
-                <h3 style="margin-top: 0;">🤖 AI 深度阅读</h3>
+                <h3 style="margin-top: 0;">
+                  <svg class="ai-sparkle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 1.5em; height: 1.5em;">
+                    <path d="M12 3L14.5 9L21 11.5L14.5 14L12 21L9.5 14L3 11.5L9.5 9L12 3Z" fill="currentColor"/>
+                    <path d="M18 3L19.14 5.86L22 7L19.14 8.14L18 11L16.86 8.14L14 7L16.86 5.86L18 3Z" fill="currentColor" opacity="0.7"/>
+                  </svg> AI 帮我研读全文
+                </h3>
                 
                 <!-- Case 1: Generate (Abstract Only) -->
                 <div id="deep-read-generate-ui" style="display: none;">
-                    <p style="color: var(--muted-text);">当前仅显示摘要总结。如需获取详细的论文深度解读（包含创新点、实验结果、术语解释等），请点击下方按钮。</p>
+                    <p style="color: var(--muted-text);">当前仅显示摘要。如需 AI 帮您阅读整篇论文并总结核心创新点、实验结果和技术细节，请点击下方按钮。</p>
                     
                     {% if current_user_id %}
-                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: 1.1rem; padding: var(--spacing-lg) var(--spacing-xl); margin-top: var(--spacing-lg);">
-                        <span>📚</span> 生成深度解读
+                    <button id="deep-read-gen-btn" class="primary-btn" style="font-size: var(--font-size-md); padding: var(--spacing-lg) var(--spacing-xl); margin-top: var(--spacing-lg);">
+                        <span>📚</span> 触发 AI 全文精读
                     </button>
                     <div id="deep-read-loading" style="display: none; margin-top: var(--spacing-lg);">
                         <div class="loading-spinner" style="display: inline-block; margin-right: var(--spacing-sm);"></div>
-                        <span>AI正在深入阅读并生成详细报告，请稍候... (约30-60秒)</span>
+                        <span>AI正在研读全文并提炼核心要点，请稍候... (约30-60秒)</span>
                     </div>
                     <div id="deep-read-error" style="display: none; margin-top: var(--spacing-lg); color: var(--danger);"></div>
                     {% else %}
                     <div style="margin-top: var(--spacing-lg);">
                         <a href="/#login" class="login-cta-btn" style="display: inline-block; text-decoration: none;">
                             <span class="cta-icon">🔑</span>
-                            <span class="cta-text">登录以启用深度阅读</span>
+                            <span class="cta-text">登录以启用 AI 全文精读</span>
                         </a>
                     </div>
                     {% endif %}
@@ -216,10 +233,50 @@
         <article class='markdown-body'>
             {{ content | safe }}
         </article>
-        <p style='text-align:center;margin-top:var(--spacing-2xl);'>
-            <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf'>📄 打开原文 PDF</a>
+        
+        <!-- Action Buttons Section -->
+        <div class="card-actions detail-actions">
+            <div class="primary-actions">
+                {% if is_read %}
+                    <a class='remove-read-link action-btn secondary-btn'>移除没兴趣</a>
+                {% else %}
+                    {% if uid %}
+                        <a class='mark-read-link action-btn secondary-btn'>👋 没兴趣</a>
+                    {% else %}
+                        <a class='mark-read-link action-btn secondary-btn disabled'>👋 没兴趣</a>
+                    {% endif %}
+                {% endif %}
+                {% if uid %}
+                    <a class='favorite-link action-btn secondary-btn' data-favorited='{{ 'true' if is_favorited else 'false' }}'>
+                        {% if is_favorited %}⭐ 取消感兴趣{% else %}☆ 感兴趣{% endif %}
+                    </a>
+                {% else %}
+                    <a class='favorite-link action-btn secondary-btn disabled'>☆ 感兴趣</a>
+                {% endif %}
+                {% if uid %}
+                    <a class='add-todo-link action-btn secondary-btn'>📌 待读</a>
+                {% else %}
+                    <a class='add-todo-link action-btn secondary-btn disabled'>📌 待读</a>
+                {% endif %}
+            </div>
+            <div class="secondary-actions">
+                <a id='pdf-link' target='_blank' href='https://arxiv.org/pdf/{{ arxiv_id }}.pdf' class='action-btn secondary-btn pdf-btn'>
+                    <svg class="pdf-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 18H17V16H7V18Z" fill="currentColor" />
+                        <path d="M17 14H7V12H17V14Z" fill="currentColor" />
+                        <path d="M7 10H11V8H7V10Z" fill="currentColor" />
+                        <path d="M6 2C4.34315 2 3 3.34315 3 5V19C3 20.6569 4.34315 22 6 22H18C19.6569 22 21 20.6569 21 19V9L14 2H6ZM6 4H13V9H19V19C19 19.5523 18.5523 20 18 20H6C5.44772 20 5 19.5523 5 19V5C5 4.44772 5.44772 4 6 4Z" fill="currentColor" />
+                    </svg> 打开原文 PDF
+                </a>
+            </div>
+        </div>
+        
+        <p style='text-align:center;margin-top:var(--spacing-2xl); color: var(--muted-text); font-size: var(--font-size-sm);'>
+            源自 arXiv: {{ arxiv_id }}
         </p>
     </main>
+    
+    {% include 'components/footer.html' %}
     
     {% include 'components/admin-modal.html' %}
     <!-- JavaScript Modules -->
@@ -232,6 +289,8 @@
     <script src="{{ url_for('static_js', filename='paper-submission.js') }}"></script>
     <script src="{{ url_for('static_js', filename='visitor-stats-tracker.js') }}"></script>
     <script src="{{ url_for('static_js', filename='abstract-viewer.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='layout.js') }}"></script>
+    <script src="{{ url_for('static_js', filename='header-scroll.js') }}"></script>
     <script src="{{ url_for('static_js', filename='deep-read-status.js') }}"></script>
     
     <script>
@@ -239,6 +298,10 @@
       window.appUrls = {
         mark_read: '{{ mark_read_url }}',
         unmark_read: '{{ unmark_read_url }}',
+        mark_favorite: '{{ mark_favorite_url }}',
+        unmark_favorite: '{{ unmark_favorite_url }}',
+        mark_todo: '{{ mark_todo_url }}',
+        unmark_todo: '{{ unmark_todo_url }}',
         reset: '{{ reset_url }}',
         admin_stream: '{{ admin_stream_url }}',
         admin_fetch: '{{ admin_fetch_url }}'
@@ -351,25 +414,48 @@
               }
             });
             
-            const data = await response.json();
+            // Try to parse JSON, but handle failures gracefully
+            let data = {};
+            try {
+              data = await response.json();
+            } catch (jsonError) {
+              console.warn('Failed to parse response as JSON:', jsonError);
+              // If response is OK but JSON parsing failed, treat as success
+              // (the backend might have returned empty body)
+              if (response.ok) {
+                data = { success: true, processing: true };
+              }
+            }
             
             if (response.ok && data.success) {
               if (data.processing || data.already_processing) {
                 // Processing started, show status bar and keep loading
-                showToast('深度阅读生成已开始，请稍候');
+                showToast('AI 全文研读已开始，请稍候');
                 if (window.deepReadStatusBar) {
+                  // Register this job so we can detect when it completes
+                  window.deepReadStatusBar.registerProcessingJob('{{ arxiv_id }}');
                   window.deepReadStatusBar.updateStatus().then(() => {
                     // Start polling to track the new job
                     window.deepReadStatusBar.startPolling();
                   });
                 }
                 // Don't reload yet - status bar will show progress
-                // User can manually reload or wait for completion
+                // Page will auto-refresh when deep read completes
               } else {
                 // Shouldn't happen with new async flow, but keep as fallback
-              window.location.reload();
+                window.location.reload();
+              }
+            } else if (response.ok) {
+              // Response OK but success not explicitly true - still treat as processing started
+              showToast('AI 全文研读已开始，请稍候');
+              if (window.deepReadStatusBar) {
+                window.deepReadStatusBar.registerProcessingJob('{{ arxiv_id }}');
+                window.deepReadStatusBar.updateStatus().then(() => {
+                  window.deepReadStatusBar.startPolling();
+                });
               }
             } else {
+              // Response not OK - show error
               loading.style.display = 'none';
               deepReadGenBtn.style.display = 'inline-block';
               error.textContent = data.message || '生成失败，请稍后重试';

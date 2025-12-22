@@ -28,6 +28,8 @@ class RecommendationContext:
     favorites_map: Dict[str, Optional[str]]
     read_meta: Sequence[Dict[str, Any]] = field(default_factory=list)
     read_map: Dict[str, Optional[str]] = field(default_factory=dict)
+    deep_read_meta: Sequence[Dict[str, Any]] = field(default_factory=list)
+    deep_read_map: Dict[str, Optional[str]] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -122,7 +124,13 @@ class RecommendationEngine:
 
 
 class TagPreferenceStrategy:
-    """Ranks entries based on overlap with user's tag preferences using both positive and negative signals."""
+    """Ranks entries based on overlap with user's tag preferences using multiple signals.
+    
+    Signal sources (each tracked separately for debugging/tuning):
+    - favorites: Explicit positive signal (strongest)
+    - deep_read: Strong interest signal - user requested full paper analysis
+    - read: Implicit negative signal (only with sufficient samples)
+    """
 
     name = "tag_preference"
 
@@ -132,39 +140,49 @@ class TagPreferenceStrategy:
         recency_half_life_days: int = 21,
         top_tag_multiplier: float = 1.0,
         detail_tag_multiplier: float = 1.5,
-        min_negative_samples: int = 200, # now the read list can not be taken as negative signal.
+        deep_read_multiplier: float = 2.5,  # deep_read signal weight relative to favorites
+        min_negative_samples: int = 200,  # now the read list can not be taken as negative signal.
     ):
         self.now = now or datetime.now(timezone.utc)
         self.recency_half_life_days = max(1, recency_half_life_days)
         self.top_tag_multiplier = top_tag_multiplier
         self.detail_tag_multiplier = detail_tag_multiplier
+        self.deep_read_multiplier = deep_read_multiplier
         self.min_negative_samples = max(1, min_negative_samples)
         self._profile: Dict[str, Any] = {}
 
     def score(self, context: RecommendationContext) -> Dict[str, StrategyScore]:
         favorites = list(context.favorites_meta or [])
         reads = list(context.read_meta or [])
+        deep_reads = list(context.deep_read_meta or [])
         
-        # Build positive and negative tag weights
-        positive_weights = self._build_positive_tag_weights(
+        # Build tag weights from each source separately (for debugging/tuning)
+        favorites_weights = self._build_positive_tag_weights(
             favorites=favorites, favorites_map=context.favorites_map
+        )
+        deep_read_weights = self._build_deep_read_tag_weights(
+            deep_reads=deep_reads, 
+            deep_read_map=context.deep_read_map,
         )
         negative_weights = self._build_negative_tag_weights(
             reads=reads, read_map=context.read_map, favorites_map=context.favorites_map
         )
         
-        # Calculate net weights: positive - negative
+        # Calculate net weights: favorites + deep_read - negative
+        # Each source is tracked separately for transparency
         net_weights: Dict[str, float] = {}
-        all_tags = set(positive_weights.keys()) | set(negative_weights.keys())
+        all_tags = set(favorites_weights.keys()) | set(deep_read_weights.keys()) | set(negative_weights.keys())
         for tag in all_tags:
-            positive = positive_weights.get(tag, 0.0)
-            negative = negative_weights.get(tag, 0.0)
-            net_weights[tag] = positive - negative
+            fav_w = favorites_weights.get(tag, 0.0)
+            deep_w = deep_read_weights.get(tag, 0.0)
+            neg_w = negative_weights.get(tag, 0.0)
+            net_weights[tag] = fav_w + deep_w - neg_w
         
         if not net_weights or all(w <= 0 for w in net_weights.values()):
             self._profile = {
                 "top_tags": [],
-                "positive_tag_weights": positive_weights,
+                "favorites_tag_weights": favorites_weights,
+                "deep_read_tag_weights": deep_read_weights,
                 "negative_tag_weights": negative_weights,
                 "net_tag_weights": net_weights,
             }
@@ -173,7 +191,8 @@ class TagPreferenceStrategy:
         ordered_tags = sorted(net_weights.items(), key=lambda item: item[1], reverse=True)
         self._profile = {
             "top_tags": [tag for tag, _ in ordered_tags[:8] if net_weights[tag] > 0],
-            "positive_tag_weights": positive_weights,
+            "favorites_tag_weights": favorites_weights,
+            "deep_read_tag_weights": deep_read_weights,
             "negative_tag_weights": negative_weights,
             "net_tag_weights": net_weights,
         }
@@ -250,6 +269,42 @@ class TagPreferenceStrategy:
                 if not normalized:
                     continue
                 weights[normalized] = weights.get(normalized, 0.0) + recency * self.detail_tag_multiplier
+
+        return weights
+
+    def _build_deep_read_tag_weights(
+        self,
+        deep_reads: Sequence[Dict[str, Any]],
+        deep_read_map: Dict[str, Optional[str]],
+    ) -> Dict[str, float]:
+        """Build tag weights from deep read papers with recency weighting.
+        
+        Deep read indicates strong interest - user explicitly requested full paper analysis.
+        Excludes papers already in favorites (already counted in favorites_weights).
+        
+        Weight formula: recency * tag_multiplier * deep_read_multiplier
+        """
+        weights: Dict[str, float] = {}
+        for meta in deep_reads:
+            entry_id = meta.get("id")
+            if not entry_id:
+                continue
+
+            recency = self._recency_weight(deep_read_map.get(entry_id))
+            top_tags = meta.get("top_tags") or []
+            detail_tags = meta.get("detail_tags") or []
+
+            for tag in top_tags:
+                normalized = _normalize_tag(tag)
+                if not normalized:
+                    continue
+                weights[normalized] = weights.get(normalized, 0.0) + recency * self.top_tag_multiplier * self.deep_read_multiplier
+
+            for tag in detail_tags:
+                normalized = _normalize_tag(tag)
+                if not normalized:
+                    continue
+                weights[normalized] = weights.get(normalized, 0.0) + recency * self.detail_tag_multiplier * self.deep_read_multiplier
 
         return weights
 

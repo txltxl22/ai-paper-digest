@@ -5,6 +5,8 @@
   {% set qs = [] %}
   {% if active_tag %}{% set _ = qs.append('tag=' ~ active_tag) %}{% endif %}
   {% if tag_query %}{% set _ = qs.append('q=' ~ tag_query) %}{% endif %}
+  {% if search_query %}{% set _ = qs.append('search=' ~ search_query) %}{% endif %}
+  {% if search_type %}{% set _ = qs.append('search_type=' ~ search_type) %}{% endif %}
   {% if active_tops %}
     {% for t in active_tops %}{% set _ = qs.append('top=' ~ t) %}{% endfor %}
   {% endif %}

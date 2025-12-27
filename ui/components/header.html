@@ -64,7 +64,8 @@
 </div>
 
 <!-- Deep Read Status Bar (fixed at top, independent of header) -->
-{% if uid %}
+<!-- Note: Hidden on detail pages -->
+{% if uid and not show_back_link %}
     <div id="deep-read-status-bar" class="deep-read-status-bar-fixed" style="display: none;">
       <div class="status-bar-content">
         <span class="status-bar-label">
